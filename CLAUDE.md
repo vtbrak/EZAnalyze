@@ -33,6 +33,11 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   Bins / Path / Heatmap tabs (per-tab plot controls). Center/periphery overlap
   warning at Analyze.
 - `tooltip.py`: portable hover tooltips.
+- `dialogs.py`: **use this for every pop-up** (show_info/show_warning/
+  show_error/ask_yes_no), never `tkinter.messagebox`. It renders the first
+  sentence bold on both Mac and Windows, so write messages whose first
+  sentence says what happened.
+- `Open Behavior Tracker.bat`: Windows launcher (CRLF via `.gitattributes`).
 - `region_dialog.py`: the Match regions dialog.
 - `Open Behavior Tracker.command`: Mac double-click launcher (builds `.venv`
   on first run from `requirements.txt`).
@@ -65,8 +70,8 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   speed** reported as both average and peak.
 
 ## Build order and progress
-Steps 1–3 and ROADMAP §7 (file-input workflow) are done. Next: §10 groundwork
-(shared pop-up dialog + Windows launcher), §8 display fixes, EPM metrics,
+Steps 1–3, ROADMAP §7 (file-input workflow), and the §10 groundwork (shared
+dialogs + Windows launcher) are done. Next: the user's first PC test, §8 display fixes, EPM metrics,
 open-field metrics, immobility, and §9 export last. **ROADMAP "Build order" is
 the source of truth.**
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder

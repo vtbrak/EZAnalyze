@@ -226,8 +226,8 @@ All §7 decisions are made (2026-10-23).
     matplotlib toolbar save may not preserve it, so this needs checking when
     built.
 
-- [ ] **Dialog box text: only the first sentence in bold**, the rest in
-  regular type. Today pop-ups such as the center/periphery overlap warning
+- [x] **Dialog box text: only the first sentence in bold**, the rest in
+  regular type. ✅ Built 2026-10-23 as `dialogs.py`, used for every pop-up. Today pop-ups such as the center/periphery overlap warning
   show all of their text in bold.
   - Applies to every pop-up message (warnings, errors, info).
   - Implementation note: on macOS, tkinter's `messagebox` shows the `message`
@@ -279,16 +279,21 @@ For each loaded file (one file, or every file in a folder), named after the
   replacing the earlier separate-CSV plan.)
 
 ### 10. Runs on both Mac and PC (requested 2026-10-23 — requirement)
-- [ ] The program must **work on Windows PCs as well as macOS**. This applies
+- [ ] The program must **work on Windows PCs as well as macOS**. Groundwork
+  built 2026-10-23 (shared dialogs + Windows launcher). Awaiting the first PC
+  test. This applies
   to everything built from now on, and the existing code needs checking.
 
 **Known Mac-only or at-risk pieces**
-- **Launcher:** `Open Behavior Tracker.command` is Mac-only (bash). A PC needs
-  its own double-click launcher (e.g. `Open Behavior Tracker.bat`) that builds
-  `.venv` from `requirements.txt` the same way. On Windows the venv's Python
-  is `.venv\Scripts\python.exe`, not `.venv/bin/python`.
-- **Dialog styling:** bold-first-sentence pop-ups need a custom dialog, since
-  Windows message boxes have no bold line (§8).
+- ✅ **Launcher:** `Open Behavior Tracker.bat` added alongside the Mac
+  `.command`. It builds `.venv` from `requirements.txt` (via `py -3`, falling
+  back to `python`) and runs `.venv\Scripts\python.exe gui.py` in a console so
+  errors stay visible. CRLF line endings are enforced by `.gitattributes`.
+  Untested on Windows.
+- ✅ **Dialog styling:** `dialogs.py` draws every pop-up with tkinter itself
+  (bold first sentence, colored edge by kind, no icons/emoji), so it looks the
+  same on both. Native file pickers and the color picker stay native, which is
+  fine on both.
 - **Drag-and-drop:** `tkinterdnd2` ships Windows builds, but this is
   untested on a PC.
 - **Fonts and sizes:** fonts and widget sizes differ between macOS and
@@ -353,8 +358,8 @@ Done:
 
 Next (updated 2026-10-23):
 4. ✅ **File-input workflow (§7).**
-5. **Mac + PC groundwork (§10):** the shared pop-up dialog (bold first
-   sentence, §8) and a Windows launcher, so PC testing can start early.
+5. ✅ **Mac + PC groundwork (§10):** shared pop-up dialog and Windows
+   launcher. Next: the user's first PC test.
 6. **Display fixes (§8):** no heatmap labels, no background by default, and
    the "Add background" button.
 7. **EPM metrics (§4)**, validated against `EPM.csv`.

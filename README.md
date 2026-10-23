@@ -6,14 +6,23 @@ summary metrics, time-binned tables, path plots, and occupancy heatmaps.
 
 ## Running
 
-Double-click **`Open Behavior Tracker.command`**. On the first run it builds a
-local Python environment and installs dependencies automatically; after that it
-just launches the app.
+**Mac:** double-click **`Open Behavior Tracker.command`**.
+
+**Windows:** double-click **`Open Behavior Tracker.bat`**. It needs Python 3
+from [python.org](https://www.python.org/downloads/) (tick "Add python.exe to
+PATH" during setup). A console window stays open while the app runs and shows
+any error messages.
+
+On the first run either launcher builds a local Python environment (`.venv`)
+and installs dependencies automatically; after that it just launches the app.
+Get the code onto a PC with `git clone`, or copy the folder **without** its
+`.venv` (a Mac `.venv` doesn't work on Windows).
 
 To run from a terminal instead:
 
 ```bash
-./.venv/bin/python gui.py
+./.venv/bin/python gui.py          # Mac
+.venv\Scripts\python.exe gui.py     # Windows
 ```
 
 ## What it computes
@@ -63,8 +72,10 @@ BehaviorTracker/
 ├── gui.py           tkinter front end
 ├── region_dialog.py Match regions dialog
 ├── tooltip.py       hover tooltips
+├── dialogs.py       pop-up messages (same look on Mac and Windows)
 ├── requirements.txt
-└── Open Behavior Tracker.command   double-click launcher
+├── Open Behavior Tracker.command   double-click launcher (Mac)
+└── Open Behavior Tracker.bat       double-click launcher (Windows)
 ```
 
 The engine in `core/` is deliberately GUI-free so it can be scripted or, later,

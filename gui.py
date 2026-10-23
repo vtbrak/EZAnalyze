@@ -20,7 +20,7 @@ import os
 import traceback
 import tkinter as tk
 from dataclasses import dataclass
-from tkinter import colorchooser, filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, ttk
 
 # Drag-and-drop is optional: without tkinterdnd2 (or if its Tcl library won't
 # load) the app still works through the Open File / Open Folder buttons.
@@ -57,6 +57,7 @@ from core import (
     resolve_roles,
 )
 from region_dialog import RegionDialog
+from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
 
 HEATMAP_CMAPS = ["inferno", "viridis", "magma", "plasma", "hot", "jet", "gray"]
@@ -343,7 +344,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 raise ValueError
             return v
         except ValueError:
-            messagebox.showwarning("Invalid frame rate", "Using 20 fps instead.")
+            show_warning(self, "Invalid frame rate",
+                         "The frame rate must be a number above 0. Using 20 fps instead.")
             self.fps_var.set("20")
             return 20.0
 
@@ -354,7 +356,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 raise ValueError
             return v
         except ValueError:
-            messagebox.showwarning("Invalid bin size", "Using 60 s instead.")
+            show_warning(self, "Invalid bin size",
+                         "The bin size must be a number above 0. Using 60 s instead.")
             self.bin_var.set("60")
             return 60.0
 
@@ -616,12 +619,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         still = self._unfit(entries)
         if still:
             lines = "\n".join(f"• {e.label}: {'; '.join(pr)}" for e, pr in still)
-            messagebox.showwarning(
-                "Some files not analyzed",
-                f"These files don't fit the {test} test and were skipped:\n\n"
+            show_warning(
+                self, "Some files not analyzed",
+                f"These files don't fit the {test} test and were skipped.\n\n"
                 f"{lines}\n\nUse Regions… to assign their regions, or click "
                 "Clear to choose a different test.",
-                parent=self,
             )
         skipped = {id(e) for e, _ in still}
         return [e for e in entries if id(e) not in skipped]
@@ -641,25 +643,23 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             f"• {name}: {n:,} frames ({pct:.1f}% of the session)"
             for name, n, pct in overlaps
         )
-        messagebox.showwarning(
-            "Center and periphery overlap",
-            "Center and periphery should always be separate, but these "
-            "frames are marked as both:\n\n"
-            f"{lines}\n\n"
-            "This is an error in the file — usually the periphery ROI was "
-            "drawn around the whole arena instead of only the outer ring. "
-            "Re-drawing the ROIs in the tracking software is the real fix.\n\n"
-            "Until then, these frames are counted as center (not periphery).",
-            parent=self,
+        show_warning(
+            self, "Center and periphery overlap",
+            "Center and periphery overlap in these files, which is an error "
+            "in the file.\n\n"
+            "Center and periphery should always be separate, but these frames "
+            f"are marked as both:\n{lines}\n\n"
+            "Usually the periphery ROI was drawn around the whole arena instead "
+            "of only the outer ring. Re-drawing the ROIs in the tracking "
+            "software is the real fix. Until then, these frames are counted as "
+            "center (not periphery).",
         )
 
     def open_region_dialog(self, reason: str = "", entries=None) -> None:
         entries = self.files if entries is None else entries
         overview = self._region_overview(entries)
         if not overview:
-            messagebox.showinfo(
-                "No regions", "Add a file with region columns first.", parent=self
-            )
+            show_info(self, "No regions", "Add a file with region columns first.")
             return
         preview = next((e.data for e in entries if e.data.regions), None)
         dlg = RegionDialog(
@@ -729,7 +729,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             return
         csvs = self._csvs_in(folder)
         if not csvs:
-            messagebox.showinfo("No CSVs", "That folder has no .csv files.", parent=self)
+            show_info(self, "No CSVs", "That folder has no .csv files.")
             return
         self.add_files(csvs)
 
@@ -745,9 +745,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if csvs:
             self.add_files(csvs)
         else:
-            messagebox.showinfo(
-                "No CSVs", "Nothing dropped was a .csv file or folder.", parent=self
-            )
+            show_info(self, "No CSVs", "Nothing dropped was a .csv file or folder.")
         return event.action
 
     @staticmethod
@@ -773,11 +771,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             names = "\n".join(f"• {os.path.basename(p)}" for p in repeats[:10])
             if len(repeats) > 10:
                 names += f"\n…and {len(repeats) - 10} more"
-            add_again = messagebox.askyesno(
-                "Already in the list",
-                f"{len(repeats)} file(s) are already in the list:\n\n{names}\n\n"
-                "Add them again? Choose No to ignore them.",
-                parent=self,
+            add_again = ask_yes_no(
+                self, "Already in the list",
+                f"{len(repeats)} file(s) are already in the list.\n\n{names}\n\n"
+                "Add them again, or ignore them?",
+                yes="Add Again", no="Ignore",
             )
             if not add_again:
                 paths = [p for p in paths if p not in repeats]
@@ -801,8 +799,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self._selected = first_new
         self._refresh()
         if errors:
-            messagebox.showwarning(
-                "Some files weren't added", "\n".join(errors), parent=self
+            show_warning(
+                self, "Some files weren't added",
+                "Some files couldn't be read and weren't added.\n\n"
+                + "\n".join(errors),
             )
 
     def clear_files(self) -> None:
@@ -813,15 +813,13 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     def analyze(self, selected_only: bool) -> None:
         if not self.files:
-            messagebox.showinfo("No files", "Add files first.", parent=self)
+            show_info(self, "No files", "Add files first.")
             return
         if selected_only:
             entry = self._selected_entry()
             if entry is None:
-                messagebox.showinfo(
-                    "No file selected", "Select a file in the Summary table first.",
-                    parent=self,
-                )
+                show_info(self, "No file selected",
+                          "Select a file in the Summary table first.")
                 return
             targets = [entry]
         else:
@@ -855,7 +853,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         else:
             df = self._summary_df
         if df is None or df.empty:
-            messagebox.showinfo("Nothing to export", "Analyze a file first.", parent=self)
+            show_info(self, "Nothing to export", "Analyze a file first.")
             return
         path = filedialog.asksaveasfilename(
             title=f"Export {active}",
@@ -872,7 +870,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 df.to_csv(path, index=False)
             self.status.set(f"Exported {active} → {path}")
         except Exception as exc:
-            messagebox.showerror("Export failed", str(exc), parent=self)
+            show_error(self, "Export failed", f"The table couldn't be saved.\n\n{exc}")
 
 
 def main():

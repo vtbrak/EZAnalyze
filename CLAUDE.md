@@ -14,24 +14,37 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 - **Do NOT compile/bundle the app (PyInstaller etc.) until explicitly told.**
   End goal is a standalone app, but we build & run from source for now.
 - Keep the **`.command` launcher** that opens the GUI working.
+- **Must run on both macOS and Windows PCs.** Avoid Mac-specific features
+  entirely, using one portable approach on both. The user tests on a real PC, so
+  give them a PC test checklist after cross-platform changes. See ROADMAP §10
+  for at-risk pieces (launcher, dialog styling, DnD, fonts).
 - **Never run `pip install --upgrade pip` in the venv** — it corrupted pip before
   and required a venv rebuild. Install deps straight from `requirements.txt`.
 
 ## Current state (what's built)
-- `core/` — GUI-free engine: `loader.py` (read/validate CSV, parse ROI polygons),
-  `metrics.py` (summary + time-binned metrics), `plotting.py` (path & heatmap).
-- `gui.py` — tkinter app: single-file + batch-folder modes, Summary / Time Bins /
-  Path / Heatmap tabs, configurable fps (default 20) & bin size, CSV/Excel export.
-- `Open Behavior Tracker.command` — double-click launcher (builds `.venv` on first
-  run from `requirements.txt`, then launches `gui.py`).
-- Verified working on the one available sample (an atypical EPM file).
+- `core/`: GUI-free engine. `loader.py` (read CSV, detect region columns),
+  `metrics.py` (summary + time bins + summary column groups), `plotting.py`
+  (path, heatmap, region map), `regions.py` (role mapping, per-frame roles,
+  polygon matching, overlap check), `config.py` (`config.json`).
+- `gui.py`: tkinter app. Single-file and folder modes, test-type dropdown,
+  Summary (checkbox column groups) / Time Bins / Path / Heatmap tabs with
+  per-tab plot controls, drag-and-drop, and a center/periphery overlap warning.
+- `region_dialog.py`: the Match regions dialog.
+- `Open Behavior Tracker.command`: Mac double-click launcher (builds `.venv`
+  on first run from `requirements.txt`).
+- Git repo pushed to GitHub `vtbrak/EZAnalyze` (private). `*.csv` and
+  `config.json` are gitignored.
 
 ## Locked design decisions
-- **Trust the file's own zone columns** (`center`, `peripheral`, `ROI_location`)
-  for region membership — do not recompute zones from X/Y.
-- **EPM arms are labeled in `ROI_location`** in real files, but label strings vary.
-  Plan: a **region-role mapping** that auto-classifies each label by keyword
-  (open→open arm, closed→closed arm, center, periphery), user-overridable, **saved**.
+- **Trust the file's own region columns** (one True/False column per region)
+  rather than recomputing zones from X/Y. The exception is open-field sides,
+  which files don't have, so they come from X/Y.
+- **Region names and order vary between files**, so there's a **region-role
+  mapping**: auto-classified by keyword or code (EPM `ol/or`→open, `ct/cb`→
+  closed, `mid`→center), user-overridable, **saved**. Unrecognized names
+  prompt the user with a dropdown.
+- **Overlaps count as center** (EPM arm+mid). **Center/periphery must never
+  overlap**: that's a file error, so warn the user.
 - **Test type** chosen via a **dropdown** (EPM / Open Field); no auto-detect.
 - **All thresholds** are **input boxes in the UI, persisted to `config.json`**.
 
@@ -47,21 +60,14 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   adjoining sides (counted only if ≥ min time in center between sides); **crossing
   speed** reported as both average and peak.
 
-## Build order (next steps)
-1. Config/persistence layer (`config.json`).
-2. Plot point controls (size/color/transparency) + drag-and-drop file input.
-3. Test-type dropdown + region-role mapping panel.
-4. EPM metrics — validate against a properly labeled EPM file.
-5. Open-field metrics — validate against a real open-field file.
-6. Shared immobility detection.
-
-## Progress
-Steps 1–3 done (config, plot controls + drag-and-drop, test type + region
-mapping). Sample files `EPM.csv` and `Open Field.csv` are in the project folder
-(gitignored); see ROADMAP "Sample data findings" for their region labels.
-Decided 2026-10-23 (details in ROADMAP "Decisions from sample data"): EPM
-overlap frames = center; open-field sides derived from X/Y (video top = arena
-top); center/periphery overlap is a file error → warn user, count as center.
+## Build order and progress
+Steps 1–3 are done. Next comes ROADMAP §7 (file-input workflow), then the §10
+groundwork, §8 display fixes, EPM metrics, open-field metrics, immobility, and
+§9 export last. **ROADMAP "Build order" is the source of truth**, so read it,
+and settle §7's "to decide" questions with the user before building it.
+Sample files `EPM.csv` and `Open Field.csv` are in the project folder
+(gitignored). See ROADMAP "Sample data findings" and "Decisions from sample
+data".
 
 ## How to run
 ```bash

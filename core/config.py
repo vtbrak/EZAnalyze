@@ -30,7 +30,7 @@ DEFAULTS: dict = {
     "min_center_seconds_adjoining": 0.5,
     # Plot style.
     "plot": {
-        "point_size": 4,
+        "point_size": 4.0,  # float so sizes like 2.5 survive a reload
         "point_color": "#1f77b4",
         "alpha": 0.8,
         "color_by_speed": True,

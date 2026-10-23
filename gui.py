@@ -13,7 +13,16 @@ from __future__ import annotations
 import os
 import traceback
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, ttk
+
+# Drag-and-drop is optional: without tkinterdnd2 (or if its Tcl library won't
+# load) the app still works through the Open File / Open Folder buttons.
+try:
+    from tkinterdnd2 import DND_FILES, TkinterDnD
+    _DnDMixin = TkinterDnD.DnDWrapper
+except ImportError:
+    TkinterDnD = None
+    _DnDMixin = object
 
 import matplotlib
 matplotlib.use("Agg")  # figures are built off-screen, then embedded
@@ -35,7 +44,7 @@ from core import (
 )
 
 
-class BehaviorTrackerApp(tk.Tk):
+class BehaviorTrackerApp(tk.Tk, _DnDMixin):
     def __init__(self):
         super().__init__()
         self.title("Behavior Tracker")
@@ -51,9 +60,12 @@ class BehaviorTrackerApp(tk.Tk):
         self._bins_df = None
         self._canvas = None                         # active embedded figure canvas
         self._toolbar = None
+        self._redraw_job = None                     # pending debounced plot redraw
 
         self._build_controls()
+        self._build_plot_controls()
         self._build_tabs()
+        self._enable_drop()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ------------------------------------------------------------------ UI
@@ -79,11 +91,67 @@ class BehaviorTrackerApp(tk.Tk):
             side=tk.RIGHT
         )
 
-        self.status = tk.StringVar(value="Open a file or folder to begin.")
+        self.status = tk.StringVar(value="Open or drop a file or folder to begin.")
         status_bar = ttk.Label(
             self, textvariable=self.status, relief=tk.SUNKEN, anchor=tk.W, padding=4
         )
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+    def _build_plot_controls(self):
+        """Second toolbar row: path/heatmap styling. Changes redraw the plots."""
+        p = self.config_data["plot"]
+        bar = ttk.Frame(self, padding=(8, 0, 8, 8))
+        bar.pack(side=tk.TOP, fill=tk.X)
+
+        ttk.Label(bar, text="Plot —").pack(side=tk.LEFT, padx=(0, 8))
+
+        ttk.Label(bar, text="Point size:").pack(side=tk.LEFT)
+        self.size_var = tk.StringVar(value=f"{p['point_size']:g}")
+        ttk.Spinbox(
+            bar, from_=0.5, to=50, increment=0.5, width=5, textvariable=self.size_var
+        ).pack(side=tk.LEFT, padx=(4, 12))
+
+        ttk.Label(bar, text="Transparency (alpha):").pack(side=tk.LEFT)
+        self.alpha_var = tk.StringVar(value=f"{p['alpha']:g}")
+        ttk.Spinbox(
+            bar, from_=0.05, to=1.0, increment=0.05, width=5, textvariable=self.alpha_var
+        ).pack(side=tk.LEFT, padx=(4, 12))
+
+        self.speed_var = tk.BooleanVar(value=p["color_by_speed"])
+        ttk.Checkbutton(
+            bar, text="Color by speed", variable=self.speed_var,
+            command=self._on_color_mode,
+        ).pack(side=tk.LEFT, padx=(0, 8))
+
+        self.point_color = p["point_color"]
+        self.color_btn = ttk.Button(bar, text="Point color…", command=self._pick_color)
+        self.color_btn.pack(side=tk.LEFT)
+        # A plain tk.Label so its background can show the chosen color.
+        self.color_swatch = tk.Label(
+            bar, width=2, background=self.point_color, relief=tk.SOLID, borderwidth=1
+        )
+        self.color_swatch.pack(side=tk.LEFT, padx=(4, 12))
+
+        ttk.Label(bar, text="Heatmap bins:").pack(side=tk.LEFT)
+        self.hbins_var = tk.StringVar(value=str(p["heatmap_bins"]))
+        ttk.Spinbox(
+            bar, from_=5, to=300, increment=5, width=5, textvariable=self.hbins_var
+        ).pack(side=tk.LEFT, padx=(4, 0))
+
+        for var in (self.size_var, self.alpha_var, self.hbins_var):
+            var.trace_add("write", lambda *_: self._schedule_redraw())
+        self._on_color_mode(redraw=False)
+
+    def _enable_drop(self) -> None:
+        """Register the window as a drop target for files and folders."""
+        if TkinterDnD is None:
+            return
+        try:
+            TkinterDnD._require(self)
+            self.drop_target_register(DND_FILES)
+            self.dnd_bind("<<Drop>>", self._on_drop)
+        except (RuntimeError, tk.TclError):
+            traceback.print_exc()  # fall back to the Open buttons only
 
     def _build_tabs(self):
         self.nb = ttk.Notebook(self)
@@ -142,15 +210,81 @@ class BehaviorTrackerApp(tk.Tk):
             self.bin_var.set("60")
             return 60.0
 
+    def _plot_settings(self) -> dict:
+        """Current plot style. A box that's mid-edit or invalid keeps its last good
+        value instead of interrupting the user with a warning on every keystroke."""
+        p = self.config_data["plot"]
+
+        def read(var, cast, lo, hi, key):
+            try:
+                v = cast(float(var.get()))
+            except ValueError:
+                return p[key]
+            return min(max(v, lo), hi)
+
+        p["point_size"] = read(self.size_var, float, 0.5, 50, "point_size")
+        p["alpha"] = read(self.alpha_var, float, 0.05, 1.0, "alpha")
+        p["heatmap_bins"] = read(self.hbins_var, int, 5, 300, "heatmap_bins")
+        p["color_by_speed"] = bool(self.speed_var.get())
+        p["point_color"] = self.point_color
+        return p
+
+    def _schedule_redraw(self) -> None:
+        """Redraw plots shortly after the last change, not on every keystroke."""
+        if self._redraw_job is not None:
+            self.after_cancel(self._redraw_job)
+        self._redraw_job = self.after(400, self._redraw_plots)
+
+    def _redraw_plots(self) -> None:
+        self._redraw_job = None
+        p = self._plot_settings()
+        if self.current is None:
+            return
+        try:
+            self._show_figure(
+                self.tab_path,
+                path_figure(
+                    self.current,
+                    color_by_speed=p["color_by_speed"],
+                    point_size=p["point_size"],
+                    point_color=p["point_color"],
+                    alpha=p["alpha"],
+                ),
+            )
+            self._show_figure(
+                self.tab_heat, heatmap_figure(self.current, bins=p["heatmap_bins"])
+            )
+        except Exception:
+            traceback.print_exc()
+
+    def _on_color_mode(self, redraw: bool = True) -> None:
+        # The solid color only applies when not coloring by speed.
+        state = tk.DISABLED if self.speed_var.get() else tk.NORMAL
+        self.color_btn.configure(state=state)
+        if redraw:
+            self._schedule_redraw()
+
+    def _pick_color(self) -> None:
+        _, hex_color = colorchooser.askcolor(
+            color=self.point_color, title="Point color", parent=self
+        )
+        if hex_color:
+            self.point_color = hex_color
+            self.color_swatch.configure(background=hex_color)
+            self._schedule_redraw()
+
     def _save_settings(self, fps: float, bin_s: float) -> None:
         self.config_data["fps"] = fps
         self.config_data["bin_seconds"] = bin_s
+        self._plot_settings()
         try:
             save_config(self.config_data)
         except OSError:
             traceback.print_exc()  # settings just won't persist this time
 
     def _on_close(self) -> None:
+        if self._redraw_job is not None:
+            self.after_cancel(self._redraw_job)
         self._save_settings(self._fps(), self._bin_seconds())
         self.destroy()
 
@@ -189,8 +323,42 @@ class BehaviorTrackerApp(tk.Tk):
             title="Open a LocationOutput CSV",
             filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
         )
-        if not path:
-            return
+        if path:
+            self.load_file(path)
+
+    def open_folder(self):
+        folder = filedialog.askdirectory(title="Open a folder of CSVs")
+        if folder:
+            self.load_folder(folder)
+
+    def _on_drop(self, event):
+        """Dropped items: one CSV → single-file mode; a folder or several CSVs →
+        batch mode. Non-CSV files are ignored."""
+        paths = self.tk.splitlist(event.data)
+        dirs = [p for p in paths if os.path.isdir(p)]
+        csvs = [p for p in paths if os.path.isfile(p) and p.lower().endswith(".csv")]
+        if len(dirs) == 1 and not csvs:
+            self.load_folder(dirs[0])
+        elif len(csvs) == 1 and not dirs:
+            self.load_file(csvs[0])
+        else:
+            for d in dirs:
+                csvs.extend(self._csvs_in(d))
+            if csvs:
+                self._load_batch(sorted(set(csvs)))
+            else:
+                messagebox.showinfo("No CSVs", "Nothing dropped was a .csv file or folder.")
+        return event.action
+
+    @staticmethod
+    def _csvs_in(folder: str) -> list[str]:
+        return sorted(
+            os.path.join(folder, f)
+            for f in os.listdir(folder)
+            if f.lower().endswith(".csv")
+        )
+
+    def load_file(self, path: str) -> None:
         try:
             self.current = load_csv(path)
             self.batch = []
@@ -200,18 +368,14 @@ class BehaviorTrackerApp(tk.Tk):
             messagebox.showerror("Could not load file", str(exc))
             traceback.print_exc()
 
-    def open_folder(self):
-        folder = filedialog.askdirectory(title="Open a folder of CSVs")
-        if not folder:
-            return
-        csvs = sorted(
-            os.path.join(folder, f)
-            for f in os.listdir(folder)
-            if f.lower().endswith(".csv")
-        )
+    def load_folder(self, folder: str) -> None:
+        csvs = self._csvs_in(folder)
         if not csvs:
             messagebox.showinfo("No CSVs", "That folder has no .csv files.")
             return
+        self._load_batch(csvs)
+
+    def _load_batch(self, csvs: list[str]) -> None:
         loaded, errors = [], []
         for p in csvs:
             try:
@@ -248,11 +412,7 @@ class BehaviorTrackerApp(tk.Tk):
         self._bins_df = binned_metrics(d, fps=fps, bin_seconds=bin_s)
         self._fill_tree(self.summary_tree, self._summary_df)
         self._fill_tree(self.bins_tree, self._bins_df)
-        try:
-            self._show_figure(self.tab_path, path_figure(d))
-            self._show_figure(self.tab_heat, heatmap_figure(d))
-        except Exception:
-            traceback.print_exc()
+        self._redraw_plots()
 
     def _recompute_batch(self, fps: float, bin_s: float):
         self._summary_df = batch_summary(self.batch, fps=fps)
@@ -260,8 +420,9 @@ class BehaviorTrackerApp(tk.Tk):
         self._fill_tree(self.summary_tree, self._summary_df)
         self._fill_tree(self.bins_tree, None)
         # Plots are per-file; in batch mode point the user back to single-file.
+        # The Time Bins table is left in place (just emptied) so single-file mode
+        # can fill it again; the plot tabs are rebuilt on every draw anyway.
         note = "Plots and time bins show for a single file.\nUse “Open File…” to view one."
-        self._clear_tab(self.tab_bins, note)
         self._clear_tab(self.tab_path, note)
         self._clear_tab(self.tab_heat, note)
 

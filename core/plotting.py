@@ -23,8 +23,14 @@ def _draw_rois(ax, data: TrackingData) -> None:
             ax.plot(xs, ys, color="0.6", linewidth=1.0, zorder=1)
 
 
-def path_figure(data: TrackingData, color_by_speed: bool = True) -> Figure:
-    """Trajectory plot of X/Y, optionally colored by frame-to-frame speed."""
+def path_figure(
+    data: TrackingData,
+    color_by_speed: bool = True,
+    point_size: float = 4,
+    point_color: str = "#1f77b4",
+    alpha: float = 0.8,
+) -> Figure:
+    """Trajectory plot of X/Y points, colored by speed or a single solid color."""
     df = data.df
     fig = Figure(figsize=(6, 6), dpi=100)
     ax = fig.add_subplot(111)
@@ -36,10 +42,16 @@ def path_figure(data: TrackingData, color_by_speed: bool = True) -> Figure:
 
     if color_by_speed and "Distance_px" in df.columns:
         speed = df["Distance_px"].to_numpy()
-        sc = ax.scatter(x, y, c=speed, cmap="viridis", s=4, zorder=2)
+        sc = ax.scatter(
+            x, y, c=speed, cmap="viridis", s=point_size, alpha=alpha,
+            edgecolors="none", zorder=2,
+        )
         fig.colorbar(sc, ax=ax, label="Speed (px/frame)", shrink=0.8)
     else:
-        ax.plot(x, y, color="tab:blue", linewidth=0.6, zorder=2)
+        ax.scatter(
+            x, y, color=point_color, s=point_size, alpha=alpha,
+            edgecolors="none", zorder=2,
+        )
 
     ax.set_title(f"Path — {data.name}")
     ax.set_xlabel("X (px)")
@@ -59,7 +71,9 @@ def heatmap_figure(data: TrackingData, bins: int = 50) -> Figure:
     x = df["X"].to_numpy()
     y = df["Y"].to_numpy()
 
-    heat, xedges, yedges = np.histogram2d(x, y, bins=bins)
+    # Untracked frames come through as NaN; histogram2d can't bin them.
+    ok = ~(np.isnan(x) | np.isnan(y))
+    heat, xedges, yedges = np.histogram2d(x[ok], y[ok], bins=bins)
     # Transpose so array orientation matches x (cols) / y (rows).
     im = ax.imshow(
         heat.T,

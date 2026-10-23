@@ -38,16 +38,16 @@ are listed first so we know the starting point.
 ## Planned features
 
 ### 1. File input
-- [ ] **Drag-and-drop** files/folders onto the window, in addition to the existing
+- [x] **Drag-and-drop** files/folders onto the window, in addition to the existing
   Open File / Open Folder buttons.
-- [ ] Graceful fallback: if drag-and-drop can't initialize, buttons still work.
+- [x] Graceful fallback: if drag-and-drop can't initialize, buttons still work.
 
 ### 2. Plot controls (path & heatmap)
-- [ ] Adjustable **point size**.
-- [ ] Adjustable **point color** (used when not coloring by speed).
-- [ ] Adjustable **transparency (alpha)**.
-- [ ] Toggle: color-by-speed vs solid color; heatmap bin count.
-- [ ] Settings persisted in `config.json`.
+- [x] Adjustable **point size**.
+- [x] Adjustable **point color** (used when not coloring by speed).
+- [x] Adjustable **transparency (alpha)**.
+- [x] Toggle: color-by-speed vs solid color; heatmap bin count.
+- [x] Settings persisted in `config.json`.
 
 ### 3. Test-type framework
 - [ ] Test-type dropdown drives which metric set is computed and shown.
@@ -92,7 +92,7 @@ centroid.)
 - [ ] Immobility detection (shared with EPM).
 
 ### 6. Config / persistence
-- [ ] `config.json` holding fps, bin size, all thresholds, plot style, and the
+- [x] `config.json` holding fps, bin size, all thresholds, plot style, and the
   region-role mapping. Loaded on start, saved on change.
 
 ---

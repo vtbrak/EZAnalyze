@@ -30,6 +30,8 @@ from core import (
     batch_summary,
     path_figure,
     heatmap_figure,
+    load_config,
+    save_config,
 )
 
 
@@ -39,6 +41,8 @@ class BehaviorTrackerApp(tk.Tk):
         self.title("Behavior Tracker")
         self.geometry("1080x720")
         self.minsize(880, 560)
+
+        self.config_data = load_config()
 
         # Loaded state.
         self.current: TrackingData | None = None   # single-file mode
@@ -50,6 +54,7 @@ class BehaviorTrackerApp(tk.Tk):
 
         self._build_controls()
         self._build_tabs()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
 
     # ------------------------------------------------------------------ UI
     def _build_controls(self):
@@ -62,11 +67,11 @@ class BehaviorTrackerApp(tk.Tk):
         )
 
         ttk.Label(bar, text="Frame rate (fps):").pack(side=tk.LEFT)
-        self.fps_var = tk.StringVar(value="20")
+        self.fps_var = tk.StringVar(value=f"{self.config_data['fps']:g}")
         ttk.Entry(bar, textvariable=self.fps_var, width=6).pack(side=tk.LEFT, padx=(4, 16))
 
         ttk.Label(bar, text="Bin size (s):").pack(side=tk.LEFT)
-        self.bin_var = tk.StringVar(value="60")
+        self.bin_var = tk.StringVar(value=f"{self.config_data['bin_seconds']:g}")
         ttk.Entry(bar, textvariable=self.bin_var, width=6).pack(side=tk.LEFT, padx=(4, 16))
 
         ttk.Button(bar, text="Recompute", command=self.recompute).pack(side=tk.LEFT)
@@ -136,6 +141,18 @@ class BehaviorTrackerApp(tk.Tk):
             messagebox.showwarning("Invalid bin size", "Using 60 s instead.")
             self.bin_var.set("60")
             return 60.0
+
+    def _save_settings(self, fps: float, bin_s: float) -> None:
+        self.config_data["fps"] = fps
+        self.config_data["bin_seconds"] = bin_s
+        try:
+            save_config(self.config_data)
+        except OSError:
+            traceback.print_exc()  # settings just won't persist this time
+
+    def _on_close(self) -> None:
+        self._save_settings(self._fps(), self._bin_seconds())
+        self.destroy()
 
     def _fill_tree(self, tree: ttk.Treeview, df) -> None:
         tree.delete(*tree.get_children())
@@ -218,6 +235,7 @@ class BehaviorTrackerApp(tk.Tk):
         """(Re)build every view from the current fps / bin settings."""
         fps = self._fps()
         bin_s = self._bin_seconds()
+        self._save_settings(fps, bin_s)
 
         if self.batch:
             self._recompute_batch(fps, bin_s)

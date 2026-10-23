@@ -20,32 +20,49 @@ To run from a terminal instead:
 
 **Summary metrics** (one row per file):
 - Total distance (cm / px), duration, mean speed
-- Time and percent spent in each zone (center / peripheral) and each ROI
+- Time and percent spent in each region (e.g. center / peripheral, or EPM arms) and each ROI label
 - Number of entries into each zone, ROI transitions
 - The tracking settings recorded in the file
 
-**Time bins** (single file): the session split into fixed-length bins (default
+**Time bins** (per file): the session split into fixed-length bins (default
 60 s) with distance, mean speed, and time-in-zone per bin.
 
-**Plots** (single file): path/trajectory (colored by speed) and occupancy heatmap,
+**Plots** (per file): path/trajectory (colored by speed) and occupancy heatmap,
 both with ROI outlines overlaid.
 
-## Modes
-- **Open File…** — deep-dive one CSV: summary, time bins, and plots.
-- **Open Folder…** — batch every CSV in a folder into one combined summary table.
+## Working with files
+1. **Add File…**, **Add Folder…**, or drag files/folders onto the window. Files
+   build up a list in the Summary table, each marked **Not analyzed**. Adding a
+   file that's already in the list asks whether to add it again.
+2. Choose the **Test** (Elevated Plus Maze / Open Field), **frame rate**
+   (default 20 fps), and **bin size** in the toolbar.
+3. **Analyze Selected** (the row selected in the Summary) or **Analyze All**.
+   Nothing is computed until you click one. At the first Analyze, Test, frame
+   rate, and bin size **lock** (greyed out), so every file in the load is
+   analyzed the same way. Path and Heatmap styling never locks.
+4. **Select a row** in the Summary to see that file's Time Bins, Path, and
+   Heatmap.
+5. **Clear** empties the list and unlocks the settings, e.g. to try one file,
+   adjust the settings, then run a whole folder.
 
-Frame rate (default **20 fps**) and bin size are set in the toolbar; click
-**Recompute** after changing them. **Export Table…** saves the active table as
+The file list resets when the app closes. Settings, plot style, Summary
+columns, and region roles are remembered. **Regions…** sets what each region
+in the files means (open arm, closed arm, center, periphery). **Export
+Table…** saves the Summary (every file) or the selected file's Time Bins as
 CSV or Excel.
 
 ## Layout
 ```
 BehaviorTracker/
 ├── core/            analysis engine (no GUI dependencies)
-│   ├── loader.py    read & validate CSVs
+│   ├── loader.py    read & validate CSVs, detect region columns
 │   ├── metrics.py   summary + time-binned metrics
-│   └── plotting.py  path & heatmap figures
+│   ├── plotting.py  path, heatmap & region-map figures
+│   ├── regions.py   region-role mapping and checks
+│   └── config.py    saved settings (config.json)
 ├── gui.py           tkinter front end
+├── region_dialog.py Match regions dialog
+├── tooltip.py       hover tooltips
 ├── requirements.txt
 └── Open Behavior Tracker.command   double-click launcher
 ```

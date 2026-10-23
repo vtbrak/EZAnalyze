@@ -26,9 +26,13 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   `metrics.py` (summary + time bins + summary column groups), `plotting.py`
   (path, heatmap, region map), `regions.py` (role mapping, per-frame roles,
   polygon matching, overlap check), `config.py` (`config.json`).
-- `gui.py`: tkinter app. Single-file and folder modes, test-type dropdown,
-  Summary (checkbox column groups) / Time Bins / Path / Heatmap tabs with
-  per-tab plot controls, drag-and-drop, and a center/periphery overlap warning.
+- `gui.py`: tkinter app. File list (Add File/Folder/drop, Clear, Analyze
+  Selected/All). Test type, fps, and bin size lock at the first Analyze, and
+  unlock at Clear. Path/Heatmap controls never lock. Summary
+  (File, Status, checkbox column groups); the selected row drives the Time
+  Bins / Path / Heatmap tabs (per-tab plot controls). Center/periphery overlap
+  warning at Analyze.
+- `tooltip.py`: portable hover tooltips.
 - `region_dialog.py`: the Match regions dialog.
 - `Open Behavior Tracker.command`: Mac double-click launcher (builds `.venv`
   on first run from `requirements.txt`).
@@ -61,11 +65,10 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   speed** reported as both average and peak.
 
 ## Build order and progress
-Steps 1–3 are done. Next comes ROADMAP §7 (file-input workflow), then the §10
-groundwork, §8 display fixes, EPM metrics, open-field metrics, immobility, and
-§9 export last. **ROADMAP "Build order" is the source of truth**, so read it,
-All §7 decisions are made (file list + Clear, settings locked in the toolbar
-per load, Analyze all/selected, Summary selection drives Time Bins/Path/Heatmap).
+Steps 1–3 and ROADMAP §7 (file-input workflow) are done. Next: §10 groundwork
+(shared pop-up dialog + Windows launcher), §8 display fixes, EPM metrics,
+open-field metrics, immobility, and §9 export last. **ROADMAP "Build order" is
+the source of truth.**
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample
 data".

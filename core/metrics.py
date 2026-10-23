@@ -17,9 +17,6 @@ import pandas as pd
 from .loader import TrackingData
 
 
-def _zone_columns(df: pd.DataFrame) -> list[str]:
-    """Boolean zone-flag columns present in this file (center/peripheral/...)."""
-    return [c for c in ("center", "peripheral") if c in df.columns]
 
 
 def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
@@ -49,7 +46,7 @@ def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
         out["MeanSpeed_cm_s"] = round(dist_cm / duration_s, 3)
 
     # Time spent in each boolean zone (seconds and percent of session).
-    for zone in _zone_columns(df):
+    for zone in data.regions:
         frames_in = int(df[zone].sum())
         out[f"Time_{zone}_s"] = round(frames_in / fps, 2) if fps else float("nan")
         out[f"Percent_{zone}"] = round(100.0 * frames_in / n, 1) if n else 0.0
@@ -63,7 +60,7 @@ def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
             out[f"Percent_ROI_{safe}"] = round(100.0 * frames_in / n, 1) if n else 0.0
 
     # Zone entries: count rising edges (False -> True) per zone.
-    for zone in _zone_columns(df):
+    for zone in data.regions:
         entries = int(((~df[zone].shift(1, fill_value=False)) & df[zone]).sum())
         out[f"Entries_{zone}"] = entries
 
@@ -93,7 +90,7 @@ def binned_metrics(
     frames_per_bin = max(1, int(round(bin_seconds * fps)))
     df["_bin"] = (np.arange(n) // frames_per_bin).astype(int)
 
-    zones = _zone_columns(df)
+    zones = data.regions
     rows = []
     for bin_idx, g in df.groupby("_bin"):
         gframes = len(g)
@@ -123,25 +120,24 @@ _DETAILS = ("Frames", "FPS", "Duration_s", "TotalDistance_px")
 def summary_column_groups(columns) -> dict[str, list[str]]:
     """Sort summary-table columns into display groups (File is not grouped).
 
-    Groups: basics, zones, entries, roi, details. Anything unrecognized lands in
-    details so a new column is never silently lost from the on-screen table.
+    Groups: basics, zones (per-region time/%), entries, roi, details.
+    Anything unrecognized lands in details so a new column is never silently
+    lost from the on-screen table.
     """
     groups: dict[str, list[str]] = {
         "basics": [], "zones": [], "entries": [], "roi": [], "details": []
     }
-    zone_cols = {f"{p}_{z}{s}" for z in ("center", "peripheral")
-                 for p, s in (("Time", "_s"), ("Percent", ""))}
     for c in columns:
         if c == "File":
             continue
         if c in _BASICS:
             groups["basics"].append(c)
-        elif c in zone_cols:
-            groups["zones"].append(c)
-        elif c.startswith("Entries_") or c == "ROI_transitions":
-            groups["entries"].append(c)
         elif c.startswith(("Time_ROI_", "Percent_ROI_")):
             groups["roi"].append(c)
+        elif c.startswith("Entries_") or c == "ROI_transitions":
+            groups["entries"].append(c)
+        elif (c.startswith("Time_") and c.endswith("_s")) or c.startswith("Percent_"):
+            groups["zones"].append(c)  # per-region columns: center, ol, mid, ...
         else:
             groups["details"].append(c)  # _DETAILS + tracking settings + unknown
     return groups

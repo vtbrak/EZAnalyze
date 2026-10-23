@@ -42,7 +42,14 @@ from core import (
     load_config,
     save_config,
     summary_column_groups,
+    TEST_TYPES,
+    auto_role,
+    center_periphery_overlap,
+    check_roles,
+    describe_roles,
+    resolve_roles,
 )
+from region_dialog import RegionDialog
 
 HEATMAP_CMAPS = ["inferno", "viridis", "magma", "plasma", "hot", "jet", "gray"]
 
@@ -73,6 +80,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._canvas = None                         # active embedded figure canvas
         self._toolbar = None
         self._redraw_job = None                     # pending debounced plot redraw
+        self._loaded_msg = ""                       # status text for the loaded data
 
         self._build_controls()
         self._build_tabs()
@@ -87,6 +95,20 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         ttk.Button(bar, text="Open File…", command=self.open_file).pack(side=tk.LEFT)
         ttk.Button(bar, text="Open Folder…", command=self.open_folder).pack(
             side=tk.LEFT, padx=(6, 16)
+        )
+
+        ttk.Label(bar, text="Test:").pack(side=tk.LEFT)
+        if self.config_data["test_type"] not in TEST_TYPES:  # hand-edited config
+            self.config_data["test_type"] = TEST_TYPES[0]
+        self.test_var = tk.StringVar(value=self.config_data["test_type"])
+        test_box = ttk.Combobox(
+            bar, textvariable=self.test_var, values=TEST_TYPES,
+            state="readonly", width=17,
+        )
+        test_box.pack(side=tk.LEFT, padx=(4, 4))
+        test_box.bind("<<ComboboxSelected>>", lambda _e: self._on_test_type())
+        ttk.Button(bar, text="Regions…", command=self.open_region_dialog).pack(
+            side=tk.LEFT, padx=(0, 16)
         )
 
         ttk.Label(bar, text="Frame rate (fps):").pack(side=tk.LEFT)
@@ -390,6 +412,108 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             child.destroy()
         ttk.Label(parent, text=message, padding=20).pack()
 
+    # -------------------------------------------------------------- regions
+    def _loaded(self) -> list[TrackingData]:
+        return self.batch or ([self.current] if self.current else [])
+
+    def _region_overview(self) -> list[tuple[str, float]]:
+        """Every region across the loaded files (first-seen order) with its
+        share of all loaded frames."""
+        frames: dict[str, int] = {}
+        total = 0
+        for d in self._loaded():
+            total += d.n_frames
+            for r in d.regions:
+                frames[r] = frames.get(r, 0) + int(d.df[r].sum())
+        return [(r, 100.0 * n / total if total else 0.0) for r, n in frames.items()]
+
+    def _current_roles(self) -> dict[str, str]:
+        names = [r for r, _ in self._region_overview()]
+        return resolve_roles(names, self.config_data["region_roles"])
+
+    def _check_regions(self, prompt: bool) -> None:
+        """Show the mapping in the status bar; if it doesn't fit the chosen
+        test, ask the user to match regions (when `prompt`)."""
+        if not self._loaded():
+            return
+        roles = self._current_roles()
+        test = self.test_var.get()
+        problems = check_roles(test, roles)
+        if problems and prompt:
+            if "" in roles.values():
+                reason = ("Some region names in this data couldn't be matched "
+                          "automatically. Please choose a role for each.")
+            else:
+                reason = (f"These regions don't fit the {test} test "
+                          f"({'; '.join(problems)}). If the Test choice is wrong, "
+                          "cancel and change it; otherwise adjust the roles.")
+            self.open_region_dialog(reason=reason)
+            roles = self._current_roles()
+            problems = check_roles(test, roles)
+        tally = describe_roles(roles)
+        note = f"⚠ {'; '.join(problems)}" if problems else tally
+        overlaps = self._overlap_report(roles)
+        if overlaps:
+            note += f" — ⚠ center/periphery overlap in {len(overlaps)} file(s)"
+        self.status.set(f"{self._loaded_msg} — {test}: {note}")
+        if overlaps and prompt:
+            lines = "\n".join(
+                f"• {name}: {n:,} frames ({pct:.1f}% of the session)"
+                for name, n, pct in overlaps
+            )
+            messagebox.showwarning(
+                "Center and periphery overlap",
+                "Center and periphery should always be separate, but these "
+                "frames are marked as both:\n\n"
+                f"{lines}\n\n"
+                "This is an error in the file — usually the periphery ROI was "
+                "drawn around the whole arena instead of only the outer ring. "
+                "Re-drawing the ROIs in the tracking software is the real fix.\n\n"
+                "Until then, these frames are counted as center (not periphery).",
+                parent=self,
+            )
+
+    def _overlap_report(self, roles: dict[str, str]) -> list[tuple[str, int, float]]:
+        """[(file, overlapping frames, % of its frames)] for files whose center
+        and periphery regions overlap."""
+        report = []
+        for d in self._loaded():
+            n = center_periphery_overlap(d, roles)
+            if n:
+                report.append((d.name, n, 100.0 * n / d.n_frames))
+        return report
+
+    def open_region_dialog(self, reason: str = "") -> None:
+        overview = self._region_overview()
+        if not overview:
+            messagebox.showinfo(
+                "No regions", "Load a file with region columns first.", parent=self
+            )
+            return
+        preview = next((d for d in self._loaded() if d.regions), None)
+        dlg = RegionDialog(
+            self, self.test_var.get(), overview, self._current_roles(),
+            preview=preview, reason=reason,
+        )
+        self.wait_window(dlg)
+        if dlg.result is None:
+            return
+        # Save only real overrides, so later improvements to the automatic
+        # suggestions still reach names the user never changed.
+        saved = self.config_data["region_roles"]
+        for name, role in dlg.result.items():
+            if role == auto_role(name):
+                saved.pop(name, None)
+            else:
+                saved[name] = role
+        self._save_settings(self._fps(), self._bin_seconds())
+        self._check_regions(prompt=False)
+
+    def _on_test_type(self) -> None:
+        self.config_data["test_type"] = self.test_var.get()
+        self._save_settings(self._fps(), self._bin_seconds())
+        self._check_regions(prompt=True)
+
     # --------------------------------------------------------------- actions
     def open_file(self):
         path = filedialog.askopenfilename(
@@ -436,10 +560,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self.current = load_csv(path)
             self.batch = []
             self.recompute()
-            self.status.set(f"Loaded {self.current.name} ({self.current.n_frames} frames)")
+            self._loaded_msg = f"Loaded {self.current.name} ({self.current.n_frames} frames)"
         except Exception as exc:  # surface load errors to the user
             messagebox.showerror("Could not load file", str(exc))
             traceback.print_exc()
+            return
+        self._check_regions(prompt=True)
 
     def load_folder(self, folder: str) -> None:
         csvs = self._csvs_in(folder)
@@ -464,9 +590,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         msg = f"Loaded {len(loaded)} file(s)"
         if errors:
             msg += f", skipped {len(errors)}"
-        self.status.set(msg)
+        self._loaded_msg = msg
         if errors:
             messagebox.showwarning("Some files skipped", "\n".join(errors))
+        self._check_regions(prompt=True)
 
     def recompute(self):
         """(Re)build every view from the current fps / bin settings."""

@@ -50,9 +50,14 @@ are listed first so we know the starting point.
 - [x] Settings persisted in `config.json`.
 
 ### 3. Test-type framework
-- [ ] Test-type dropdown drives which metric set is computed and shown.
-- [ ] Region-role mapping panel: shows each `ROI_location` label found in the
-  file, with an editable role assignment; saved.
+- [x] Test-type dropdown (saved). It will drive which metric set runs once
+  §4–§5 exist; for now it drives the region check below.
+- [x] Region-role mapping ("Match regions" dialog, also via **Regions…**):
+  each region column is auto-classified (keywords + EPM codes like ol/ct/mid),
+  user-overridable, saved. Opens automatically when names can't be matched or
+  don't fit the chosen test.
+- [x] ROI polygons are paired with regions by data agreement, not file order,
+  and labeled on the plots.
 
 ### 4. Elevated Plus Maze (EPM) metrics
 - [ ] **Open-arm vs closed-arm time** (seconds and %).
@@ -108,7 +113,30 @@ centroid.)
 5. **Crossing speed** — ✅ report both average (over traversal) and peak.
 6. **Immobility defaults** — ✅ seed at <2 cm/s for ≥1 s; both configurable, saved.
 
-## Still needed
+## Sample data findings (2026-10-23)
+- **EPM** (`EPM.csv`): region columns `ol`, `or` (open left/right), `ct`, `cb`
+  (closed top/bottom), `mid`. `ROI_location` also has overlap labels where the
+  point is in two polygons at once (`or_mid`, `ol_mid`, `ct_mid`, `cb_mid`,
+  `or_ct_mid`; ~1.3% of frames).
+- **Open field** (`Open Field.csv`): region columns `center`, `peripheral`.
+  `peripheral` is the *whole arena* (center frames read `center_peripheral`);
+  `non_roi` = outside both. **There are no side regions** (left/right/top/
+  bottom) — see decisions below.
+- Both files are gitignored (`*.csv`) — research data stays off GitHub.
+
+## Decisions from sample data — RESOLVED (2026-10-23)
+1. **EPM overlap frames count as center.** A frame in an arm *and* the middle
+   (or_mid, ct_mid, or_ct_mid, ...) is center; so is open+closed at once.
+   Implemented in `core.regions.frame_roles` — §4 metrics must use it.
+2. **Open-field sides come from X/Y**: the top of the video is the top of the
+   arena (image coords: smaller Y = top). §5 crossings derive left/right/top/
+   bottom from position relative to the center ROI.
+3. **Center and periphery must never overlap.** Any frame marked as both is a
+   file/ROI error: the app warns the user on load (per file, frames + %), and
+   counts those frames as center. `Open Field.csv` has this error (21.5% of
+   frames — its periphery ROI covers the whole arena).
+
+## Previously needed (now resolved)
 - **Sample data**: we only have one (atypical) EPM file whose labels are
   open-field-style. To build & validate §4–§5 we need (a) a representative **EPM**
   file with proper arm labels in `ROI_location`, and (b) a sample **open-field**

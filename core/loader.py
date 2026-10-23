@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import ast
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pandas as pd
@@ -28,8 +28,10 @@ SETTINGS_COLUMNS = [
     "Start_Frame",
 ]
 
-# Boolean-ish columns that pandas may read as strings ("True"/"False").
-BOOL_COLUMNS = ["center", "peripheral", "ROI_transition"]
+# True/False columns that are not regions (Use_Window is a tracking setting).
+NON_REGION_BOOL_COLUMNS = {"ROI_transition", "Use_Window"}
+
+_BOOL_TEXT = {"true": True, "false": False, "1": True, "0": False}
 
 
 @dataclass
@@ -39,6 +41,10 @@ class TrackingData:
     path: str
     df: pd.DataFrame
     settings: dict[str, Any]
+    # Per-region True/False columns, in file order (e.g. center, peripheral for
+    # open field; ol, or, ct, cb, mid for EPM). Their order matches the ROI
+    # polygons in ROI_coordinates.
+    regions: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -56,13 +62,17 @@ def _to_bool(series: pd.Series) -> pd.Series:
     """Coerce a 'True'/'False'/1/0 column to real booleans."""
     if series.dtype == bool:
         return series
-    return (
-        series.astype(str)
-        .str.strip()
-        .str.lower()
-        .map({"true": True, "false": False, "1": True, "0": False})
-        .fillna(False)
-    )
+    return series.astype(str).str.strip().str.lower().map(_BOOL_TEXT).fillna(False)
+
+
+def _is_bool_column(series: pd.Series) -> bool:
+    """True if every non-empty value reads as True/False."""
+    if series.dtype == bool:
+        return True
+    values = series.dropna()
+    if values.empty:
+        return False
+    return values.astype(str).str.strip().str.lower().isin(["true", "false"]).all()
 
 
 def load_csv(path: str) -> TrackingData:
@@ -84,18 +94,25 @@ def load_csv(path: str) -> TrackingData:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
-    # Boolean zone flags.
-    for col in BOOL_COLUMNS:
-        if col in df.columns:
-            df[col] = _to_bool(df[col])
-
-    # Pull the constant settings off the first row.
+    # Pull the constant settings off the first row (before bool coercion, so
+    # they show exactly as written in the file).
     settings: dict[str, Any] = {}
     for col in SETTINGS_COLUMNS:
         if col in df.columns and len(df):
             settings[col] = df[col].iloc[0]
 
-    return TrackingData(path=path, df=df, settings=settings)
+    # Region flags: any True/False column that isn't a known non-region one.
+    regions: list[str] = []
+    for col in df.columns:
+        if col in SETTINGS_COLUMNS or col in REQUIRED_COLUMNS:
+            continue
+        if col in NON_REGION_BOOL_COLUMNS:
+            df[col] = _to_bool(df[col])
+        elif _is_bool_column(df[col]):
+            df[col] = _to_bool(df[col])
+            regions.append(col)
+
+    return TrackingData(path=path, df=df, settings=settings, regions=regions)
 
 
 def parse_roi_coordinates(raw: str) -> dict[str, list]:

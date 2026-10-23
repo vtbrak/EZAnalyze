@@ -7,7 +7,18 @@ from .metrics import (
     batch_summary,
     summary_column_groups,
 )
-from .plotting import path_figure, heatmap_figure
+from .plotting import path_figure, heatmap_figure, regions_figure
+from .regions import (
+    ROLE_LABELS,
+    TEST_TYPES,
+    auto_role,
+    center_periphery_overlap,
+    check_roles,
+    describe_roles,
+    frame_roles,
+    match_polygons,
+    resolve_roles,
+)
 from .config import DEFAULTS, load_config, save_config
 
 __all__ = [
@@ -23,4 +34,14 @@ __all__ = [
     "summary_column_groups",
     "path_figure",
     "heatmap_figure",
+    "regions_figure",
+    "ROLE_LABELS",
+    "TEST_TYPES",
+    "auto_role",
+    "center_periphery_overlap",
+    "check_roles",
+    "describe_roles",
+    "frame_roles",
+    "match_polygons",
+    "resolve_roles",
 ]

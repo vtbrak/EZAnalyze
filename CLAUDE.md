@@ -55,9 +55,13 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 5. Open-field metrics — validate against a real open-field file.
 6. Shared immobility detection.
 
-## Blockers
-Need two sample files to build/validate steps 4–5: a **properly labeled EPM** file
-and an **open-field** file (to confirm the exact `ROI_location` label strings).
+## Progress
+Steps 1–3 done (config, plot controls + drag-and-drop, test type + region
+mapping). Sample files `EPM.csv` and `Open Field.csv` are in the project folder
+(gitignored); see ROADMAP "Sample data findings" for their region labels.
+Decided 2026-10-23 (details in ROADMAP "Decisions from sample data"): EPM
+overlap frames = center; open-field sides derived from X/Y (video top = arena
+top); center/periphery overlap is a file error → warn user, count as center.
 
 ## How to run
 ```bash

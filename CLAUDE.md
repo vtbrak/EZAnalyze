@@ -64,7 +64,8 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 Steps 1–3 are done. Next comes ROADMAP §7 (file-input workflow), then the §10
 groundwork, §8 display fixes, EPM metrics, open-field metrics, immobility, and
 §9 export last. **ROADMAP "Build order" is the source of truth**, so read it,
-and settle §7's "to decide" questions with the user before building it.
+All §7 decisions are made (file list + Clear, settings locked in the toolbar
+per load, Analyze all/selected, Summary selection drives Time Bins/Path/Heatmap).
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample
 data".

@@ -141,15 +141,53 @@ and multiple files from a folder.
 - [ ] In folder/batch mode, a way to **select a single file** and view its Time
   Bins, Path, and Heatmap.
 
-**To decide before building** (questions to raise with the user)
-- Should a newly loaded file be *added* to a running list (a file list the
-  user builds up), or still replace the current one?
-- Are test type/parameters chosen once per load (applies to every file in a
-  folder), or can each file carry its own?
-- What triggers computation — an explicit "Analyze" button, or automatically
-  once the user confirms the load step?
-- How the per-file picker should look (e.g. a file list beside the tabs,
-  clicking a Summary row, or a dropdown).
+**✅ Decided 2026-10-23**
+- [ ] **New files are added to a list.** Loading (Open File, Open Folder,
+  drag-and-drop) appends to the list instead of replacing what's there.
+- [ ] **Clear button** empties the list.
+- [ ] **The list resets when the app closes.** It isn't saved between
+  sessions.
+- [ ] **Settings are chosen once per load session.** The first load sets
+  them, and they then apply to every file added afterward. **Clear** resets
+  this, so settings can be chosen again for the next batch.
+  - A **tooltip** explains this, e.g. on Clear: "Clears the file list and
+    lets you choose settings again."
+- [ ] **Analysis starts with an Analyze button**, not automatically on load.
+  So the EPM/open-field warning can't fire before the test is chosen.
+- [ ] **Two ways to analyze:** **Analyze all** files in the list, or
+  **Analyze selected**, the file selected in the Summary table.
+- [ ] **The file selected in the Summary table drives the Path and
+  Heatmap** tabs. Clicking a row shows that file's plots. This is also how a
+  single file is viewed in folder mode.
+
+**✅ Details decided 2026-10-23**
+- [ ] **Locked for the whole load session** (until Clear): **test type**,
+  **fps**, and **time-bin size**. Bin size stays consistent across every file
+  in the load, and **is remembered when the app closes**, like fps.
+- [ ] **Plot style stays adjustable at any time** (point size, colors,
+  transparency, colormap, heatmap bins, background), and whatever is selected
+  **is remembered** (already saved in `config.json`).
+- [ ] **"Not analyzed" status in the Summary**, in a column **immediately
+  after the file name**. It changes once the file is analyzed.
+- [ ] **Repeated file: ask the user** whether to ignore it or add it again.
+- [ ] **Always wait for Analyze.** Files added later are never analyzed
+  automatically, even when settings are already chosen.
+- [ ] Files can be added **one at a time or via a folder**, mixed freely.
+
+**Use case to support:** analyze **one file**, look at the results, adjust
+the settings, then run a **larger set** of files. In practice: load one file
+→ Analyze → **Clear** (resets the list and unlocks the settings) → choose new
+settings → load a folder → Analyze all. The Clear tooltip should make this
+clear.
+
+- [ ] **Time Bins, Path, and Heatmap all follow the file selected in the
+  Summary table.**
+- [ ] **Locked settings live in the toolbar** (no separate dialog). Test
+  type, fps, and bin size are set there before the first load. Once files are
+  loaded, they're **greyed out** with a tooltip explaining they're locked
+  until Clear.
+
+All §7 decisions are made (2026-10-23).
 
 ### 8. Layout / display changes (requested 2026-10-23 — not built yet)
 - [ ] **Heatmap: no region labels drawn on the plot** (both EPM and open field).
@@ -302,7 +340,7 @@ Done:
 Next (updated 2026-10-23):
 4. **File-input workflow (§7).** Later features depend on how files are
    loaded and selected, and it fixes the warning that fires before the test
-   type is chosen. Settle the §7 "to decide" questions first.
+   type is chosen. All decisions are made.
 5. **Mac + PC groundwork (§10):** the shared pop-up dialog (bold first
    sentence, §8) and a Windows launcher, so PC testing can start early.
 6. **Display fixes (§8):** no heatmap labels, no background by default, and

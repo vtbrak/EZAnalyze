@@ -35,6 +35,15 @@ DEFAULTS: dict = {
         "alpha": 0.8,
         "color_by_speed": True,
         "heatmap_bins": 50,
+        "heatmap_cmap": "inferno",
+    },
+    # Which Summary-table column groups are shown on screen (export has all).
+    "summary_groups": {
+        "basics": True,
+        "zones": False,
+        "entries": False,
+        "roi": False,
+        "details": False,
     },
     # ROI_location label -> role (open_arm, closed_arm, center, periphery).
     "region_roles": {},

@@ -116,6 +116,37 @@ def binned_metrics(
     return pd.DataFrame(rows)
 
 
+_BASICS = ("Duration_min", "TotalDistance_cm", "MeanSpeed_cm_s")
+_DETAILS = ("Frames", "FPS", "Duration_s", "TotalDistance_px")
+
+
+def summary_column_groups(columns) -> dict[str, list[str]]:
+    """Sort summary-table columns into display groups (File is not grouped).
+
+    Groups: basics, zones, entries, roi, details. Anything unrecognized lands in
+    details so a new column is never silently lost from the on-screen table.
+    """
+    groups: dict[str, list[str]] = {
+        "basics": [], "zones": [], "entries": [], "roi": [], "details": []
+    }
+    zone_cols = {f"{p}_{z}{s}" for z in ("center", "peripheral")
+                 for p, s in (("Time", "_s"), ("Percent", ""))}
+    for c in columns:
+        if c == "File":
+            continue
+        if c in _BASICS:
+            groups["basics"].append(c)
+        elif c in zone_cols:
+            groups["zones"].append(c)
+        elif c.startswith("Entries_") or c == "ROI_transitions":
+            groups["entries"].append(c)
+        elif c.startswith(("Time_ROI_", "Percent_ROI_")):
+            groups["roi"].append(c)
+        else:
+            groups["details"].append(c)  # _DETAILS + tracking settings + unknown
+    return groups
+
+
 def batch_summary(datasets: list[TrackingData], fps: float = 20.0) -> pd.DataFrame:
     """Summary metrics for many files, one row each, aligned into a table."""
     return pd.DataFrame([summary_metrics(d, fps=fps) for d in datasets])

@@ -41,7 +41,19 @@ from core import (
     heatmap_figure,
     load_config,
     save_config,
+    summary_column_groups,
 )
+
+HEATMAP_CMAPS = ["inferno", "viridis", "magma", "plasma", "hot", "jet", "gray"]
+
+# Summary-table column groups, in checkbox order (keys match summary_column_groups).
+SUMMARY_GROUP_LABELS = {
+    "basics": "Session basics",
+    "zones": "Zone time & %",
+    "entries": "Entries & transitions",
+    "roi": "ROI label time & %",
+    "details": "Details",
+}
 
 
 class BehaviorTrackerApp(tk.Tk, _DnDMixin):
@@ -63,7 +75,6 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._redraw_job = None                     # pending debounced plot redraw
 
         self._build_controls()
-        self._build_plot_controls()
         self._build_tabs()
         self._enable_drop()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -97,13 +108,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         )
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-    def _build_plot_controls(self):
-        """Second toolbar row: path/heatmap styling. Changes redraw the plots."""
+    def _build_path_controls(self, parent):
+        """Path-tab styling row. Changes redraw the plots."""
         p = self.config_data["plot"]
-        bar = ttk.Frame(self, padding=(8, 0, 8, 8))
+        bar = ttk.Frame(parent, padding=(4, 6))
         bar.pack(side=tk.TOP, fill=tk.X)
-
-        ttk.Label(bar, text="Plot —").pack(side=tk.LEFT, padx=(0, 8))
 
         ttk.Label(bar, text="Point size:").pack(side=tk.LEFT)
         self.size_var = tk.StringVar(value=f"{p['point_size']:g}")
@@ -130,17 +139,52 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.color_swatch = tk.Label(
             bar, width=2, background=self.point_color, relief=tk.SOLID, borderwidth=1
         )
-        self.color_swatch.pack(side=tk.LEFT, padx=(4, 12))
+        self.color_swatch.pack(side=tk.LEFT, padx=(4, 0))
 
-        ttk.Label(bar, text="Heatmap bins:").pack(side=tk.LEFT)
+        for var in (self.size_var, self.alpha_var):
+            var.trace_add("write", lambda *_: self._schedule_redraw())
+        self._on_color_mode(redraw=False)
+
+    def _build_heatmap_controls(self, parent):
+        """Heatmap-tab styling row. Changes redraw the plots."""
+        p = self.config_data["plot"]
+        bar = ttk.Frame(parent, padding=(4, 6))
+        bar.pack(side=tk.TOP, fill=tk.X)
+
+        ttk.Label(bar, text="Bins:").pack(side=tk.LEFT)
         self.hbins_var = tk.StringVar(value=str(p["heatmap_bins"]))
         ttk.Spinbox(
             bar, from_=5, to=300, increment=5, width=5, textvariable=self.hbins_var
+        ).pack(side=tk.LEFT, padx=(4, 12))
+
+        ttk.Label(bar, text="Colormap:").pack(side=tk.LEFT)
+        if p["heatmap_cmap"] not in HEATMAP_CMAPS:  # hand-edited config
+            p["heatmap_cmap"] = HEATMAP_CMAPS[0]
+        self.cmap_var = tk.StringVar(value=p["heatmap_cmap"])
+        ttk.Combobox(
+            bar, textvariable=self.cmap_var, values=HEATMAP_CMAPS,
+            state="readonly", width=10,
         ).pack(side=tk.LEFT, padx=(4, 0))
 
-        for var in (self.size_var, self.alpha_var, self.hbins_var):
+        for var in (self.hbins_var, self.cmap_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
-        self._on_color_mode(redraw=False)
+
+    def _build_summary_controls(self, parent):
+        """Checkboxes choosing which column groups the Summary table shows."""
+        groups = self.config_data["summary_groups"]
+        bar = ttk.Frame(parent, padding=(4, 6))
+        bar.pack(side=tk.TOP, fill=tk.X)
+        ttk.Label(bar, text="Show:").pack(side=tk.LEFT, padx=(0, 6))
+        self.group_vars = {}
+        for key, label in SUMMARY_GROUP_LABELS.items():
+            var = tk.BooleanVar(value=groups.get(key, False))
+            ttk.Checkbutton(
+                bar, text=label, variable=var, command=self._show_summary
+            ).pack(side=tk.LEFT, padx=(0, 10))
+            self.group_vars[key] = var
+        ttk.Label(
+            bar, text="(Export always includes every column)", foreground="gray"
+        ).pack(side=tk.RIGHT)
 
     def _enable_drop(self) -> None:
         """Register the window as a drop target for files and folders."""
@@ -157,9 +201,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
 
-        # Summary tab (a Treeview table).
+        # Summary tab (column-group checkboxes over a Treeview table).
         self.tab_summary = ttk.Frame(self.nb)
         self.nb.add(self.tab_summary, text="Summary")
+        self._build_summary_controls(self.tab_summary)
         self.summary_tree = self._make_tree(self.tab_summary)
 
         # Time-bins tab.
@@ -167,11 +212,19 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.nb.add(self.tab_bins, text="Time Bins")
         self.bins_tree = self._make_tree(self.tab_bins)
 
-        # Plot tabs.
+        # Plot tabs: a control row on top, and an area the figure is redrawn into
+        # (kept separate so redrawing never removes the controls).
         self.tab_path = ttk.Frame(self.nb)
         self.nb.add(self.tab_path, text="Path")
+        self._build_path_controls(self.tab_path)
+        self.path_area = ttk.Frame(self.tab_path)
+        self.path_area.pack(fill=tk.BOTH, expand=True)
+
         self.tab_heat = ttk.Frame(self.nb)
         self.nb.add(self.tab_heat, text="Heatmap")
+        self._build_heatmap_controls(self.tab_heat)
+        self.heat_area = ttk.Frame(self.tab_heat)
+        self.heat_area.pack(fill=tk.BOTH, expand=True)
 
     def _make_tree(self, parent) -> ttk.Treeview:
         wrap = ttk.Frame(parent)
@@ -225,6 +278,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         p["point_size"] = read(self.size_var, float, 0.5, 50, "point_size")
         p["alpha"] = read(self.alpha_var, float, 0.05, 1.0, "alpha")
         p["heatmap_bins"] = read(self.hbins_var, int, 5, 300, "heatmap_bins")
+        p["heatmap_cmap"] = self.cmap_var.get() or p["heatmap_cmap"]
         p["color_by_speed"] = bool(self.speed_var.get())
         p["point_color"] = self.point_color
         return p
@@ -242,7 +296,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             return
         try:
             self._show_figure(
-                self.tab_path,
+                self.path_area,
                 path_figure(
                     self.current,
                     color_by_speed=p["color_by_speed"],
@@ -252,7 +306,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 ),
             )
             self._show_figure(
-                self.tab_heat, heatmap_figure(self.current, bins=p["heatmap_bins"])
+                self.heat_area,
+                heatmap_figure(
+                    self.current, bins=p["heatmap_bins"], cmap=p["heatmap_cmap"]
+                ),
             )
         except Exception:
             traceback.print_exc()
@@ -277,6 +334,9 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.config_data["fps"] = fps
         self.config_data["bin_seconds"] = bin_s
         self._plot_settings()
+        self.config_data["summary_groups"] = {
+            k: bool(v.get()) for k, v in self.group_vars.items()
+        }
         try:
             save_config(self.config_data)
         except OSError:
@@ -287,6 +347,19 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self.after_cancel(self._redraw_job)
         self._save_settings(self._fps(), self._bin_seconds())
         self.destroy()
+
+    def _show_summary(self) -> None:
+        """Fill the Summary table with File plus the checked column groups."""
+        df = self._summary_df
+        if df is None or df.empty:
+            self._fill_tree(self.summary_tree, df)
+            return
+        groups = summary_column_groups(df.columns)
+        cols = [c for c in df.columns if c == "File"]
+        for key, var in self.group_vars.items():
+            if var.get():
+                cols += groups.get(key, [])  # group order, so Details stay last
+        self._fill_tree(self.summary_tree, df[cols])
 
     def _fill_tree(self, tree: ttk.Treeview, df) -> None:
         tree.delete(*tree.get_children())
@@ -410,21 +483,21 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         d = self.current
         self._summary_df = batch_summary([d], fps=fps)
         self._bins_df = binned_metrics(d, fps=fps, bin_seconds=bin_s)
-        self._fill_tree(self.summary_tree, self._summary_df)
+        self._show_summary()
         self._fill_tree(self.bins_tree, self._bins_df)
         self._redraw_plots()
 
     def _recompute_batch(self, fps: float, bin_s: float):
         self._summary_df = batch_summary(self.batch, fps=fps)
         self._bins_df = None
-        self._fill_tree(self.summary_tree, self._summary_df)
+        self._show_summary()
         self._fill_tree(self.bins_tree, None)
         # Plots are per-file; in batch mode point the user back to single-file.
         # The Time Bins table is left in place (just emptied) so single-file mode
         # can fill it again; the plot tabs are rebuilt on every draw anyway.
         note = "Plots and time bins show for a single file.\nUse “Open File…” to view one."
-        self._clear_tab(self.tab_path, note)
-        self._clear_tab(self.tab_heat, note)
+        self._clear_tab(self.path_area, note)
+        self._clear_tab(self.heat_area, note)
 
     def export_table(self):
         """Export whichever table is on the active tab (Summary or Time Bins)."""

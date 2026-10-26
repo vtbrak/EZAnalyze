@@ -34,6 +34,9 @@ except ImportError:
 import pandas as pd
 import matplotlib
 matplotlib.use("Agg")  # figures are built off-screen, then embedded
+# Plots saved from the toolbar keep a transparent background, so empty heatmap
+# cells (and the area around each plot) can be recolored in an image editor.
+matplotlib.rcParams["savefig.transparent"] = True
 from matplotlib.backends.backend_tkagg import (
     FigureCanvasTkAgg,
     NavigationToolbar2Tk,
@@ -254,10 +257,28 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         ttk.Combobox(
             bar, textvariable=self.cmap_var, values=HEATMAP_CMAPS,
             state="readonly", width=10,
-        ).pack(side=tk.LEFT, padx=(4, 0))
+        ).pack(side=tk.LEFT, padx=(4, 16))
+
+        self.bg_var = tk.BooleanVar(value=p["heatmap_background"])
+        bg_check = ttk.Checkbutton(
+            bar, text="Add background", variable=self.bg_var,
+            command=self._on_background,
+        )
+        bg_check.pack(side=tk.LEFT, padx=(0, 8))
+        Tooltip(bg_check, "Fill every cell the animal never entered with one flat "
+                          "color. Off: those cells are left empty, and transparent "
+                          "in a saved PNG.")
+        self.bg_color = p["heatmap_bg_color"]
+        self.bg_btn = ttk.Button(bar, text="Background color…", command=self._pick_bg_color)
+        self.bg_btn.pack(side=tk.LEFT)
+        self.bg_swatch = tk.Label(
+            bar, width=2, background=self.bg_color, relief=tk.SOLID, borderwidth=1
+        )
+        self.bg_swatch.pack(side=tk.LEFT, padx=(4, 0))
 
         for var in (self.hbins_var, self.cmap_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
+        self._on_background(redraw=False)
 
     def _build_summary_controls(self, parent):
         """Checkboxes choosing which column groups the Summary table shows."""
@@ -379,6 +400,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         p["heatmap_cmap"] = self.cmap_var.get() or p["heatmap_cmap"]
         p["color_by_speed"] = bool(self.speed_var.get())
         p["point_color"] = self.point_color
+        p["heatmap_background"] = bool(self.bg_var.get())
+        p["heatmap_bg_color"] = self.bg_color
         return p
 
     def _schedule_redraw(self) -> None:
@@ -407,7 +430,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self._show_figure(
                 self.heat_area,
                 heatmap_figure(
-                    entry.data, bins=p["heatmap_bins"], cmap=p["heatmap_cmap"]
+                    entry.data, bins=p["heatmap_bins"], cmap=p["heatmap_cmap"],
+                    background=p["heatmap_bg_color"] if p["heatmap_background"] else None,
                 ),
             )
         except Exception:
@@ -418,6 +442,21 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         state = tk.DISABLED if self.speed_var.get() else tk.NORMAL
         self.color_btn.configure(state=state)
         if redraw:
+            self._schedule_redraw()
+
+    def _on_background(self, redraw: bool = True) -> None:
+        # The color only matters while the background is on.
+        self.bg_btn.configure(state=tk.NORMAL if self.bg_var.get() else tk.DISABLED)
+        if redraw:
+            self._schedule_redraw()
+
+    def _pick_bg_color(self) -> None:
+        _, hex_color = colorchooser.askcolor(
+            color=self.bg_color, title="Heatmap background color", parent=self
+        )
+        if hex_color:
+            self.bg_color = hex_color
+            self.bg_swatch.configure(background=hex_color)
             self._schedule_redraw()
 
     def _pick_color(self) -> None:

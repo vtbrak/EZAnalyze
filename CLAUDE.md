@@ -71,7 +71,8 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 
 ## Build order and progress
 Steps 1–3, ROADMAP §7 (file-input workflow), and the §10 groundwork (shared
-dialogs + Windows launcher) are done. Next: the user's first PC test, §8 display fixes, EPM metrics,
+dialogs + Windows launcher), and §8 display fixes are done. Next: the user's first PC
+test (when they're ready), EPM metrics,
 open-field metrics, immobility, and §9 export last. **ROADMAP "Build order" is
 the source of truth.**
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder

@@ -36,6 +36,10 @@ DEFAULTS: dict = {
         "color_by_speed": True,
         "heatmap_bins": 50,
         "heatmap_cmap": "inferno",
+        # Fill cells the animal never entered with one flat color (off = those
+        # cells are transparent in a saved PNG).
+        "heatmap_background": False,
+        "heatmap_bg_color": "#cccccc",
     },
     # Which Summary-table column groups are shown on screen (export has all).
     "summary_groups": {

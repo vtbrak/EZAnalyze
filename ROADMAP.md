@@ -203,17 +203,20 @@ clear.
 
 All §7 decisions are made (2026-10-23).
 
-### 8. Layout / display changes (requested 2026-10-23 — not built yet)
-- [ ] **Heatmap: no region labels drawn on the plot** (both EPM and open field).
+### 8. Layout / display changes (requested 2026-10-23 — ✅ built 2026-10-23)
+- [x] **Heatmap: no region labels drawn on the plot** (both EPM and open field).
   The name boxes added in step 3 sit on top of the data and block the view.
   Keep the ROI outlines. (Path plot labels are not part of this request.)
-  - To decide: whether region names should appear somewhere off the data
-    (e.g. outside the axes or in a legend), or not at all on the heatmap.
-- [ ] **Heatmap: no background by default** (EPM and open field). Today
+  - ✅ Decided: **labels sit outside the bounds of the regions.** Each label
+    goes just past the outermost ROI edge, in its region's direction (EPM
+    arms: past the arm end; a central region: along a free diagonal), with a
+    thin line that **stops at the region's edge** so it doesn't cross data
+    inside the region.
+- [x] **Heatmap: no background by default** (EPM and open field). Today
   every empty cell is drawn in the colormap's lowest color (black for
   inferno), so the whole rectangle around the maze is filled. Instead, cells
   with no occupancy should show nothing.
-- [ ] **"Add background" button** on the Heatmap tab (EPM and open field).
+- [x] **"Add background" button** on the Heatmap tab (EPM and open field).
   ✅ Decided 2026-10-23:
   - **Background = any pixel the mouse never occupied.** In practice that's
     every heatmap cell with zero frames, so it follows the heatmap's bin size.
@@ -222,9 +225,16 @@ All §7 decisions are made (2026-10-23).
     with it on, they're filled with a background color.
   - **The button's on/off state is saved** in `config.json` like the other
     plot settings.
-  - Implies a PNG export of the heatmap that keeps transparency. The current
-    matplotlib toolbar save may not preserve it, so this needs checking when
-    built.
+  - ✅ Built as an "Add background" toggle plus a **Background color…** picker
+    (default light gray `#cccccc`), both saved. The toolbar's save keeps
+    transparency (`savefig.transparent`), verified by checking the PNG's
+    pixels: empty cells have alpha 0, or a flat color when the background is on.
+  - **Heatmap grid now covers the whole arena** (all ROIs plus wherever the
+    animal went), with **square cells**: `bins` cells along the longer side.
+    So "background" fills every arena cell the animal never entered, not just
+    gaps within the area it covered. Side effect: for a narrow path like the
+    EPM sample, cells are coarser than before at the same bin count. Raise
+    Bins for finer detail.
 
 - [x] **Dialog box text: only the first sentence in bold**, the rest in
   regular type. ✅ Built 2026-10-23 as `dialogs.py`, used for every pop-up. Today pop-ups such as the center/periphery overlap warning
@@ -360,8 +370,7 @@ Next (updated 2026-10-23):
 4. ✅ **File-input workflow (§7).**
 5. ✅ **Mac + PC groundwork (§10):** shared pop-up dialog and Windows
    launcher. Next: the user's first PC test.
-6. **Display fixes (§8):** no heatmap labels, no background by default, and
-   the "Add background" button.
+6. ✅ **Display fixes (§8).**
 7. **EPM metrics (§4)**, validated against `EPM.csv`.
 8. **Open-field metrics (§5)**, validated against `Open Field.csv`.
 9. **Shared immobility detection** (§4/§5).

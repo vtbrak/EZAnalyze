@@ -36,8 +36,11 @@ To run from a terminal instead:
 **Time bins** (per file): the session split into fixed-length bins (default
 60 s) with distance, mean speed, and time-in-zone per bin.
 
-**Plots** (per file): path/trajectory (colored by speed) and occupancy heatmap,
-both with ROI outlines overlaid.
+**Plots** (per file): path/trajectory (colored by speed or one solid color) and
+occupancy heatmap, both with ROI outlines. The heatmap labels each region
+outside the ROIs so the data stays visible. Cells the animal never entered are
+left empty (transparent in a saved PNG) unless **Add background** fills them
+with one flat color, which is easy to recolor in an image editor.
 
 ## Working with files
 1. **Add File…**, **Add Folder…**, or drag files/folders onto the window. Files

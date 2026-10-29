@@ -123,12 +123,12 @@ arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
 `EPM_PctSession_Open` / `_Closed` / `_Center`. Blank = can't be computed
 (e.g. no open-arm time, or an arm never entered).
 
-### 5. Open Field metrics
-- [ ] **Center-region entries** — count entries into the center, using the
+### 5. Open Field metrics (✅ built 2026-10-29, except immobility)
+- [x] **Center-region entries** — count entries into the center, using the
   shared entry rule (min frames inside) plus a **minimum time-between-entries
   threshold** (debounce). Both configurable, saved.
-- [ ] **Time & % in center**, latency to first center entry.
-- [ ] **Field crossings** — a crossing is a traversal **across the center** that
+- [x] **Time & % in center**, latency to first center entry.
+- [x] **Field crossings** — a crossing is a traversal **across the center** that
   connects two sides. Counts in three categories:
   - **Opposite sides**: left↔right and top↔bottom.
   - **Adjoining sides**: e.g. left→top — counted **only if the path spends at
@@ -138,8 +138,60 @@ arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
     region column. **Sides come from X/Y** relative to the center ROI, with
     the top of the video as the top of the arena (the files have no side
     regions).
-- [ ] **Crossing speed** — report **both** average speed over the traversal
+- [x] **Crossing speed** — report **both** average speed over the traversal
   (leaving one side → reaching the next) and **peak** speed during crossings.
+
+**✅ Open Field definitions (decided 2026-10-29)**
+- **Defaults:** min time between center entries **1 s**; min center time for an
+  adjoining-side crossing **0.5 s**. Both are input boxes on a third toolbar
+  row that only shows when the test is Open Field. They're saved and lock at
+  Analyze.
+- **Center entries:** the entry rule (min frames) applies. Re-entering the
+  center less than the minimum gap after leaving it continues the same visit.
+  The starting region counts toward time, not entries or latency (as for EPM).
+- **Sides follow the center ROI's drawn lines as they are in the file**
+  (user, 2026-10-29: "Follow the lines of the ROIs from the file, not what
+  would be assumed to be straight." The program doesn't draw ROI lines; it
+  reports which side of the drawn line the point is on.) Each edge of the
+  drawn center polygon is extended across the arena, and a point belongs to
+  the side whose line it's furthest beyond: left of the drawn left edge =
+  left, above the drawn top edge = top, and so on. **Corners split along the
+  diagonal** between the two lines. An edge's side comes from the way it
+  faces. Top of the video = top of the arena. A point inside the polygon but
+  not in the center by the file's columns takes its nearest edge's side, so
+  every frame is center or exactly one side. Built as
+  `core.metrics.side_labels`.
+- **Every file has its own ROI lines, and each file is analyzed against its
+  own** (user, 2026-10-29). Center membership comes from that file's region
+  columns; sides, crossings, and plot outlines/labels come from that file's
+  own `ROI_coordinates`. Nothing geometric is shared or reused between files.
+  Only the region *name → role* mapping is shared, since names mean the same
+  thing across files. Verified with two files that have the same path but
+  different center squares: each gets its own sides and crossings.
+- **Crossings:** side A → center → side B with B ≠ A, using the entry rule's
+  held places. Opposite sides (left↔right, top↔bottom) always count. Adjoining
+  sides count only if the center visit lasted ≥ the minimum. Going around the
+  edge without the center, or returning to the same side, isn't a crossing.
+- **Crossing speed:** speed is **smoothed** first (user, 2026-10-29): a
+  centered rolling mean over **Speed smoothing (frames)**, default **5**
+  (0.25 s at 20 fps), saved, locked at Analyze, 1 = none. The average is the
+  mean of each counted crossing's average speed from leaving side A to
+  reaching side B. The peak is the fastest smoothed frame during any counted
+  crossing.
+- **Recorded with the results:** Open Field rows carry
+  `MinBetweenCenterEntries_s`, `MinCenterAdjoiningCrossing_s`, and
+  `SpeedSmoothing_frames` (plus `Test` and `MinEntryFrames`) in the Details
+  group and every export.
+- **Columns** (Summary "Test measures"): `OF_Center_s`, `OF_PctCenter`,
+  `OF_Periphery_s`, `OF_PctPeriphery`, `OF_CenterEntries`,
+  `OF_Latency_Center_s`, `OF_Left_s` / `_Right_s` / `_Top_s` / `_Bottom_s`,
+  `OF_Crossings_Total`, `_Opposite`, `_LeftRight`, `_TopBottom`, `_Adjoining`,
+  `OF_CrossingSpeed_Mean_cm_s`, `OF_CrossingSpeed_Peak_cm_s`.
+- **Sample `Open Field.csv`:** center 21.5% (793 s), 227 center entries (250
+  with no gap, 202 with 3 s), 197 crossings (66 opposite: 27 L↔R and 39 T↔B;
+  131 adjoining), crossing speed 10.2 cm/s average and 36.1 cm/s peak with
+  5-frame smoothing (42.8 unsmoothed). Center + sides = the full 3686.3 s
+  session.
 - [ ] Immobility detection (shared with EPM).
 
 ### 6. Config / persistence
@@ -304,7 +356,8 @@ For each loaded file (one file, or every file in a folder), named after the
 - [ ] Each `_analysis.xlsx` includes a **settings sheet** recording every
   setting used to generate its results:
   - analysis: fps, test type, region roles, thresholds, **entry rule (min
-    entry frames)**
+    entry frames)**, and for Open Field the **min time between center entries**,
+    **min center time for adjoining crossings**, and **speed smoothing**
   - **Time Bins**: bin size
   - **Path**: point size, transparency, color-by-speed, point color
   - **Heatmap**: bins, colormap, background on/off
@@ -399,7 +452,8 @@ Next (updated 2026-10-23):
 6. ✅ **Display fixes (§8).**
 7. ✅ **EPM metrics (§4)**, validated against `EPM.csv`. Immobility is still
    to come (step 9).
-8. **Open-field metrics (§5)**, validated against `Open Field.csv`.
+8. ✅ **Open-field metrics (§5)**, validated against `Open Field.csv`. Immobility
+   still to come (step 9).
 9. **Shared immobility detection** (§4/§5).
 10. **Export (§9)** comes last, since it bundles every table and plot built
     above.

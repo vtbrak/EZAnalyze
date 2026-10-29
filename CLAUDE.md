@@ -49,7 +49,11 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 ## Locked design decisions
 - **Trust the file's own region columns** (one True/False column per region)
   rather than recomputing zones from X/Y. The exception is open-field sides,
-  which files don't have, so they come from X/Y.
+  which files don't have, so they come from X/Y judged against **that file's
+  own drawn center-ROI lines** (as drawn, tilt and all; never straightened).
+- **Each file has its own ROI lines; always analyze a file against its own.**
+  Never share or cache ROI geometry between files. Only the region-name → role
+  mapping is shared.
 - **Region names and order vary between files**, so there's a **region-role
   mapping**: auto-classified by keyword or code (EPM `ol/or`→open, `ct/cb`→
   closed, `mid`→center), user-overridable, **saved**. Unrecognized names
@@ -73,8 +77,8 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 
 ## Build order and progress
 Steps 1–3, ROADMAP §7 (file-input workflow), and the §10 groundwork (shared
-dialogs + Windows launcher), §8 display fixes, and EPM metrics (§4, minus
-immobility) are done. Next: open-field metrics, immobility, and §9 export last. **ROADMAP "Build order" is
+dialogs + Windows launcher), §8 display fixes, and EPM and open-field metrics (§4–§5, minus immobility) are
+done. Next: immobility, and §9 export last. **ROADMAP "Build order" is
 the source of truth.**
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample

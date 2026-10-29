@@ -33,6 +33,19 @@ Index, closed/open time ratio, and latency to first open/closed/center entry.
 An entry only counts once the animal stays in a region for at least **Min
 entry (frames)** (default 5), which filters jitter at region boundaries.
 
+**Open Field** (when Test is Open Field): center time and %, center entries
+(a return within **Min time between center entries**, default 1 s, is the
+same visit), latency to the center, time on each side, field crossings
+(opposite sides, and adjoining sides when the center visit lasted at least
+the adjoining minimum, default 0.5 s), and crossing speed (average and
+peak, smoothed over **Speed smoothing (frames)**, default 5). Sides are judged
+against the center ROI's lines exactly as drawn in the file (each edge
+extended across the arena), with the top of the video as the top of the
+arena.
+
+Every analyzed row records the settings that produced it (test, entry rule,
+and the Open Field thresholds), so exported tables show how they were made.
+
 **Summary metrics** (one row per file):
 - Total distance (cm / px), duration, mean speed
 - Time and percent spent in each region (e.g. center / peripheral, or EPM arms) and each ROI label

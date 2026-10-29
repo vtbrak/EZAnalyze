@@ -8,6 +8,9 @@ from .metrics import (
     summary_column_groups,
     epm_metrics,
     held_entries,
+    held_states,
+    of_metrics,
+    side_labels,
 )
 from .plotting import path_figure, heatmap_figure, regions_figure
 from .regions import (
@@ -36,6 +39,9 @@ __all__ = [
     "summary_column_groups",
     "epm_metrics",
     "held_entries",
+    "held_states",
+    "of_metrics",
+    "side_labels",
     "path_figure",
     "heatmap_figure",
     "regions_figure",

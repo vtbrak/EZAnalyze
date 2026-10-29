@@ -28,6 +28,8 @@ DEFAULTS: dict = {
     # Open field.
     "min_seconds_between_entries": 1.0,
     "min_center_seconds_adjoining": 0.5,
+    # Crossing speed is smoothed with a rolling mean over this many frames.
+    "speed_smoothing_frames": 5,
     # Plot style.
     "plot": {
         "point_size": 4.0,  # float so sizes like 2.5 survive a reload

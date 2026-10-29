@@ -48,6 +48,7 @@ from core import (
     summary_metrics,
     binned_metrics,
     epm_metrics,
+    of_metrics,
     path_figure,
     heatmap_figure,
     load_config,
@@ -105,7 +106,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         super().__init__()
         self.title("Behavior Tracker")
         self.geometry("1080x720")
-        self.minsize(880, 560)
+        self.minsize(940, 560)  # widest toolbar row is ~900 px
 
         self.config_data = load_config()
 
@@ -117,10 +118,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
         self._build_controls()
         self._build_tabs()
+        self._show_test_settings()
         self._enable_drop()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         # Settings are editable until Analyze, so keep the status bar current.
-        for var in (self.fps_var, self.bin_var, self.entry_var):
+        for var in (self.fps_var, self.bin_var, self.entry_var, self.gap_var, self.adj_var,
+                    self.smooth_var):
             var.trace_add("write", lambda *_: self._update_status())
         self._refresh()
 
@@ -204,6 +207,34 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         regions_btn.pack(side=tk.LEFT)
         Tooltip(regions_btn, "Choose what each region in the files represents "
                              "(open arm, center, ...). Saved for next time.")
+
+        # Row 3: Open Field thresholds, shown only when the test is Open Field.
+        self.of_bar = ttk.Frame(self, padding=(8, 0, 8, 8))
+        ttk.Label(self.of_bar, text="Min gap between center entries (s):").pack(side=tk.LEFT)
+        self.gap_var = tk.StringVar(value=f"{self.config_data['min_seconds_between_entries']:g}")
+        self.gap_entry = ttk.Entry(self.of_bar, textvariable=self.gap_var, width=5)
+        self.gap_entry.pack(side=tk.LEFT, padx=(4, 16))
+        ttk.Label(self.of_bar, text="Min center time, adjoining (s):").pack(side=tk.LEFT)
+        self.adj_var = tk.StringVar(value=f"{self.config_data['min_center_seconds_adjoining']:g}")
+        self.adj_entry = ttk.Entry(self.of_bar, textvariable=self.adj_var, width=5)
+        self.adj_entry.pack(side=tk.LEFT, padx=(4, 16))
+        ttk.Label(self.of_bar, text="Speed smoothing (frames):").pack(side=tk.LEFT)
+        self.smooth_var = tk.StringVar(value=str(self.config_data["speed_smoothing_frames"]))
+        self.smooth_entry = ttk.Entry(self.of_bar, textvariable=self.smooth_var, width=4)
+        self.smooth_entry.pack(side=tk.LEFT, padx=(4, 0))
+        for widget, unlocked in (
+            (self.gap_entry, "Returning to the center sooner than this after leaving "
+                             "it counts as the same visit, not a new entry. Locks "
+                             "when you click Analyze."),
+            (self.adj_entry, "A crossing between adjoining sides (e.g. left to top) "
+                             "only counts if the animal spent at least this long in "
+                             "the center on the way. Opposite-side crossings always "
+                             "count. Locks when you click Analyze."),
+            (self.smooth_entry, "Crossing speeds use speed averaged over this many "
+                                "frames, so a one-frame tracking jump can't set the "
+                                "peak. 1 = no smoothing. Locks when you click Analyze."),
+        ):
+            Tooltip(widget, lambda u=unlocked: LOCKED_TIP if self._locked() else u)
 
         self.status = tk.StringVar()
         status_bar = ttk.Label(
@@ -304,7 +335,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             ).pack(side=tk.LEFT, padx=(0, 10))
             self.group_vars[key] = var
         ttk.Label(
-            bar, text="(Export always includes every column)", foreground="gray"
+            bar, text="(Export includes all columns)", foreground="gray"
         ).pack(side=tk.RIGHT)
 
     def _enable_drop(self) -> None:
@@ -404,6 +435,34 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                          "1 or more. Using 5 frames instead.")
             self.entry_var.set("5")
             return 5
+
+    def _frames_setting(self, var, name: str, default: int) -> int:
+        """A whole number of frames (1 or more), resetting to `default` if invalid."""
+        try:
+            v = int(float(var.get()))
+            if v < 1:
+                raise ValueError
+            return v
+        except ValueError:
+            show_warning(self, f"Invalid {name}",
+                         f"The {name} must be a whole number of frames, 1 or more. "
+                         f"Using {default} frames instead.")
+            var.set(str(default))
+            return default
+
+    def _seconds_setting(self, var, name: str, default: float) -> float:
+        """A threshold in seconds (0 or more), resetting to `default` if invalid."""
+        try:
+            v = float(var.get())
+            if v < 0:
+                raise ValueError
+            return v
+        except ValueError:
+            show_warning(self, f"Invalid {name}",
+                         f"The {name} must be a number of seconds, 0 or more. "
+                         f"Using {default:g} s instead.")
+            var.set(f"{default:g}")
+            return default
 
     def _plot_settings(self) -> dict:
         """Current plot style. A box that's mid-edit or invalid keeps its last good
@@ -619,7 +678,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         The Path/Heatmap plot controls are never locked."""
         locked = self._locked()
         self.test_box.configure(state="disabled" if locked else "readonly")
-        for entry in (self.fps_entry, self.bin_entry, self.entry_entry):
+        for entry in (self.fps_entry, self.bin_entry, self.entry_entry,
+                      self.gap_entry, self.adj_entry, self.smooth_entry):
             entry.configure(state="disabled" if locked else "normal")
 
     def _fps_locked(self) -> float:
@@ -633,6 +693,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         load's settings (called at Analyze, before anything is locked)."""
         self.config_data["test_type"] = self.test_var.get()
         self.config_data["min_entry_frames"] = self._min_entry_frames()
+        self.config_data["min_seconds_between_entries"] = self._seconds_setting(
+            self.gap_var, "time between center entries", 1.0)
+        self.config_data["min_center_seconds_adjoining"] = self._seconds_setting(
+            self.adj_var, "center time for adjoining crossings", 0.5)
+        self.config_data["speed_smoothing_frames"] = self._frames_setting(
+            self.smooth_var, "speed smoothing", 5)
         self._save_settings(self._fps(), self._bin_seconds())
 
     # -------------------------------------------------------------- regions
@@ -747,7 +813,15 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         # Only reachable while unlocked; regions are checked at Analyze.
         self.config_data["test_type"] = self.test_var.get()
         self._save_settings(self._fps(), self._bin_seconds())
+        self._show_test_settings()
         self._update_status()
+
+    def _show_test_settings(self) -> None:
+        """Show the Open Field threshold row only when Open Field is chosen."""
+        if self.test_var.get() == "Open Field":
+            self.of_bar.pack(side=tk.TOP, fill=tk.X, before=self.nb)
+        else:
+            self.of_bar.pack_forget()
 
     # --------------------------------------------------------------- status
     def _update_status(self) -> None:
@@ -762,15 +836,26 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if self._locked():
             settings = (f"{self.test_var.get()}, {self._fps_locked():g} fps, "
                         f"{self._bin_seconds_locked():g} s bins, "
-                        f"entry ≥ {self.config_data['min_entry_frames']} frames (locked)")
+                        f"entry ≥ {self.config_data['min_entry_frames']} frames"
+                        f"{self._of_status(locked=True)} (locked)")
         else:
             settings = (f"{self.test_var.get()}, {self.fps_var.get()} fps, "
                         f"{self.bin_var.get()} s bins, entry ≥ {self.entry_var.get()} "
-                        "frames (locks at Analyze)")
+                        f"frames{self._of_status(locked=False)} (locks at Analyze)")
         self.status.set(
             f"{len(self.files)} file(s), {done} analyzed — {settings} — "
             f"Regions: {regions}"
         )
+
+    def _of_status(self, locked: bool) -> str:
+        if self.test_var.get() != "Open Field":
+            return ""
+        if locked:
+            gap = f"{self.config_data['min_seconds_between_entries']:g}"
+            adj = f"{self.config_data['min_center_seconds_adjoining']:g}"
+        else:
+            gap, adj = self.gap_var.get(), self.adj_var.get()
+        return f", entry gap {gap} s, adjoining center {adj} s"
 
     def _refresh(self) -> None:
         """Re-sync everything that depends on the file list."""
@@ -906,15 +991,27 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             min_entry = self.config_data["min_entry_frames"]
             for e in targets:
                 summary = summary_metrics(e.data, fps=fps)
-                if test == "Elevated Plus Maze":
-                    summary.update(epm_metrics(
-                        e.data, self._current_roles([e]), fps=fps,
-                        min_entry_frames=min_entry,
-                    ))
+                roles = self._current_roles([e])
                 # Record the settings behind these numbers in the row itself, so
                 # an exported table shows how it was produced.
-                summary["Test"] = test
-                summary["MinEntryFrames"] = min_entry
+                settings = {"Test": test, "MinEntryFrames": min_entry}
+                if test == "Elevated Plus Maze":
+                    summary.update(epm_metrics(
+                        e.data, roles, fps=fps, min_entry_frames=min_entry,
+                    ))
+                elif test == "Open Field":
+                    gap = self.config_data["min_seconds_between_entries"]
+                    adj = self.config_data["min_center_seconds_adjoining"]
+                    smooth = self.config_data["speed_smoothing_frames"]
+                    summary.update(of_metrics(
+                        e.data, roles, fps=fps, min_entry_frames=min_entry,
+                        min_between_entries_s=gap, min_center_adjoining_s=adj,
+                        speed_smoothing_frames=smooth,
+                    ))
+                    settings.update({"MinBetweenCenterEntries_s": gap,
+                                     "MinCenterAdjoiningCrossing_s": adj,
+                                     "SpeedSmoothing_frames": smooth})
+                summary.update(settings)
                 e.summary = summary
                 e.bins = binned_metrics(e.data, fps=fps, bin_seconds=bin_s)
         finally:

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import traceback
+from datetime import datetime
 import tkinter as tk
 from dataclasses import dataclass
 from tkinter import colorchooser, filedialog, ttk
@@ -54,6 +55,7 @@ from core import (
     load_config,
     save_config,
     summary_column_groups,
+    ROLE_LABELS,
     TEST_TYPES,
     auto_role,
     center_periphery_overlap,
@@ -61,6 +63,7 @@ from core import (
     describe_roles,
     resolve_roles,
 )
+from core.export import output_paths, save_figure, settings_table, write_analysis_workbook
 from region_dialog import RegionDialog
 from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
@@ -115,6 +118,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._selected: int | None = None           # index into self.files
         self._summary_df = None                     # last Summary table (for export)
         self._redraw_job = None                     # pending debounced plot redraw
+        self._canvases = {}                         # plot area -> its figure canvas
 
         self._build_controls()
         self._build_tabs()
@@ -159,9 +163,22 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.analyze_all_btn.pack(side=tk.LEFT, padx=(6, 0))
         Tooltip(self.analyze_all_btn, "Analyze every file in the list.")
 
-        ttk.Button(files_bar, text="Export Table…", command=self.export_table).pack(
-            side=tk.RIGHT
+        self.export_all_btn = ttk.Button(
+            files_bar, text="Export All", command=lambda: self.export(False)
         )
+        self.export_all_btn.pack(side=tk.RIGHT)
+        Tooltip(self.export_all_btn, "Export every analyzed file. Each gets "
+                                     "<name>_analysis.xlsx, <name>_path.png, and "
+                                     "<name>_heatmap.png next to its CSV (existing "
+                                     "files are overwritten).")
+        self.export_sel_btn = ttk.Button(
+            files_bar, text="Export Selected", command=lambda: self.export(True)
+        )
+        self.export_sel_btn.pack(side=tk.RIGHT, padx=(0, 6))
+        Tooltip(self.export_sel_btn, "Export the file selected in the Summary table: "
+                                     "<name>_analysis.xlsx, <name>_path.png, and "
+                                     "<name>_heatmap.png next to its CSV (existing "
+                                     "files are overwritten).")
 
         # Row 2: the settings locked per load, plus region roles.
         bar = ttk.Frame(self, padding=(8, 0, 8, 8))
@@ -499,25 +516,29 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if entry is None or not entry.analyzed:
             return
         try:
-            self._show_figure(
-                self.path_area,
-                path_figure(
-                    entry.data,
-                    color_by_speed=p["color_by_speed"],
-                    point_size=p["point_size"],
-                    point_color=p["point_color"],
-                    alpha=p["alpha"],
-                ),
-            )
-            self._show_figure(
-                self.heat_area,
-                heatmap_figure(
-                    entry.data, bins=p["heatmap_bins"], cmap=p["heatmap_cmap"],
-                    background=p["heatmap_bg_color"] if p["heatmap_background"] else None,
-                ),
-            )
+            self._show_figure(self.path_area, self._path_fig(entry, p))
+            self._show_figure(self.heat_area, self._heat_fig(entry, p))
         except Exception:
             traceback.print_exc()
+
+    # The same builders draw the on-screen plots and the exported images, so
+    # exports always match what's shown.
+    @staticmethod
+    def _path_fig(entry, p):
+        return path_figure(
+            entry.data,
+            color_by_speed=p["color_by_speed"],
+            point_size=p["point_size"],
+            point_color=p["point_color"],
+            alpha=p["alpha"],
+        )
+
+    @staticmethod
+    def _heat_fig(entry, p):
+        return heatmap_figure(
+            entry.data, bins=p["heatmap_bins"], cmap=p["heatmap_cmap"],
+            background=p["heatmap_bg_color"] if p["heatmap_background"] else None,
+        )
 
     def _on_color_mode(self, redraw: bool = True) -> None:
         # The solid color only applies when not coloring by speed.
@@ -622,12 +643,31 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             child.destroy()
         canvas = FigureCanvasTkAgg(fig, master=parent)
         canvas.draw()
+        self._canvases[str(parent)] = canvas
         toolbar = NavigationToolbar2Tk(canvas, parent, pack_toolbar=False)
         toolbar.update()
         toolbar.pack(side=tk.BOTTOM, fill=tk.X)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
+    def _screen_size(self, area) -> tuple[float, float] | None:
+        """The size (inches) a plot has on screen in this tab, so exports can
+        be drawn at the same size and look the same. Falls back to the plot
+        area's size if the plot hasn't been drawn there yet."""
+        canvas = self._canvases.get(str(area))
+        if canvas is not None and canvas.get_tk_widget().winfo_ismapped():
+            w, h = canvas.figure.get_size_inches()
+            if w > 1 and h > 1:
+                return float(w), float(h)
+        # Not drawn yet: the notebook's space minus the control row and the
+        # plot toolbar (Figure dpi is 100, so 100 px = 1 in).
+        w_px = self.nb.winfo_width() - 20
+        h_px = self.nb.winfo_height() - 120
+        if w_px > 200 and h_px > 200:
+            return w_px / 100, h_px / 100
+        return None
+
     def _clear_tab(self, parent, message: str) -> None:
+        self._canvases.pop(str(parent), None)
         for child in parent.winfo_children():
             child.destroy()
         ttk.Label(parent, text=message, padding=20).pack()
@@ -1018,33 +1058,135 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self.config(cursor="")
         self._refresh()
 
-    def export_table(self):
-        """Export the Summary (every file) or the selected file's Time Bins."""
-        active = self.nb.tab(self.nb.select(), "text")
-        if active == "Time Bins":
+    def _settings_sheet(self, entry, plot: dict):
+        """Everything that produced this file's numbers and images."""
+        row = entry.summary
+        test = row.get("Test", self.test_var.get())
+        analysis = {
+            "Test": test,
+            "Frame rate (fps)": row.get("FPS"),
+            "Min entry (frames)": row.get("MinEntryFrames"),
+        }
+        if test == "Open Field":
+            analysis.update({
+                "Min gap between center entries (s)": row.get("MinBetweenCenterEntries_s"),
+                "Min center time, adjoining crossings (s)":
+                    row.get("MinCenterAdjoiningCrossing_s"),
+                "Speed smoothing (frames)": row.get("SpeedSmoothing_frames"),
+            })
+        roles = self._current_roles([entry])
+        return settings_table({
+            "Source": {
+                "Source file": entry.path,
+                "Video (File column)": entry.data.name,
+                "Exported": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            "Analysis": analysis,
+            "Region roles": {r: ROLE_LABELS.get(k, k) or "Unassigned"
+                             for r, k in roles.items()},
+            "Time Bins": {"Bin size (s)": self._bin_seconds_locked()},
+            "Path": {
+                "Point size": plot["point_size"],
+                "Transparency (alpha)": plot["alpha"],
+                "Color by speed": plot["color_by_speed"],
+                "Point color": plot["point_color"],
+            },
+            "Heatmap": {
+                "Bins": plot["heatmap_bins"],
+                "Colormap": plot["heatmap_cmap"],
+                "Add background": plot["heatmap_background"],
+                "Background color": plot["heatmap_bg_color"],
+            },
+            "Tracking (from file)": dict(entry.data.settings),
+        })
+
+    def export(self, selected_only: bool) -> None:
+        """Write each file's _analysis.xlsx, _path.png, and _heatmap.png next
+        to its source CSV, overwriting existing files."""
+        if selected_only:
             entry = self._selected_entry()
-            df = entry.bins if entry is not None and entry.analyzed else None
+            if entry is None:
+                show_info(self, "No file selected",
+                          "Select a file in the Summary table first.")
+                return
+            if not entry.analyzed:
+                show_info(self, "Not analyzed yet",
+                          f"{entry.label} hasn't been analyzed. Click Analyze "
+                          "Selected first, then export.")
+                return
+            targets = [entry]
         else:
-            df = self._summary_df
-        if df is None or df.empty:
-            show_info(self, "Nothing to export", "Analyze a file first.")
-            return
-        path = filedialog.asksaveasfilename(
-            title=f"Export {active}",
-            defaultextension=".csv",
-            filetypes=[("CSV", "*.csv"), ("Excel", "*.xlsx")],
-            initialfile=f"{active.lower().replace(' ', '_')}.csv",
-        )
-        if not path:
-            return
+            targets = [e for e in self.files if e.analyzed]
+            if not targets:
+                show_info(self, "Nothing to export",
+                          "No files have been analyzed yet. Click Analyze All "
+                          "first, then export.")
+                return
+        # A file added twice writes to the same names, so export it once.
+        seen, unique = set(), []
+        for e in targets:
+            key = self._same_file_key(e.path)
+            if key not in seen:
+                seen.add(key)
+                unique.append(e)
+
+        plot = dict(self._plot_settings())  # the on-screen plot settings, now
+        path_size = self._screen_size(self.path_area)
+        heat_size = self._screen_size(self.heat_area)
+        written, errors = [], []
+        self.config(cursor="watch")
+        self.update_idletasks()
         try:
-            if path.lower().endswith(".xlsx"):
-                df.to_excel(path, index=False)
-            else:
-                df.to_csv(path, index=False)
-            self.status.set(f"Exported {active} → {path}")
-        except Exception as exc:
-            show_error(self, "Export failed", f"The table couldn't be saved.\n\n{exc}")
+            for e in unique:
+                out = output_paths(e.path)
+                try:
+                    write_analysis_workbook(
+                        out["analysis"], {k: v for k, v in e.summary.items()},
+                        e.bins, self._settings_sheet(e, plot),
+                    )
+                    path_fig, heat_fig = self._path_fig(e, plot), self._heat_fig(e, plot)
+                    # Same size as on screen, so the export looks the same.
+                    if path_size:
+                        path_fig.set_size_inches(*path_size)
+                    if heat_size:
+                        heat_fig.set_size_inches(*heat_size)
+                    save_figure(path_fig, out["path"])
+                    save_figure(heat_fig, out["heatmap"])
+                    written.append(e)
+                except PermissionError:
+                    errors.append(f"• {e.label}: a file is open in another program "
+                                  "(e.g. the workbook in Excel). Close it and try again.")
+                except Exception as exc:  # report and carry on with the rest
+                    errors.append(f"• {e.label}: {exc}")
+                    traceback.print_exc()
+        finally:
+            self.config(cursor="")
+
+        skipped = len(self.files) - len([f for f in self.files if f.analyzed])
+        if written:
+            folders = sorted({os.path.dirname(e.path) for e in written})
+            where = folders[0] if len(folders) == 1 else f"{len(folders)} folders"
+            self.status.set(f"Exported {len(written)} file(s) → {where}")
+        if errors:
+            show_warning(
+                self, "Some files weren't exported",
+                f"{len(errors)} file(s) couldn't be exported.\n\n" + "\n".join(errors),
+            )
+        if written:
+            names = "\n".join(f"• {os.path.basename(output_paths(e.path)['analysis'])}"
+                              for e in written[:10])
+            if len(written) > 10:
+                names += f"\n…and {len(written) - 10} more"
+            note = ("" if selected_only or not skipped
+                    else f"\n\n{skipped} file(s) in the list weren't analyzed, so "
+                         "they weren't exported.")
+            show_info(
+                self, "Export finished",
+                f"Exported {len(written)} file(s) next to their CSVs.\n\n"
+                "Each has an _analysis.xlsx workbook (Summary, Time Bins, and "
+                f"Settings sheets) plus _path.png and _heatmap.png images.\n\n"
+                f"{names}{note}",
+            )
 
 
 def main():

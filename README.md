@@ -78,14 +78,31 @@ with one flat color, which is easy to recolor in an image editor.
 
 The file list resets when the app closes. Settings, plot style, Summary
 columns, and region roles are remembered. **Regions…** sets what each region
-in the files means (open arm, closed arm, center, periphery). **Export
-Table…** saves the Summary (every file) or the selected file's Time Bins as
-CSV or Excel.
+in the files means (open arm, closed arm, center, periphery).
+
+## Exporting
+
+**Export Selected** (the row selected in the Summary) or **Export All**
+(every analyzed file) writes three files **next to each source CSV**, named
+after it, overwriting any earlier export:
+
+- `<name>_analysis.xlsx`: **Summary** (the file's row), **Time Bins**, and
+  **Settings** (everything used to produce the results: test, frame rate,
+  entry rule, Open Field thresholds, region roles, bin size, and the Path and
+  Heatmap plot settings).
+- `<name>_path.png` and `<name>_heatmap.png`: drawn **at the same size and
+  with the same settings as on screen**, so they look the same (at twice the
+  screen's resolution), with a transparent background (heatmap cells the animal never
+  entered stay transparent unless **Add background** is on).
+
+Only analyzed files are exported. If a workbook is open in Excel, close it
+before exporting again.
 
 ## Layout
 ```
 BehaviorTracker/
 ├── core/            analysis engine (no GUI dependencies)
+│   ├── export.py    write _analysis.xlsx and plot images
 │   ├── loader.py    read & validate CSVs, detect region columns
 │   ├── metrics.py   summary + time-binned metrics
 │   ├── plotting.py  path, heatmap & region-map figures

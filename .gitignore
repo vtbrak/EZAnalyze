@@ -6,3 +6,8 @@ config.json
 
 # Tracking data (large; research data stays off GitHub)
 *.csv
+
+# Analysis outputs written next to source CSVs (research results stay off GitHub)
+*_analysis.xlsx
+*_path.png
+*_heatmap.png

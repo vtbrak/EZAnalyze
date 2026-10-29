@@ -28,7 +28,9 @@ are listed first so we know the starting point.
   and the selected Summary row drives Time Bins, Path, and Heatmap.
 - **Settings saved** to `config.json` (fps, bin size, plot style, summary
   columns, test type, region roles).
-- **Export** the active table to CSV or Excel (to be replaced by §9).
+- **Export Selected / Export All** (§9): per file, `_analysis.xlsx`
+  (Summary, Time Bins, Settings) plus `_path.png` and `_heatmap.png` next to
+  the source CSV.
 - Double-click **`Open Behavior Tracker.command`** launcher (Mac).
 - Code is on GitHub (`vtbrak/EZAnalyze`, private). Data CSVs are gitignored.
 
@@ -108,8 +110,8 @@ centroid.)
   `EPM.csv` starts on an open arm for 6.80 s; that time is included in open-arm
   time (23.65 s), while open latency is 75.5 s.
 - **The rule is recorded with the results**: every analyzed Summary row
-  carries `Test` and `MinEntryFrames` columns (Details group), so today's
-  Export Table shows it. The §9 settings sheet must list it too.
+  carries `Test` and `MinEntryFrames` columns (Details group), and the §9
+  export's Settings sheet lists it ("Min entry (frames)").
 - Sample `EPM.csv` (20 fps): open entries are 22 with no rule, 6 at 5 frames,
   and 6 at 10 frames. So 5 frames filters boundary flicker without losing
   real visits.
@@ -323,11 +325,36 @@ All §7 decisions are made (2026-10-23).
     custom dialog (a tkinter `Toplevel` with a bold first line and regular
     text) and use it for every pop-up. See §10.
 
-### 9. Exporting results (requested 2026-10-23 — not built yet)
-- [ ] Proper **export for a single file** and for **multiple files**
+### 9. Exporting results (requested 2026-10-23 — ✅ built 2026-10-29)
+- [x] Proper **export for a single file** and for **multiple files**
   (folder/batch).
 
-**What exists today**
+**Built as:** **Export Selected** / **Export All** buttons (replacing Export
+Table…), with `core/export.py` doing the writing. Notes:
+- Only analyzed files are exported. Export All reports how many weren't
+  analyzed; Export Selected on an unanalyzed file says to analyze first.
+- A file added to the list twice is exported once (same output names).
+- The **Settings sheet** has Section / Setting / Value rows: Source (file path,
+  video name, export time), Analysis (test, fps, min entry frames, and for
+  Open Field the entry gap, adjoining center time, and speed smoothing),
+  Region roles, Time Bins (bin size), Path, Heatmap, and the file's own
+  tracking settings. On/off values read Yes/No.
+- Images are drawn by the same builders as the on-screen plots, using the
+  plot settings at the moment of export, transparent, and cropped to their
+  content so no label is clipped.
+- **Exported plots are the same size as on screen** (user, 2026-10-29: keep
+  the look consistent between screen and export). Each export takes its tab's
+  current on-screen plot size (or the plot area's size if that plot hasn't
+  been drawn yet), so points, text, and spacing match. It saves at 200 dpi,
+  twice the screen's 100, which makes it sharper with the same layout.
+  Verified: plot-area width matched to the hundredth of an inch at two window
+  sizes.
+- A file open in another program (e.g. the workbook in Excel, which locks
+  files on Windows) is reported by name; the other files still export.
+- Output files (`*_analysis.xlsx`, `*_path.png`, `*_heatmap.png`) are
+  gitignored like the CSVs.
+
+**What existed before**
 - **Export Table…** saves whichever table tab is active (Summary or Time
   Bins) as CSV or Excel. It's one table at a time, and the Summary always
   includes every column.
@@ -339,20 +366,20 @@ All §7 decisions are made (2026-10-23).
 **✅ Decided 2026-10-23: export everything, per loaded file**
 For each loaded file (one file, or every file in a folder), named after the
 **loaded file's own name** (e.g. `EPM.csv` → `EPM_...`):
-- [ ] `<name>_analysis.xlsx`: one Excel workbook with **everything, each
+- [x] `<name>_analysis.xlsx`: one Excel workbook with **everything, each
   table on its own sheet** (Summary, Time Bins, and later the EPM/open-field
   metrics).
-- [ ] `<name>_path.png`: the Path plot image.
-- [ ] `<name>_heatmap.png`: the Heatmap image, keeping the transparent
+- [x] `<name>_path.png`: the Path plot image.
+- [x] `<name>_heatmap.png`: the Heatmap image, keeping the transparent
   background (§8).
 
 **✅ Details decided 2026-10-23**
-- [ ] **Saved next to each source CSV** (same folder as the file it came
+- [x] **Saved next to each source CSV** (same folder as the file it came
   from).
-- [ ] **Existing output files are overwritten** without asking.
-- [ ] Each `_analysis.xlsx` **includes that file's Summary row** (its own
+- [x] **Existing output files are overwritten** without asking.
+- [x] Each `_analysis.xlsx` **includes that file's Summary row** (its own
   sheet).
-- [ ] Each `_analysis.xlsx` includes a **settings sheet** recording every
+- [x] Each `_analysis.xlsx` includes a **settings sheet** recording every
   setting used to generate its results:
   - analysis: fps, test type, region roles, thresholds, **entry rule (min
     entry frames)**, and for Open Field the **min time between center entries**,
@@ -360,7 +387,7 @@ For each loaded file (one file, or every file in a folder), named after the
   - **Time Bins**: bin size
   - **Path**: point size, transparency, color-by-speed, point color
   - **Heatmap**: bins, colormap, background on/off
-- [ ] Plot images use the **on-screen plot settings** (point size, colors,
+- [x] Plot images use the **on-screen plot settings** (point size, colors,
   transparency, colormap, bins, background on/off).
 - **No separate summary file.** The Summary row lives only in
   `_analysis.xlsx`, and there's no combined file either. (Decided 2026-10-23,
@@ -472,7 +499,7 @@ Next (updated 2026-10-23):
 7. ✅ **EPM metrics (§4)**, validated against `EPM.csv`.
 8. ✅ **Open-field metrics (§5)**, validated against `Open Field.csv`.
 9. ⏸ ~~Shared immobility detection~~: deferred to future items (§11).
-10. **Export (§9)** is next. It bundles every table and plot built above.
+10. ✅ **Export (§9).**
 
 Throughout: keep everything working on both Mac and PC (§10), with a PC test
 checklist after cross-platform changes.

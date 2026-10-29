@@ -77,6 +77,23 @@ app.add_files([E, O]); log.clear(); dialogs.clear(); app.analyze(False); app.upd
 check("EPM test: OF file gets dialog, skipped", dialogs == [["center", "peripheral"]] and "Some files not analyzed" in log)
 check("EPM file analyzed with EPM measures", rows()[0][1] == "Analyzed" and "EPM_AnxietyIndex" in app._summary_df.columns)
 check("rule recorded in export", app._summary_df["MinEntryFrames"][0] == 5)
+# Export, on copies of the samples in a temp folder (never the project folder).
+import shutil
+import pandas as pd
+from core.export import output_paths
+tmp = tempfile.mkdtemp()
+E2 = shutil.copy(E, tmp)
+app.clear_files(); app.add_files([E2]); app.analyze(True); app.update()
+log.clear(); app.export(True); app.update()
+out = output_paths(E2)
+check("export writes _analysis.xlsx, _path.png, _heatmap.png", all(os.path.exists(p) for p in out.values()))
+sheets = pd.read_excel(out["analysis"], sheet_name=None)
+check("workbook sheets", list(sheets) == ["Summary", "Time Bins", "Settings"])
+names = set(sheets["Settings"]["Setting"])
+check("settings sheet lists entry rule, bins, plot style",
+      {"Min entry (frames)", "Bin size (s)", "Point size", "Colormap", "Add background"} <= names)
+check("export finished message", "Export finished" in log)
+
 app._on_close()
 c = json.load(open(cfg))
 check("settings saved", c["test_type"] == "Elevated Plus Maze" and c["bin_seconds"] == 30

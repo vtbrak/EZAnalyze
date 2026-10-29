@@ -38,13 +38,16 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   sentence bold on both Mac and Windows, so write messages whose first
   sentence says what happened.
 - `Open Behavior Tracker.bat`: Windows launcher (CRLF via `.gitattributes`).
+- `core/export.py`: writes each analyzed file's `_analysis.xlsx` (Summary,
+  Time Bins, Settings sheets), `_path.png`, and `_heatmap.png` next to its CSV.
 - `region_dialog.py`: the Match regions dialog.
 - `tests/regress_gui.py`: workflow regression test. Run it after GUI changes
   (`.venv/bin/python tests/regress_gui.py`); it needs the sample CSVs.
 - `Open Behavior Tracker.command`: Mac double-click launcher (builds `.venv`
   on first run from `requirements.txt`).
-- Git repo pushed to GitHub `vtbrak/EZAnalyze` (private). `*.csv` and
-  `config.json` are gitignored.
+- Git repo pushed to GitHub `vtbrak/EZAnalyze` (private). `*.csv`,
+  `config.json`, and export outputs (`*_analysis.xlsx`, `*_path.png`,
+  `*_heatmap.png`) are gitignored.
 
 ## Locked design decisions
 - **Trust the file's own region columns** (one True/False column per region)
@@ -78,7 +81,9 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 ## Build order and progress
 Steps 1–3, ROADMAP §7 (file-input workflow), and the §10 groundwork (shared
 dialogs + Windows launcher), §8 display fixes, and EPM and open-field metrics (§4–§5)
-are done. Immobility is deferred (ROADMAP §11). Next: §9 export. **ROADMAP "Build order" is
+and §9 export are done. Immobility is deferred (ROADMAP §11). Everything in
+the current build order is built; next steps come from the user (and the
+first PC test when they're ready). **ROADMAP "Build order" is
 the source of truth.**
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample

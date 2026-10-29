@@ -67,9 +67,9 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 - **Entry rule**: counts only after the point stays inside a region ≥ N frames (saved).
 - **EPM**: open vs closed arm time; report %open time, %open entries, composite
   Anxiety Index, AND closed/open time ratio; latency to first entry; time in
-  center; arm entry counts; immobility.
-- **Immobility**: immobile when speed < threshold for ≥ min duration; seed
-  <2 cm/s for ≥1 s; both configurable/saved; outputs total time, %, bout count.
+  center; arm entry counts.
+- **Immobility: deferred** (user, 2026-10-29: don't calculate it for this data
+  for now). Spec and jitter findings are kept in ROADMAP §11 for later.
 - **Open field**: center entries (min-frames + min time-between-entries); time/% in
   center; latency; **crossings** across center — opposite sides (L↔R, T↔B) and
   adjoining sides (counted only if ≥ min time in center between sides); **crossing
@@ -77,8 +77,8 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 
 ## Build order and progress
 Steps 1–3, ROADMAP §7 (file-input workflow), and the §10 groundwork (shared
-dialogs + Windows launcher), §8 display fixes, and EPM and open-field metrics (§4–§5, minus immobility) are
-done. Next: immobility, and §9 export last. **ROADMAP "Build order" is
+dialogs + Windows launcher), §8 display fixes, and EPM and open-field metrics (§4–§5)
+are done. Immobility is deferred (ROADMAP §11). Next: §9 export. **ROADMAP "Build order" is
 the source of truth.**
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample

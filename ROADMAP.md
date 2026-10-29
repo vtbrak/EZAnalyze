@@ -77,7 +77,7 @@ are listed first so we know the starting point.
 - [x] ROI polygons are paired with regions by data agreement, not file order,
   and labeled on the plots.
 
-### 4. Elevated Plus Maze (EPM) metrics (✅ built 2026-10-29, except immobility)
+### 4. Elevated Plus Maze (EPM) metrics (✅ built 2026-10-29; immobility deferred)
 - [x] **Open-arm vs closed-arm time** (seconds and %).
 - [x] **EPM anxiety measures** — report ALL of:
   - %open-arm time and %open-arm entries (separately)
@@ -89,9 +89,8 @@ are listed first so we know the starting point.
 - [x] **Time in center region** (the cross intersection). Arm+center
   overlap frames count as center (`core.regions.frame_roles`).
 - [x] **Open- and closed-arm entry counts.**
-- [ ] **Immobility detection** — immobile when speed stays below a threshold for
-  at least a minimum duration. Outputs: total immobile time, % immobile, bout
-  count. Threshold + min duration are **input boxes, saved**.
+- ⏸ **Immobility detection: deferred to a future item** (user, 2026-10-29: not
+  calculated for this type of data for now). See §11.
 
 **Entry rule (EPM & open field):** an entry counts only when the tracked point
 stays inside the region for at least **N frames** (configurable, saved). Filters
@@ -123,7 +122,7 @@ arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
 `EPM_PctSession_Open` / `_Closed` / `_Center`. Blank = can't be computed
 (e.g. no open-arm time, or an arm never entered).
 
-### 5. Open Field metrics (✅ built 2026-10-29, except immobility)
+### 5. Open Field metrics (✅ built 2026-10-29; immobility deferred)
 - [x] **Center-region entries** — count entries into the center, using the
   shared entry rule (min frames inside) plus a **minimum time-between-entries
   threshold** (debounce). Both configurable, saved.
@@ -192,7 +191,7 @@ arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
   131 adjoining), crossing speed 10.2 cm/s average and 36.1 cm/s peak with
   5-frame smoothing (42.8 unsmoothed). Center + sides = the full 3686.3 s
   session.
-- [ ] Immobility detection (shared with EPM).
+- ⏸ Immobility detection: deferred (see §11).
 
 ### 6. Config / persistence
 - [x] `config.json` holding fps, bin size, all thresholds, plot style, and the
@@ -399,6 +398,26 @@ For each loaded file (one file, or every file in a folder), named after the
   would look nicer. Prefer one portable approach used on both systems.
 - Not part of this item: compiling/bundling (still on hold per CLAUDE.md).
 
+### 11. Future items (deferred, not scheduled)
+- ⏸ **Immobility detection** (EPM and open field). Deferred 2026-10-29: the
+  user chose not to calculate immobility for this type of data for now.
+  - Original spec: immobile when speed stays below a threshold for at least a
+    minimum duration (seeded at < 2 cm/s for ≥ 1 s, both input boxes, saved).
+    Outputs: total immobile time, % immobile, bout count.
+  - **Why it needs care — jitter measured in the samples:** while the animal
+    is still, the tracked point wanders only ~0.07 cm (radius) and moves
+    ~0.04–0.05 cm per frame (median; 95th pct ~0.13–0.15 cm). But at 20 fps
+    that's an *apparent* speed of ~1 cm/s (95th pct 2.7–3.1 cm/s), so 10–14%
+    of still frames read over 2 cm/s raw, and 8–9% with 5-frame smoothing.
+    Larger windows (10–20 frames) were no better, because they blend in real
+    movement. A single blip would break a bout, so bouts would be undercounted.
+    (The tracking software's own smoothing is on in both files:
+    `Use_Window = True`, weight 0.9, window 100. With one centroid, jitter
+    can't be fully separated from small real movements like sniffing.)
+  - Proposed when it's picked up: keep 2 cm/s / 1 s, share the 5-frame speed
+    smoothing, and let a bout continue through a blip shorter than the entry
+    rule. Each of these needs the user's OK.
+
 More layout/function items to come in later messages.
 
 ---
@@ -450,13 +469,10 @@ Next (updated 2026-10-23):
 5. ✅ **Mac + PC groundwork (§10):** shared pop-up dialog and Windows
    launcher. Next: the user's first PC test.
 6. ✅ **Display fixes (§8).**
-7. ✅ **EPM metrics (§4)**, validated against `EPM.csv`. Immobility is still
-   to come (step 9).
-8. ✅ **Open-field metrics (§5)**, validated against `Open Field.csv`. Immobility
-   still to come (step 9).
-9. **Shared immobility detection** (§4/§5).
-10. **Export (§9)** comes last, since it bundles every table and plot built
-    above.
+7. ✅ **EPM metrics (§4)**, validated against `EPM.csv`.
+8. ✅ **Open-field metrics (§5)**, validated against `Open Field.csv`.
+9. ⏸ ~~Shared immobility detection~~: deferred to future items (§11).
+10. **Export (§9)** is next. It bundles every table and plot built above.
 
 Throughout: keep everything working on both Mac and PC (§10), with a PC test
 checklist after cross-platform changes.

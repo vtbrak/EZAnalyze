@@ -342,13 +342,11 @@ Table…), with `core/export.py` doing the writing. Notes:
 - Images are drawn by the same builders as the on-screen plots, using the
   plot settings at the moment of export, transparent, and cropped to their
   content so no label is clipped.
-- **Exported plots are the same size as on screen** (user, 2026-10-29: keep
-  the look consistent between screen and export). Each export takes its tab's
-  current on-screen plot size (or the plot area's size if that plot hasn't
-  been drawn yet), so points, text, and spacing match. It saves at 200 dpi,
-  twice the screen's 100, which makes it sharper with the same layout.
-  Verified: plot-area width matched to the hundredth of an inch at two window
-  sizes.
+- **Exported plots are a fixed size: 5 × 4.5 in at 200 dpi** (about 1000 ×
+  900 px before cropping), independent of the window. Matching the on-screen
+  size was tried and **reverted** (user, 2026-10-29: the image must not resize
+  with the window). Because the on-screen plot stretches to fill its tab,
+  points can look denser in the export than on screen at the same point size.
 - A file open in another program (e.g. the workbook in Excel, which locks
   files on Windows) is reported by name; the other files still export.
 - Output files (`*_analysis.xlsx`, `*_path.png`, `*_heatmap.png`) are

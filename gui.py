@@ -118,7 +118,6 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._selected: int | None = None           # index into self.files
         self._summary_df = None                     # last Summary table (for export)
         self._redraw_job = None                     # pending debounced plot redraw
-        self._canvases = {}                         # plot area -> its figure canvas
 
         self._build_controls()
         self._build_tabs()
@@ -643,31 +642,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             child.destroy()
         canvas = FigureCanvasTkAgg(fig, master=parent)
         canvas.draw()
-        self._canvases[str(parent)] = canvas
         toolbar = NavigationToolbar2Tk(canvas, parent, pack_toolbar=False)
         toolbar.update()
         toolbar.pack(side=tk.BOTTOM, fill=tk.X)
         canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-    def _screen_size(self, area) -> tuple[float, float] | None:
-        """The size (inches) a plot has on screen in this tab, so exports can
-        be drawn at the same size and look the same. Falls back to the plot
-        area's size if the plot hasn't been drawn there yet."""
-        canvas = self._canvases.get(str(area))
-        if canvas is not None and canvas.get_tk_widget().winfo_ismapped():
-            w, h = canvas.figure.get_size_inches()
-            if w > 1 and h > 1:
-                return float(w), float(h)
-        # Not drawn yet: the notebook's space minus the control row and the
-        # plot toolbar (Figure dpi is 100, so 100 px = 1 in).
-        w_px = self.nb.winfo_width() - 20
-        h_px = self.nb.winfo_height() - 120
-        if w_px > 200 and h_px > 200:
-            return w_px / 100, h_px / 100
-        return None
-
     def _clear_tab(self, parent, message: str) -> None:
-        self._canvases.pop(str(parent), None)
         for child in parent.winfo_children():
             child.destroy()
         ttk.Label(parent, text=message, padding=20).pack()
@@ -1131,8 +1111,6 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 unique.append(e)
 
         plot = dict(self._plot_settings())  # the on-screen plot settings, now
-        path_size = self._screen_size(self.path_area)
-        heat_size = self._screen_size(self.heat_area)
         written, errors = [], []
         self.config(cursor="watch")
         self.update_idletasks()
@@ -1144,14 +1122,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                         out["analysis"], {k: v for k, v in e.summary.items()},
                         e.bins, self._settings_sheet(e, plot),
                     )
-                    path_fig, heat_fig = self._path_fig(e, plot), self._heat_fig(e, plot)
-                    # Same size as on screen, so the export looks the same.
-                    if path_size:
-                        path_fig.set_size_inches(*path_size)
-                    if heat_size:
-                        heat_fig.set_size_inches(*heat_size)
-                    save_figure(path_fig, out["path"])
-                    save_figure(heat_fig, out["heatmap"])
+                    save_figure(self._path_fig(e, plot), out["path"])
+                    save_figure(self._heat_fig(e, plot), out["heatmap"])
                     written.append(e)
                 except PermissionError:
                     errors.append(f"• {e.label}: a file is open in another program "

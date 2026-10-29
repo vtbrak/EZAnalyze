@@ -90,9 +90,9 @@ after it, overwriting any earlier export:
   **Settings** (everything used to produce the results: test, frame rate,
   entry rule, Open Field thresholds, region roles, bin size, and the Path and
   Heatmap plot settings).
-- `<name>_path.png` and `<name>_heatmap.png`: drawn **at the same size and
-  with the same settings as on screen**, so they look the same (at twice the
-  screen's resolution), with a transparent background (heatmap cells the animal never
+- `<name>_path.png` and `<name>_heatmap.png`: drawn with the current on-screen
+  plot settings at a fixed size (5 × 4.5 in, 200 dpi), whatever the window
+  size, with a transparent background (heatmap cells the animal never
   entered stay transparent unless **Add background** is on).
 
 Only analyzed files are exported. If a workbook is open in Excel, close it

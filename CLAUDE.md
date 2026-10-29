@@ -39,6 +39,8 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   sentence says what happened.
 - `Open Behavior Tracker.bat`: Windows launcher (CRLF via `.gitattributes`).
 - `region_dialog.py`: the Match regions dialog.
+- `tests/regress_gui.py`: workflow regression test. Run it after GUI changes
+  (`.venv/bin/python tests/regress_gui.py`); it needs the sample CSVs.
 - `Open Behavior Tracker.command`: Mac double-click launcher (builds `.venv`
   on first run from `requirements.txt`).
 - Git repo pushed to GitHub `vtbrak/EZAnalyze` (private). `*.csv` and
@@ -71,9 +73,8 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 
 ## Build order and progress
 Steps 1–3, ROADMAP §7 (file-input workflow), and the §10 groundwork (shared
-dialogs + Windows launcher), and §8 display fixes are done. Next: the user's first PC
-test (when they're ready), EPM metrics,
-open-field metrics, immobility, and §9 export last. **ROADMAP "Build order" is
+dialogs + Windows launcher), §8 display fixes, and EPM metrics (§4, minus
+immobility) are done. Next: open-field metrics, immobility, and §9 export last. **ROADMAP "Build order" is
 the source of truth.**
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample

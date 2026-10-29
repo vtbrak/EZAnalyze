@@ -77,18 +77,18 @@ are listed first so we know the starting point.
 - [x] ROI polygons are paired with regions by data agreement, not file order,
   and labeled on the plots.
 
-### 4. Elevated Plus Maze (EPM) metrics
-- [ ] **Open-arm vs closed-arm time** (seconds and %).
-- [ ] **EPM anxiety measures** — report ALL of:
+### 4. Elevated Plus Maze (EPM) metrics (✅ built 2026-10-29, except immobility)
+- [x] **Open-arm vs closed-arm time** (seconds and %).
+- [x] **EPM anxiety measures** — report ALL of:
   - %open-arm time and %open-arm entries (separately)
   - Composite **Anxiety Index** = `1 − [ (open-arm time/total arm time +
     open-arm entries/total entries) / 2 ]` (higher = more anxious)
   - **Closed/open time ratio** = closed-arm time ÷ open-arm time
-- [ ] **Latency to first entry** — time to first open-arm entry (and closed-arm,
+- [x] **Latency to first entry** — time to first open-arm entry (and closed-arm,
   center for reference).
-- [ ] **Time in center region** (the cross intersection). Arm+center
+- [x] **Time in center region** (the cross intersection). Arm+center
   overlap frames count as center (`core.regions.frame_roles`).
-- [ ] **Open- and closed-arm entry counts.**
+- [x] **Open- and closed-arm entry counts.**
 - [ ] **Immobility detection** — immobile when speed stays below a threshold for
   at least a minimum duration. Outputs: total immobile time, % immobile, bout
   count. Threshold + min duration are **input boxes, saved**.
@@ -97,6 +97,31 @@ are listed first so we know the starting point.
 stays inside the region for at least **N frames** (configurable, saved). Filters
 boundary jitter. (A true "all four paws" rule isn't possible — data is a single
 centroid.)
+- ✅ Built as `core.metrics.held_entries`. The current region only changes
+  after N consecutive frames somewhere new, so brief visits don't count and
+  jitter doesn't split one stay into two entries. **Default N = 5 frames**
+  (0.25 s at 20 fps), set in the toolbar's "Min entry (frames)" box, saved,
+  and locked at Analyze with fps and bin size.
+- ✅ **Starting region (decided 2026-10-29):** time spent in the region the
+  animal starts in **counts toward that region's total time**, but **not
+  toward latency**. Latency is the first time it *enters* the region after
+  leaving. The starting stay also isn't counted as an entry. Example:
+  `EPM.csv` starts on an open arm for 6.80 s; that time is included in open-arm
+  time (23.65 s), while open latency is 75.5 s.
+- **The rule is recorded with the results**: every analyzed Summary row
+  carries `Test` and `MinEntryFrames` columns (Details group), so today's
+  Export Table shows it. The §9 settings sheet must list it too.
+- Sample `EPM.csv` (20 fps): open entries are 22 with no rule, 6 at 5 frames,
+  and 6 at 10 frames. So 5 frames filters boundary flicker without losing
+  real visits.
+
+**EPM columns** (Summary "Test measures" group, on by default):
+`EPM_OpenArm_s`, `EPM_ClosedArm_s`, `EPM_Center_s`, `EPM_PctOpenTime` (% of
+arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
+`EPM_PctOpenEntries` (% of arm entries), `EPM_AnxietyIndex`,
+`EPM_ClosedOpenRatio`, `EPM_Latency_Open_s` / `_Closed_s` / `_Center_s`, and
+`EPM_PctSession_Open` / `_Closed` / `_Center`. Blank = can't be computed
+(e.g. no open-arm time, or an arm never entered).
 
 ### 5. Open Field metrics
 - [ ] **Center-region entries** — count entries into the center, using the
@@ -278,7 +303,8 @@ For each loaded file (one file, or every file in a folder), named after the
   sheet).
 - [ ] Each `_analysis.xlsx` includes a **settings sheet** recording every
   setting used to generate its results:
-  - analysis: fps, test type, region roles, thresholds
+  - analysis: fps, test type, region roles, thresholds, **entry rule (min
+    entry frames)**
   - **Time Bins**: bin size
   - **Path**: point size, transparency, color-by-speed, point color
   - **Heatmap**: bins, colormap, background on/off
@@ -371,7 +397,8 @@ Next (updated 2026-10-23):
 5. ✅ **Mac + PC groundwork (§10):** shared pop-up dialog and Windows
    launcher. Next: the user's first PC test.
 6. ✅ **Display fixes (§8).**
-7. **EPM metrics (§4)**, validated against `EPM.csv`.
+7. ✅ **EPM metrics (§4)**, validated against `EPM.csv`. Immobility is still
+   to come (step 9).
 8. **Open-field metrics (§5)**, validated against `Open Field.csv`.
 9. **Shared immobility detection** (§4/§5).
 10. **Export (§9)** comes last, since it bundles every table and plot built

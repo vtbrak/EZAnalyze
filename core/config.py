@@ -44,6 +44,7 @@ DEFAULTS: dict = {
     # Which Summary-table column groups are shown on screen (export has all).
     "summary_groups": {
         "basics": True,
+        "test": True,  # EPM / open-field measures
         "zones": False,
         "entries": False,
         "roi": False,

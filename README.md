@@ -27,6 +27,12 @@ To run from a terminal instead:
 
 ## What it computes
 
+**Elevated Plus Maze** (when Test is EPM): open/closed-arm and center time,
+% open time (of arm time), arm and center entries, % open entries, Anxiety
+Index, closed/open time ratio, and latency to first open/closed/center entry.
+An entry only counts once the animal stays in a region for at least **Min
+entry (frames)** (default 5), which filters jitter at region boundaries.
+
 **Summary metrics** (one row per file):
 - Total distance (cm / px), duration, mean speed
 - Time and percent spent in each region (e.g. center / peripheral, or EPM arms) and each ROI label

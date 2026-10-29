@@ -47,6 +47,7 @@ from core import (
     load_csv,
     summary_metrics,
     binned_metrics,
+    epm_metrics,
     path_figure,
     heatmap_figure,
     load_config,
@@ -68,6 +69,7 @@ HEATMAP_CMAPS = ["inferno", "viridis", "magma", "plasma", "hot", "jet", "gray"]
 # Summary-table column groups, in checkbox order (keys match summary_column_groups).
 SUMMARY_GROUP_LABELS = {
     "basics": "Session basics",
+    "test": "Test measures",
     "zones": "Zone time & %",
     "entries": "Entries & transitions",
     "roi": "ROI label time & %",
@@ -118,7 +120,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._enable_drop()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         # Settings are editable until Analyze, so keep the status bar current.
-        for var in (self.fps_var, self.bin_var):
+        for var in (self.fps_var, self.bin_var, self.entry_var):
             var.trace_add("write", lambda *_: self._update_status())
         self._refresh()
 
@@ -183,10 +185,18 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.bin_entry = ttk.Entry(bar, textvariable=self.bin_var, width=6)
         self.bin_entry.pack(side=tk.LEFT, padx=(4, 16))
 
+        ttk.Label(bar, text="Min entry (frames):").pack(side=tk.LEFT)
+        self.entry_var = tk.StringVar(value=str(self.config_data["min_entry_frames"]))
+        self.entry_entry = ttk.Entry(bar, textvariable=self.entry_var, width=4)
+        self.entry_entry.pack(side=tk.LEFT, padx=(4, 16))
+
         for widget, unlocked in (
             (self.test_box, "Which test these files are. Locks when you click Analyze."),
             (self.fps_entry, "Video frame rate. Locks when you click Analyze."),
             (self.bin_entry, "Time-bin length in seconds. Locks when you click Analyze."),
+            (self.entry_entry, "Entry rule: the animal must stay in a region at least "
+                               "this many frames for it to count as an entry (filters "
+                               "boundary jitter). Locks when you click Analyze."),
         ):
             Tooltip(widget, lambda u=unlocked: LOCKED_TIP if self._locked() else u)
 
@@ -381,6 +391,19 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                          "The bin size must be a number above 0. Using 60 s instead.")
             self.bin_var.set("60")
             return 60.0
+
+    def _min_entry_frames(self) -> int:
+        try:
+            v = int(float(self.entry_var.get()))
+            if v < 1:
+                raise ValueError
+            return v
+        except ValueError:
+            show_warning(self, "Invalid entry rule",
+                         "The minimum entry length must be a whole number of frames, "
+                         "1 or more. Using 5 frames instead.")
+            self.entry_var.set("5")
+            return 5
 
     def _plot_settings(self) -> dict:
         """Current plot style. A box that's mid-edit or invalid keeps its last good
@@ -596,7 +619,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         The Path/Heatmap plot controls are never locked."""
         locked = self._locked()
         self.test_box.configure(state="disabled" if locked else "readonly")
-        for entry in (self.fps_entry, self.bin_entry):
+        for entry in (self.fps_entry, self.bin_entry, self.entry_entry):
             entry.configure(state="disabled" if locked else "normal")
 
     def _fps_locked(self) -> float:
@@ -606,9 +629,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         return self.config_data["bin_seconds"]
 
     def _lock_in_settings(self) -> None:
-        """Validate and save the toolbar's test/fps/bin values as this load's
-        settings (called at Analyze, before anything is locked)."""
+        """Validate and save the toolbar's test/fps/bin/entry values as this
+        load's settings (called at Analyze, before anything is locked)."""
         self.config_data["test_type"] = self.test_var.get()
+        self.config_data["min_entry_frames"] = self._min_entry_frames()
         self._save_settings(self._fps(), self._bin_seconds())
 
     # -------------------------------------------------------------- regions
@@ -737,10 +761,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         regions = f"⚠ {'; '.join(problems)}" if problems else describe_roles(roles)
         if self._locked():
             settings = (f"{self.test_var.get()}, {self._fps_locked():g} fps, "
-                        f"{self._bin_seconds_locked():g} s bins (locked)")
+                        f"{self._bin_seconds_locked():g} s bins, "
+                        f"entry ≥ {self.config_data['min_entry_frames']} frames (locked)")
         else:
             settings = (f"{self.test_var.get()}, {self.fps_var.get()} fps, "
-                        f"{self.bin_var.get()} s bins (locks at Analyze)")
+                        f"{self.bin_var.get()} s bins, entry ≥ {self.entry_var.get()} "
+                        "frames (locks at Analyze)")
         self.status.set(
             f"{len(self.files)} file(s), {done} analyzed — {settings} — "
             f"Regions: {regions}"
@@ -876,8 +902,20 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.config(cursor="watch")
         self.update_idletasks()
         try:
+            test = self.test_var.get()
+            min_entry = self.config_data["min_entry_frames"]
             for e in targets:
-                e.summary = summary_metrics(e.data, fps=fps)
+                summary = summary_metrics(e.data, fps=fps)
+                if test == "Elevated Plus Maze":
+                    summary.update(epm_metrics(
+                        e.data, self._current_roles([e]), fps=fps,
+                        min_entry_frames=min_entry,
+                    ))
+                # Record the settings behind these numbers in the row itself, so
+                # an exported table shows how it was produced.
+                summary["Test"] = test
+                summary["MinEntryFrames"] = min_entry
+                e.summary = summary
                 e.bins = binned_metrics(e.data, fps=fps, bin_seconds=bin_s)
         finally:
             self.config(cursor="")

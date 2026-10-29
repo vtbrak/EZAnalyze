@@ -6,6 +6,8 @@ from .metrics import (
     binned_metrics,
     batch_summary,
     summary_column_groups,
+    epm_metrics,
+    held_entries,
 )
 from .plotting import path_figure, heatmap_figure, regions_figure
 from .regions import (
@@ -32,6 +34,8 @@ __all__ = [
     "binned_metrics",
     "batch_summary",
     "summary_column_groups",
+    "epm_metrics",
+    "held_entries",
     "path_figure",
     "heatmap_figure",
     "regions_figure",

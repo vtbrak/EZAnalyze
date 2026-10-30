@@ -556,9 +556,44 @@ large dependency).
 is the video behind `EPM.csv`, so the adapted tracker can be checked against
 an existing output.
 
-**Still to decide:** which functions to keep, drop, or rebuild (walkthrough
-with the user next), and how video analysis fits into the app's workflow
-and windows.
+**✅ Walkthrough, Stage 1 — Load and prepare the video (decided 2026-10-30;
+not built).** Functions: `LoadAndCrop`, `cropframe`, `check_p_frames`,
+`Mask_select`. Freeze Analysis has near-copies of the first three, so these
+decisions apply to both modules. The user accepted all recommendations:
+1. **Open videos and report their info** (frame count, frame rate, size):
+   keep. **Fill the fps setting from the video's own frame rate
+   automatically**, with an option to override it.
+2. **Start/end trimming** (`start` / `end`): keep, set by **scrubbing through
+   the video** to the trial's start and end frames, shown in seconds as well
+   as frames (not only by typing frame numbers). Context: the user's ezTrack
+   notebook tracked the EPM practice video from frame 460 to 6460, matching
+   `Start_Frame = 460` in `EPM.csv`.
+3. **Downsampling** (`dsmpl`): keep as an optional speed setting, **default
+   full size (1.0)**.
+4. **Display zoom** (`stretch`): **drop**. The app's window handles sizing.
+5. **Crop rectangle**: keep as the main way to select the arena (tracking
+   ignores everything outside it). `cropframe` stays as its helper.
+6. **Crop for a folder of videos:** ezTrack applies one crop (drawn on the
+   first video) to every video in a batch. Instead, **each new video starts
+   from the previous video's crop, and can be adjusted per video**. This fits
+   the rule that each file has its own geometry, and handles a camera that
+   moved between sessions.
+7. **Compatibility check** (`check_p_frames`: >1% of the first 300 frames
+   unreadable): keep, but as a **warning naming the video, with an option to
+   continue**, instead of ezTrack's hard stop.
+8. **Exclusion shapes** (`Mask_select`, any number of drawn areas to ignore,
+   e.g. cables or objects): keep for Location Tracking, and **optionally offer
+   it in Freeze Analysis too** (ezTrack's freeze module only has the crop).
+
+**✅ How videos fit the app (decided 2026-10-30; not built):** videos go into
+the **same file list as CSVs**, with a **"Not tracked"** status. Tracking
+(stages 1–5) produces the same per-frame data a CSV provides; from then on,
+everything that already exists works unchanged: Analyze, Summary, Time Bins,
+plots, and export.
+
+**Still to decide:** the remaining walkthrough stages (2 reference, 3
+tracking, 4 ROIs, 5 scale, 6 summaries/playback, 7 batch; then Freeze
+Analysis), and the details of the video windows.
 
 New requests are added to this list as they come in.
 

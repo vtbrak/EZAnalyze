@@ -85,6 +85,15 @@ and §9 export are done. Immobility is deferred (ROADMAP §11). Everything in
 the current build order is built; next steps come from the user (and the
 first PC test when they're ready). **ROADMAP "Build order" is
 the source of truth.**
+**Video analysis (ROADMAP §12) is in progress on the `video-tracking` branch**
+(started 2026-10-30): adapting ezTrack (GPL-3.0, github.com/denisecailab/ezTrack;
+local reference copy in `ezTrack/`, gitignored) for location tracking **and**
+freeze analysis. Freezing will use ezTrack's thresholds instead of the planned
+immobility. **Next: walk through ezTrack's functions with the user, stage by
+stage** (Location Tracking: load/crop → reference → tracking → ROIs → scale →
+summaries/playback → batch; then Freeze Analysis), deciding keep / drop /
+change for each. Nothing from ezTrack is adapted yet. When code is adapted,
+keep the GPL-3.0 license and credit/cite ezTrack, as §12 requires.
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample
 data".

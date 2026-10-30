@@ -478,6 +478,11 @@ reopen (settings remembered).
 ### 11. Future items (deferred, not scheduled)
 - ⏸ **Immobility detection** (EPM and open field). Deferred 2026-10-29: the
   user chose not to calculate immobility for this type of data for now.
+  - **Superseded 2026-10-30:** freezing will come from **ezTrack's Freeze
+    Analysis** (§12), using its thresholds instead of the speed-based plan
+    below. It measures pixel change in the video, not the tracked point's
+    speed, so tracking jitter doesn't affect it. It needs the video; data
+    available only as a CSV still gets no freezing measure.
   - Original spec: immobile when speed stays below a threshold for at least a
     minimum duration (seeded at < 2 cm/s for ≥ 1 s, both input boxes, saved).
     Outputs: total immobile time, % immobile, bout count.
@@ -494,6 +499,66 @@ reopen (settings remembered).
   - Proposed when it's picked up: keep 2 cm/s / 1 s, share the 5-frame speed
     smoothing, and let a bout continue through a blip shorter than the entry
     rule. Each of these needs the user's OK.
+
+### 12. Video analysis from ezTrack (branch `video-tracking`, started 2026-10-30)
+Add video analysis to the app by adapting **ezTrack** (the open-source program
+that produced these CSVs), so one tool goes video → tracking → analysis →
+export. Development happens on the **`video-tracking` branch**; `main` stays
+stable until it's merged.
+
+**Source:** https://github.com/denisecailab/ezTrack (local reference copy in
+`ezTrack/`, gitignored, including practice videos).
+
+**License and credit (required; the user asked that they be kept):**
+- ezTrack is **GPL-3.0**, so once its code is adapted in, the combined app is
+  GPL-3.0. Add the GPL-3.0 license text to the repo; mark every file with
+  adapted code ("adapted from ezTrack", authors, GPL-3.0, what was changed);
+  credit and cite ezTrack in the README and an in-app About/credits screen.
+  A distributed standalone app must also be GPL-3.0, with source available.
+- **Citation:** Pennington ZT, Dong Z, Feng Y, Vetere LM, Page-Harley L,
+  Shuman T, Cai DJ (2019). ezTrack: An open-source video analysis pipeline for
+  the investigation of animal behavior. *Scientific Reports* 9(1): 19979.
+- The ezTrack logo art is by Kathleen Wang; credit her if it's ever used.
+
+**What ezTrack is:** two modules of Python functions driven by Jupyter
+notebooks with HoloViews interactive tools (crop box, ROI drawing,
+distance points). The notebook/HoloViews interface would be rebuilt as
+tkinter windows; the processing uses OpenCV (works on Mac and PC, adds a
+large dependency).
+
+**✅ Decided 2026-10-30:**
+- **Keep both modules:** Location Tracking *and* Freeze Analysis.
+- **Freezing uses ezTrack's freeze thresholds**, replacing the planned
+  speed-based immobility (§11). ezTrack's defaults: motion cutoff
+  `mt_cutoff` = 10 (brightness change for a pixel to count as changed, after
+  a light blur, `SIGMA` = 1); `FreezeThresh` = 200 (a frame is still if fewer
+  pixels than this changed); `MinDuration` = 15 frames (0.75 s at 20 fps).
+  Calibration from an empty-chamber video recommends `mt_cutoff` = 2 × the
+  99.99th percentile of pixel change.
+
+**Function catalog** (to go through with the user: keep / drop / rebuild):
+- *Location Tracking:* `LoadAndCrop`, `cropframe`, `check_p_frames`,
+  `Mask_select` (load/crop/exclude areas); `Reference` (empty-arena
+  background); `Locate`, `TrackLocation`, `LocationThresh_View` (tracking and
+  preview); `ROI_plot`, `ROI_Location`, `ROI_linearize`, `ROI_transitions`
+  (draw ROIs and produce the region columns); `DistanceTool`, `setScale`,
+  `ScaleDistance` (pixel → cm); `Summarize_Location`, `showtrace`, `Heatmap`,
+  `PlayVideo` / `PlayVideo_ext` / `display_image` (summaries, figures,
+  playback); `Batch_LoadFiles`, `Batch_Process` (folders).
+- *Freeze Analysis:* `LoadAndCrop` / `cropframe` / `check_p_frames`;
+  `Calibrate`; `Measure_Motion`; `Measure_Freezing`; `PlayVideo` /
+  `PlayVideo_ext` / `display_image`; `SaveData`; `Summarize`;
+  `Batch_LoadFiles` / `Batch`.
+- Overlap with what this app already has: `Summarize_Location`, `Heatmap`,
+  and `showtrace` (path) are already covered, in more detail.
+
+**Useful for validation:** `ezTrack/PracticeVideos/6_2024-04-01_11-49-23.mp4`
+is the video behind `EPM.csv`, so the adapted tracker can be checked against
+an existing output.
+
+**Still to decide:** which functions to keep, drop, or rebuild (walkthrough
+with the user next), and how video analysis fits into the app's workflow
+and windows.
 
 New requests are added to this list as they come in.
 
@@ -552,8 +617,10 @@ Done:
 11. ✅ **Test measures per time bin (§5b).**
 
 **Everything planned so far is built** (as of 2026-10-30). Still open:
+- **Video analysis from ezTrack** (§12), on the `video-tracking` branch:
+  location tracking and freeze analysis. Function walkthrough next.
 - **First PC test** (§10), whenever the user is ready.
-- **Future items** (§11): immobility.
+- **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.
 - New requests from the user.
 

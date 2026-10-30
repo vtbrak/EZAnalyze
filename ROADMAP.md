@@ -195,6 +195,28 @@ arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
   session.
 - ⏸ Immobility detection: deferred (see §11).
 
+### 5b. Test measures per time bin (✅ built 2026-10-30)
+- [x] The **EPM and Open Field measures are added to the Time Bins** table
+  (on screen and in the exported Time Bins sheet), after the general bin
+  columns (requested 2026-10-30).
+- **EPM per bin:** open/closed/center time, % open time, open/closed/center
+  entries, % open entries, Anxiety Index, closed/open ratio, and
+  `EPM_PctBin_Open` / `_Closed` / `_Center` (% of the bin).
+- **Open Field per bin:** center and periphery time and %, center entries,
+  time per side, crossings (total, opposite, L↔R, T↔B, adjoining), and
+  crossing speed (average and peak) for the crossings in that bin.
+- **How bins are counted:** entries and crossings are found **once over the
+  whole session**, then each is counted in the **bin where it starts** (a
+  crossing starts when the animal leaves side A for the center). So bin
+  values add up to the session totals, a visit or crossing that spans a bin
+  edge isn't split or double-counted, and a bin's start isn't treated as a
+  starting position. Verified on both samples at 60 s and 30 s bins: every
+  entry and crossing count sums exactly to the session, and times match.
+- **Latency is session-only** (time to the first entry), so it isn't in the
+  bins.
+- Built as `epm_binned` / `of_binned` in `core/metrics.py`, sharing one
+  span calculation (`_epm_block` / `_of_block`) with the session summary.
+
 ### 6. Config / persistence
 - [x] `config.json` holding fps, bin size, all thresholds, plot style, and the
   region-role mapping. Loaded on start, saved on change.

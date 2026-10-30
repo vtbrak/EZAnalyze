@@ -11,6 +11,8 @@ from .metrics import (
     held_states,
     of_metrics,
     side_labels,
+    epm_binned,
+    of_binned,
 )
 from .plotting import path_figure, heatmap_figure, regions_figure
 from .regions import (
@@ -42,6 +44,8 @@ __all__ = [
     "held_states",
     "of_metrics",
     "side_labels",
+    "epm_binned",
+    "of_binned",
     "path_figure",
     "heatmap_figure",
     "regions_figure",

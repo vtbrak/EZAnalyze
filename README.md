@@ -53,7 +53,11 @@ and the Open Field thresholds), so exported tables show how they were made.
 - The tracking settings recorded in the file
 
 **Time bins** (per file): the session split into fixed-length bins (default
-60 s) with distance, mean speed, and time-in-zone per bin.
+60 s) with distance, mean speed, and time-in-zone per bin, plus the chosen
+test's measures for each bin (EPM: arm/center time, entries, % open, Anxiety
+Index, ratio; Open Field: center time and entries, side times, crossings, and
+crossing speed). Entries and crossings are counted in the bin where they
+start, so the bins add up to the session totals. Latency is session-only.
 
 **Plots** (per file): path/trajectory (colored by speed or one solid color) and
 occupancy heatmap, both with ROI outlines. The heatmap labels each region

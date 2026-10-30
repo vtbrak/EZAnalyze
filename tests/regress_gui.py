@@ -58,6 +58,11 @@ check("OF thresholds recorded in export", app._summary_df["MinBetweenCenterEntri
       and app._summary_df["MinCenterAdjoiningCrossing_s"][0] == 0.5
       and app._summary_df["SpeedSmoothing_frames"][0] == 5)
 check("OF measures on screen by default", "OF_Crossings_Total" in app.summary_tree["columns"])
+check("Time Bins include OF crossings and center entries",
+      {"OF_Crossings_Total", "OF_CenterEntries", "OF_CrossingSpeed_Mean_cm_s"} <= set(app.files[0].bins.columns)
+      and {"OF_Crossings_Total"} <= set(app.bins_tree["columns"]))
+check("OF bin crossings add up to the session",
+      app.files[0].bins["OF_Crossings_Total"].sum() == app.files[0].summary["OF_Crossings_Total"])
 check("locked after Analyze", lockw() == LK)
 check("overlap warning for OF", "Center and periphery overlap" in log)
 check("bins use 30 s", "30 s" in app.bins_note.get() and app.bins_tree.get_children())
@@ -76,6 +81,7 @@ check("Open Field row hidden for EPM", not app.of_bar.winfo_ismapped())
 app.add_files([E, O]); log.clear(); dialogs.clear(); app.analyze(False); app.update()
 check("EPM test: OF file gets dialog, skipped", dialogs == [["center", "peripheral"]] and "Some files not analyzed" in log)
 check("EPM file analyzed with EPM measures", rows()[0][1] == "Analyzed" and "EPM_AnxietyIndex" in app._summary_df.columns)
+check("Time Bins include EPM measures", {"EPM_OpenEntries", "EPM_AnxietyIndex", "EPM_PctOpenTime"} <= set(app.files[0].bins.columns))
 check("rule recorded in export", app._summary_df["MinEntryFrames"][0] == 5)
 # Export, on copies of the samples in a temp folder (never the project folder).
 import shutil
@@ -89,6 +95,7 @@ out = output_paths(E2)
 check("export writes _analysis.xlsx, _path.png, _heatmap.png", all(os.path.exists(p) for p in out.values()))
 sheets = pd.read_excel(out["analysis"], sheet_name=None)
 check("workbook sheets", list(sheets) == ["Summary", "Time Bins", "Settings"])
+check("exported Time Bins sheet has the EPM measures", "EPM_AnxietyIndex" in sheets["Time Bins"].columns)
 names = set(sheets["Settings"]["Setting"])
 check("settings sheet lists entry rule, bins, plot style",
       {"Min entry (frames)", "Bin size (s)", "Point size", "Colormap", "Add background"} <= names)

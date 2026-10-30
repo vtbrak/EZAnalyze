@@ -50,6 +50,8 @@ from core import (
     binned_metrics,
     epm_metrics,
     of_metrics,
+    epm_binned,
+    of_binned,
     path_figure,
     heatmap_figure,
     load_config,
@@ -1015,10 +1017,14 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 # Record the settings behind these numbers in the row itself, so
                 # an exported table shows how it was produced.
                 settings = {"Test": test, "MinEntryFrames": min_entry}
+                bins = binned_metrics(e.data, fps=fps, bin_seconds=bin_s)
+                test_bins = None
                 if test == "Elevated Plus Maze":
                     summary.update(epm_metrics(
                         e.data, roles, fps=fps, min_entry_frames=min_entry,
                     ))
+                    test_bins = epm_binned(e.data, roles, fps=fps, bin_seconds=bin_s,
+                                           min_entry_frames=min_entry)
                 elif test == "Open Field":
                     gap = self.config_data["min_seconds_between_entries"]
                     adj = self.config_data["min_center_seconds_adjoining"]
@@ -1028,12 +1034,20 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                         min_between_entries_s=gap, min_center_adjoining_s=adj,
                         speed_smoothing_frames=smooth,
                     ))
+                    test_bins = of_binned(
+                        e.data, roles, fps=fps, bin_seconds=bin_s,
+                        min_entry_frames=min_entry, min_between_entries_s=gap,
+                        min_center_adjoining_s=adj, speed_smoothing_frames=smooth,
+                    )
                     settings.update({"MinBetweenCenterEntries_s": gap,
                                      "MinCenterAdjoiningCrossing_s": adj,
                                      "SpeedSmoothing_frames": smooth})
                 summary.update(settings)
                 e.summary = summary
-                e.bins = binned_metrics(e.data, fps=fps, bin_seconds=bin_s)
+                # The test's measures per bin go after the general bin columns.
+                if test_bins is not None and not bins.empty:
+                    bins = bins.merge(test_bins, on="Bin", how="left")
+                e.bins = bins
         finally:
             self.config(cursor="")
         self._refresh()

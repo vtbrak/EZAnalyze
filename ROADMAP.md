@@ -1,45 +1,63 @@
 # EZanalyze — Roadmap
 
 Feature and analysis plan for the behavior-tracking analyzer. This is the design
-doc; nothing here is built until we agree on it. Existing, already-working pieces
-are listed first so we know the starting point.
+doc: what's built, what was decided (and why), and what's next. Nothing new is
+built until it's agreed here.
 
 ---
 
-## Already built (current state, as of 2026-10-23)
+## Already built (current state, as of 2026-10-30)
 - **Core engine** (`core/`, GUI-free): loads tracking CSVs, validates columns,
   detects **region columns** automatically (any True/False column, e.g. EPM
   `ol/or/ct/cb/mid`, open field `center/peripheral`), parses ROI polygons.
-- **Summary table**: one row per file. File name is always shown, and the
-  other columns come in checkbox groups (Session basics on by default; Zone
-  time & %, Entries & transitions, ROI label time & %, Details). Choices are
-  saved.
-- **Time-binned table**: session split into fixed bins (default 60 s).
-- **Path plot** (color-by-speed or solid color, with adjustable size and
-  transparency) and **occupancy heatmap** (adjustable bins and colormap).
-  Each tab has its own controls. ROI outlines are labeled with region names.
+- **File list** (§7): Add File… / Add Folder… / drag-and-drop add files to a
+  list in the Summary, each marked *Not analyzed* until **Analyze Selected** or
+  **Analyze All**. **Clear** empties the list. Test type, fps, bin size, the
+  entry rule, and the Open Field thresholds lock at the first Analyze and
+  unlock at Clear. The selected Summary row drives Time Bins, Path, and
+  Heatmap.
 - **Test-type dropdown** (EPM / Open Field) and **region-role mapping**
   (auto-classified, user-overridable via the Match regions dialog, saved).
-  ROI polygons are paired with regions by data agreement.
-- **Center/periphery overlap warning** on load.
-- **File list** (§7): add files/folders/drops to a list, Clear, Analyze
-  Selected / Analyze All. Test type, fps, and bin size lock at the first
-  Analyze,
-  and the selected Summary row drives Time Bins, Path, and Heatmap.
-- **Settings saved** to `config.json` (fps, bin size, plot style, summary
-  columns, test type, region roles).
-- **Export Selected / Export All** (§9): per file, `_analysis.xlsx`
-  (Summary, Time Bins, Settings) plus `_path.png` and `_heatmap.png` next to
-  the source CSV.
-- Double-click **`Open Behavior Tracker.command`** launcher (Mac).
-- Code is on GitHub (`vtbrak/EZAnalyze`, private). Data CSVs are gitignored.
+  Each file's regions are checked against the test at Analyze.
+- **EPM measures** (§4) and **Open Field measures** (§5) in the Summary
+  ("Test measures" group) and **per time bin** (§5b). Includes the entry rule,
+  Open Field sides judged against each file's own drawn center lines,
+  crossings, and smoothed crossing speed.
+- **Summary table**: one row per file. File and Status are always shown; the
+  other columns come in checkbox groups (Session basics and Test measures on
+  by default; Zone time & %, Entries & transitions, ROI label time & %,
+  Details). Choices are saved. Each analyzed row records the settings that
+  produced it.
+- **Time Bins table**: fixed bins (default 60 s) with distance, speed, region
+  time, and the test's measures per bin.
+- **Path plot** (color-by-speed or solid color; size, transparency) and
+  **occupancy heatmap** (bins, colormap, region labels outside the ROIs, empty
+  cells transparent, optional flat-color background). Each tab has its own
+  controls, which never lock.
+- **Center/periphery overlap warning** at Analyze.
+- **Export Selected / Export All** (§9): per file, `_analysis.xlsx` (Summary,
+  Time Bins, Settings) plus `_path.png` and `_heatmap.png` next to the source
+  CSV.
+- **Settings saved** to `config.json` (test type, fps, bin size, entry rule,
+  Open Field thresholds, plot style, Summary columns, region roles).
+- **Cross-platform groundwork** (§10): shared pop-up dialogs (`dialogs.py`),
+  hover tooltips (`tooltip.py`), and launchers for Mac
+  (`Open Behavior Tracker.command`) and Windows (`Open Behavior Tracker.bat`).
+- **Regression test**: `tests/regress_gui.py` drives the app through the whole
+  workflow on the sample files.
+- Code is on GitHub (`vtbrak/EZAnalyze`, private). Data CSVs and export
+  outputs are gitignored.
 
 ---
 
 ## Design decisions (locked in)
 - **Zone/region membership**: trust the file's own **region columns** (one
   True/False column per region) rather than recomputing from X/Y. The one
-  exception is open-field sides, which the file doesn't have (see decisions).
+  exception is open-field sides, which the file doesn't have, so they're
+  judged against **that file's own drawn center-ROI lines** (§5).
+- **Each file has its own ROI lines and is analyzed against its own.** ROI
+  geometry is never shared or reused between files; only the region
+  name → role mapping is shared.
 - **Region identification**: region names vary between files (EPM uses short
   codes like `ol`, `ct`, `mid`; open field uses `center`, `peripheral`), and
   their order varies too. So the app keeps a **region-role mapping**: each
@@ -50,16 +68,18 @@ are listed first so we know the starting point.
   user is warned.
 - **Test type**: a **dropdown** (Elevated Plus Maze / Open Field) selects which
   metric set runs. No auto-detection for now.
-- **Thresholds** (immobility etc.): **input boxes** in the UI, **values persisted**
-  to a `config.json` so they carry over between sessions.
+- **Thresholds** (entry rule, Open Field gap / adjoining time / speed
+  smoothing): **input boxes** in the UI, **values persisted** to `config.json`,
+  locked at Analyze, and **recorded with the results** (Summary row and the
+  export's Settings sheet).
 
 ---
 
 ## Planned features
 
 ### 1. File input
-- [x] **Drag-and-drop** files/folders onto the window, in addition to the existing
-  Open File / Open Folder buttons.
+- [x] **Drag-and-drop** files/folders onto the window, in addition to the
+  Add File… / Add Folder… buttons.
 - [x] Graceful fallback: if drag-and-drop can't initialize, buttons still work.
 
 ### 2. Plot controls (path & heatmap)
@@ -68,16 +88,19 @@ are listed first so we know the starting point.
 - [x] Adjustable **transparency (alpha)**.
 - [x] Toggle: color-by-speed vs solid color; heatmap bin count.
 - [x] Settings persisted in `config.json`.
+- Later additions: controls moved into their own tabs (Path: size,
+  transparency, speed coloring, point color; Heatmap: bins, colormap, Add
+  background + color), and they never lock (§7, §8).
 
 ### 3. Test-type framework
-- [x] Test-type dropdown (saved). It will drive which metric set runs once
-  §4–§5 exist; for now it drives the region check below.
+- [x] Test-type dropdown (saved). It chooses which measures are computed
+  (EPM §4 or Open Field §5) and what the region check expects.
 - [x] Region-role mapping ("Match regions" dialog, also via **Regions…**):
   each region column is auto-classified (keywords + EPM codes like ol/ct/mid),
   user-overridable, saved. Opens automatically when names can't be matched or
   don't fit the chosen test.
 - [x] ROI polygons are paired with regions by data agreement, not file order,
-  and labeled on the plots.
+  and labeled on the plots (Path: on the region; Heatmap: outside it, §8).
 
 ### 4. Elevated Plus Maze (EPM) metrics (✅ built 2026-10-29; immobility deferred)
 - [x] **Open-arm vs closed-arm time** (seconds and %).
@@ -144,9 +167,9 @@ arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
 
 **✅ Open Field definitions (decided 2026-10-29)**
 - **Defaults:** min time between center entries **1 s**; min center time for an
-  adjoining-side crossing **0.5 s**. Both are input boxes on a third toolbar
-  row that only shows when the test is Open Field. They're saved and lock at
-  Analyze.
+  adjoining-side crossing **0.5 s**; speed smoothing **5 frames**. All three are
+  input boxes on a third toolbar row that only shows when the test is Open
+  Field. They're saved and lock at Analyze.
 - **Center entries:** the entry rule (min frames) applies. Re-entering the
   center less than the minimum gap after leaving it continues the same visit.
   The starting region counts toward time, not entries or latency (as for EPM).
@@ -225,7 +248,7 @@ arm time), `EPM_OpenEntries`, `EPM_ClosedEntries`, `EPM_CenterEntries`,
 The larger concern: how the program handles files loaded one after another,
 and multiple files from a folder.
 
-**Problems today**
+**Problems before §7 was built**
 - Loading a file **replaces** the previous one and **immediately computes**
   using whatever settings (test type etc.) are already selected.
 - There's no chance to choose the test type and parameters for a file
@@ -241,7 +264,7 @@ and multiple files from a folder.
   and named, while the rest are analyzed.
 - Repeated files get "(2)", "(3)", ... after the name so their rows can be
   told apart.
-- The Summary export includes every file in the list, with its Status.
+- Export later became per file (§9), replacing the single-table export.
 
 **Wanted**
 - [x] A load step that lets the user **pick the test type and parameters for a
@@ -252,7 +275,7 @@ and multiple files from a folder.
   Bins, Path, and Heatmap.
 
 **✅ Decided 2026-10-23**
-- [x] **New files are added to a list.** Loading (Open File, Open Folder,
+- [x] **New files are added to a list.** Loading (Add File…, Add Folder…,
   drag-and-drop) appends to the list instead of replacing what's there.
 - [x] **Clear button** empties the list.
 - [x] **The list resets when the app closes.** It isn't saved between
@@ -274,7 +297,8 @@ and multiple files from a folder.
 
 **✅ Details decided 2026-10-23**
 - [x] **Locked for the whole load session** (until Clear): **test type**,
-  **fps**, and **time-bin size**. Bin size stays consistent across every file
+  **fps**, and **time-bin size** (later also the entry rule and the Open
+  Field thresholds). Bin size stays consistent across every file
   in the load, and **is remembered when the app closes**, like fps.
 - [x] **Plot style stays adjustable at any time** (point size, colors,
   transparency, colormap, heatmap bins, background), and whatever is selected
@@ -337,15 +361,10 @@ All §7 decisions are made (2026-10-23).
     Bins for finer detail.
 
 - [x] **Dialog box text: only the first sentence in bold**, the rest in
-  regular type. ✅ Built 2026-10-23 as `dialogs.py`, used for every pop-up. Today pop-ups such as the center/periphery overlap warning
-  show all of their text in bold.
-  - Applies to every pop-up message (warnings, errors, info).
-  - Implementation note: on macOS, tkinter's `messagebox` shows the `message`
-    text in bold and the optional `detail` text in regular type. **Windows
-    doesn't do this.** Its message boxes have no bold line, so the same split
-    wouldn't give the required look on a PC. To match on both, build one small
-    custom dialog (a tkinter `Toplevel` with a bold first line and regular
-    text) and use it for every pop-up. See §10.
+  regular type, for every pop-up (warnings, errors, info, questions).
+  ✅ Built 2026-10-23 as `dialogs.py`, a tkinter-drawn dialog, because native
+  message boxes style text differently (macOS bolds the whole message;
+  Windows bolds nothing). It looks the same on both (§10).
 
 ### 9. Exporting results (requested 2026-10-23 — ✅ built 2026-10-29)
 - [x] Proper **export for a single file** and for **multiple files**
@@ -387,8 +406,8 @@ Table…), with `core/export.py` doing the writing. Notes:
 For each loaded file (one file, or every file in a folder), named after the
 **loaded file's own name** (e.g. `EPM.csv` → `EPM_...`):
 - [x] `<name>_analysis.xlsx`: one Excel workbook with **everything, each
-  table on its own sheet** (Summary, Time Bins, and later the EPM/open-field
-  metrics).
+  table on its own sheet**: Summary and Time Bins (both including the test's
+  measures) plus Settings.
 - [x] `<name>_path.png`: the Path plot image.
 - [x] `<name>_heatmap.png`: the Heatmap image, keeping the transparent
   background (§8).
@@ -415,9 +434,18 @@ For each loaded file (one file, or every file in a folder), named after the
 
 ### 10. Runs on both Mac and PC (requested 2026-10-23 — requirement)
 - [ ] The program must **work on Windows PCs as well as macOS**. Groundwork
-  built 2026-10-23 (shared dialogs + Windows launcher). Awaiting the first PC
-  test. This applies
-  to everything built from now on, and the existing code needs checking.
+  built 2026-10-23 (shared dialogs + Windows launcher). **Awaiting the first PC
+  test** (user not ready yet as of 2026-10-30). This applies to everything
+  built from now on.
+
+**PC test checklist** (for when the user tests): clone the repo, run
+`Open Behavior Tracker.bat` (first run installs packages); add a file, change
+the test/fps, Analyze, and check the settings grey out; hover a locked setting
+for its tooltip; add the same file twice (bold first line, Add Again /
+Ignore); drag a CSV or folder onto the window; analyze the Open Field file
+(overlap warning); restyle Path and Heatmap; open Regions… (✓/⚠ line); Export
+and open the workbook and images; check every toolbar row fits; close and
+reopen (settings remembered).
 
 **Known Mac-only or at-risk pieces**
 - ✅ **Launcher:** `Open Behavior Tracker.bat` added alongside the Mac
@@ -433,6 +461,8 @@ For each loaded file (one file, or every file in a folder), named after the
   untested on a PC.
 - **Fonts and sizes:** fonts and widget sizes differ between macOS and
   Windows, so layouts (toolbar width, dialog wrapping) need checking on both.
+  On the Mac the widest toolbar row is ~900 px, so the minimum window width is
+  940 px. Windows fonts may run wider.
 - **File paths:** keep using `os.path` and never hard-code `/` separators.
   Exports go "next to the source CSV" (§9), which also works on Windows paths.
 - **Unicode symbols** in labels (⚠, ✓, —) should be checked on Windows
@@ -465,7 +495,7 @@ For each loaded file (one file, or every file in a folder), named after the
     smoothing, and let a bout continue through a blip shorter than the entry
     rule. Each of these needs the user's OK.
 
-More layout/function items to come in later messages.
+New requests are added to this list as they come in.
 
 ---
 
@@ -479,6 +509,7 @@ More layout/function items to come in later messages.
    region between the two sides (configurable, saved).
 5. **Crossing speed** — ✅ report both average (over traversal) and peak.
 6. **Immobility defaults** — ✅ seed at <2 cm/s for ≥1 s; both configurable, saved.
+   (Immobility itself was later deferred, §11.)
 
 ## Sample data findings (2026-10-23)
 - **EPM** (`EPM.csv`): region columns `ol`, `or` (open left/right), `ct`, `cb`
@@ -497,10 +528,10 @@ More layout/function items to come in later messages.
    Implemented in `core.regions.frame_roles` — §4 metrics must use it.
 2. **Open-field sides come from X/Y**: the top of the video is the top of the
    arena (image coords: smaller Y = top). §5 crossings derive left/right/top/
-   bottom from position relative to the center ROI.
+   bottom from position relative to the file's own drawn center-ROI lines.
 3. **Center and periphery must never overlap.** Any frame marked as both is a
-   file/ROI error: the app warns the user on load (per file, frames + %), and
-   counts those frames as center. `Open Field.csv` has this error (21.5% of
+   file/ROI error: the app warns the user when the file is analyzed (per file,
+   frames + %), and counts those frames as center. `Open Field.csv` has this error (21.5% of
    frames — its periphery ROI covers the whole arena).
 
 ---
@@ -510,16 +541,21 @@ Done:
 1. ✅ Config/persistence layer (`config.json`) — §6.
 2. ✅ Plot controls + drag-and-drop — §1, §2.
 3. ✅ Test-type dropdown + region-role mapping — §3.
-
-Next (updated 2026-10-23):
 4. ✅ **File-input workflow (§7).**
 5. ✅ **Mac + PC groundwork (§10):** shared pop-up dialog and Windows
-   launcher. Next: the user's first PC test.
+   launcher.
 6. ✅ **Display fixes (§8).**
 7. ✅ **EPM metrics (§4)**, validated against `EPM.csv`.
 8. ✅ **Open-field metrics (§5)**, validated against `Open Field.csv`.
 9. ⏸ ~~Shared immobility detection~~: deferred to future items (§11).
 10. ✅ **Export (§9).**
+11. ✅ **Test measures per time bin (§5b).**
+
+**Everything planned so far is built** (as of 2026-10-30). Still open:
+- **First PC test** (§10), whenever the user is ready.
+- **Future items** (§11): immobility.
+- **Standalone app** (bundling): on hold until the user says so.
+- New requests from the user.
 
 Throughout: keep everything working on both Mac and PC (§10), with a PC test
 checklist after cross-platform changes.

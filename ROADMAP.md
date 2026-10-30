@@ -625,9 +625,62 @@ frame to a picture of the empty arena; this stage makes that picture.
   tracking. Without Options 2 and 3, the remedies for a ghost would be
   changing the frame count or trim.
 
-**Still to decide:** the remaining walkthrough stages (3 tracking, 4 ROIs,
+**✅ Walkthrough, Stage 3 — Tracking the animal (decided 2026-10-30; not
+built).** Functions: `Locate` (finds the animal in one frame), `TrackLocation`
+(runs it on every frame and builds the per-frame table) and
+`LocationThresh_View` (preview on sample frames).
+1. **Tracking math is kept as ezTrack does it**: grayscale → downsample →
+   crop → difference from the reference (`dark` / `light` / `abs`) → zero the
+   exclusion shapes → optional window around the previous position → keep the
+   top `loc_thresh` percentile → position = center of mass. The only change is
+   item 2.
+2. **Wire removal is dropped** (`rmv_wire` / `wire_krn`, and with it ezTrack's
+   per-frame wire warning). Note: the user's notebook had it on, so the
+   practice video won't reproduce `EPM.csv` exactly; validation against it
+   should expect close, not identical, positions.
+3. **Settings are input boxes, saved to `config.json` and locked at Track**
+   like the other settings, defaulting to the user's notebook values:
+   `loc_thresh` 99.5; `method` dark; window on, `window_size` 100 px,
+   `window_weight` 0.9.
+4. **`window_size` scales automatically with downsampling**, so "100 px"
+   always means the same area of the arena (in full-size video pixels).
+5. **Preview, improved:** ezTrack's sample frames (red crosshair at the found
+   position plus a color view of the differences), plus **scrub to any frame**
+   and **re-preview after changing a setting**, before the full track.
+6. **Progress bar with Cancel** while a video tracks (ezTrack only prints a
+   text bar).
+7. **Unreadable frames don't stop tracking** (ezTrack stops at the first one,
+   silently dropping the rest of the video). The frame **stays in the data as
+   a row** with a blank position, tracking continues (the window uses the last
+   good position), and the user is told how many were unreadable.
+   - **New column `Frame_Unreadable`** (True/False) in the tracking output
+     marks these rows. ezTrack CSVs don't have it, so a file without the
+     column is treated as all frames readable.
+   - The loader must list it with the other non-region True/False columns
+     (`ROI_transition`, `Use_Window`) so it's never taken for a region.
+   - **Analysis adjusted for it** (details to confirm when building; these
+     are the recommendations): the Summary reports the count (and %) of
+     unreadable frames; those frames add no time to any region and no
+     distance (no step is drawn across the gap); the entry rule treats them as
+     a continuation of the place before, so a gap doesn't create or break an
+     entry; Time Bins report unreadable frames per bin; plots skip them.
+8. **Every setting used is recorded**: besides what ezTrack already writes
+   (threshold, window on/size/weight, start frame), also method, crop,
+   downsampling, reference frame count and whether exclusion shapes were
+   used, in the tracking output and in the export's Settings sheet.
+9. **A tracking CSV is saved**: `<name>_LocationOutput.csv` next to the
+   video, in ezTrack's format (plus the new column and settings), so a video
+   only needs tracking once and can be reloaded later like any CSV.
+
+**Still to decide:** the remaining walkthrough stages (4 ROIs,
 5 scale, 6 summaries/playback, 7 batch; then Freeze Analysis), and the
 details of the video windows.
+
+**Last step of the planning, before building:** once every walkthrough stage
+is decided, **review the GUI as a whole**: how the new video steps (load,
+crop, reference, track, ROIs, scale, freeze) fit with the existing CSV
+workflow, how windows, tabs, toolbars and settings are organized, and what
+should be regrouped or simplified. Record the agreed layout here, then build.
 
 New requests are added to this list as they come in.
 

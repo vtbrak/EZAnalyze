@@ -92,8 +92,8 @@ freeze analysis. Freezing will use ezTrack's thresholds instead of the planned
 immobility. **Walkthrough of ezTrack's functions with the user, stage by
 stage** (Location Tracking: load/crop → reference → tracking → ROIs → scale →
 summaries/playback → batch; then Freeze Analysis), deciding keep / drop /
-change for each. **Stage 1 is decided (ROADMAP §12); next is Stage 2
-(reference frame).** Decisions are recorded only; **don't build until the
+change for each. **Stages 1–2 are decided (ROADMAP §12); next is Stage 3
+(tracking).** Decisions are recorded only; **don't build until the
 user says so.** Nothing from ezTrack is adapted yet. When code is adapted,
 keep the GPL-3.0 license and credit/cite ezTrack, as §12 requires.
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder

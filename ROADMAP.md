@@ -591,9 +591,43 @@ the **same file list as CSVs**, with a **"Not tracked"** status. Tracking
 everything that already exists works unchanged: Analyze, Summary, Time Bins,
 plots, and export.
 
-**Still to decide:** the remaining walkthrough stages (2 reference, 3
-tracking, 4 ROIs, 5 scale, 6 summaries/playback, 7 batch; then Freeze
-Analysis), and the details of the video windows.
+**✅ Walkthrough, Stage 2 — Reference image (decided 2026-10-30; not built).**
+Function: `Reference` (Location Tracking only; Freeze Analysis compares each
+frame to the previous one and needs no reference). Tracking compares every
+frame to a picture of the empty arena; this stage makes that picture.
+1. **Only Option 1 is kept: build the reference from the video itself**, as
+   the median of frames spread evenly across the trimmed trial (the animal is
+   in a different place in most frames, so it drops out).
+   - **Dropped:** Option 2 (a separate empty-box video) and Option 3 (a
+     hand-picked list of frames).
+   - Frame count: ezTrack's code defaults to 100; its notebook and batch mode
+     use 50. Default and whether it's a setting are to confirm when building
+     (recommendation was 50, changeable, saved).
+   - Known limitation to keep in mind: if the animal stays in one spot for
+     about half the trial or more, a "ghost" of it remains in the reference
+     and tracking suffers there.
+2. **Each video gets its own reference image** (as ezTrack's batch mode
+   already does), never shared between videos.
+3. **Unreadable frames** are replaced by another frame, as in ezTrack.
+4. **The reference image is saved with the results**: kept with the tracked
+   file and exported as `<name>_reference.png`, next to the other outputs.
+5. **Reference as a plot background:** the **Path and Heatmap** plots (on
+   screen and exported) get an **option to use the video's reference image as
+   the background**. Details to settle in Stage 6, including:
+   - how it combines with the Heatmap's current background choices (empty
+     cells transparent, or "Add background" flat color), likely as a third
+     choice;
+   - alignment: X/Y and the reference must share the same crop and
+     downsampling so the path sits exactly on the arena;
+   - files loaded as CSVs have no reference image, so the option is
+     unavailable for them.
+- **Open question:** whether to show the reference for a check before
+  tracking. Without Options 2 and 3, the remedies for a ghost would be
+  changing the frame count or trim.
+
+**Still to decide:** the remaining walkthrough stages (3 tracking, 4 ROIs,
+5 scale, 6 summaries/playback, 7 batch; then Freeze Analysis), and the
+details of the video windows.
 
 New requests are added to this list as they come in.
 

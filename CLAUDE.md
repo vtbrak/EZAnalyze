@@ -102,15 +102,17 @@ stage** (Location Tracking: load/crop → reference → tracking → ROIs → sc
 summaries/playback → batch; then Freeze Analysis), deciding keep / drop /
 change for each. **Location Tracking Stages 1–7 are decided (ROADMAP
 §12). Freeze Analysis decisions are logged but EXCLUDED from the current
-build (Location Tracking first). Next is the GUI review.
+build (Location Tracking first). The GUI review is decided (ROADMAP §12, end):
+settings panel, always-visible file list, Track / Analyze / Export acting on
+the selected files with a Select all button, one video setup window. **Planning is complete;
+build when the user says so.**
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion
 index with an adjustable 0–255 intensity threshold, default 15; PPI and
 habituation); not built. **When ASR work starts, first remind the user to put
 a sample ASR video and its stimulus logs in the project folder.** The user
-cites papers outside the app (no in-app citation for ASR). After all stages, a review of the GUI layout
-and organization comes last, before building.** Decisions are recorded only; **don't build until the
+cites papers outside the app (no in-app citation for ASR).** Decisions are recorded only; **don't build until the
 user says so.** Nothing from ezTrack is adapted yet. When code is adapted,
 keep the GPL-3.0 license and credit/cite ezTrack, as §12 requires.
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder

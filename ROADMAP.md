@@ -885,6 +885,64 @@ crop, reference, track, ROIs, scale, freeze, and ASR from §13) fit with the exi
 workflow, how windows, tabs, toolbars and settings are organized, and what
 should be regrouped or simplified. Record the agreed layout here, then build.
 
+**✅ GUI review (decided 2026-11-03; not built).** Problems found in the
+current layout: the toolbar grows a row with each group of settings (three
+rows already; tracking would add more, and the window's 940 px minimum width
+comes from this); the file list is the Summary tab, so it's hidden on Time
+Bins / Path / Heatmap; files can't be removed one at a time (only Clear);
+greyed-out locked settings don't say why; there's nowhere for the GPL credits
+and license ezTrack requires.
+1. **Settings move to a left-hand panel** in sections: **Session** (Test,
+   frame rate, bin size), **Entries and regions** (min entry, Regions…),
+   **Open Field** (only for Open Field), **Tracking** (only when videos are
+   listed). Each section shows a lock icon and "Locked. Clear to change."
+   The toolbar becomes one row of buttons.
+2. **File list always visible above the tabs**: File, Type (CSV / Video),
+   Status, with a draggable divider between list and tabs. The **Summary
+   tab** keeps the full table of measures.
+3. **Status steps per file** with color tags: *Needs setup → Ready to track →
+   Tracking 45% → Not analyzed → Analyzed*, plus *Failed* (with the reason).
+   CSVs start at *Not analyzed*.
+4. **Toolbar in working order:** Add files / Add folder / **Remove** / Clear |
+   **Set up videos…** | **Select all** / **Track** / **Analyze** / **Export** |
+   **About**. Set up videos… and Track show only when videos are listed.
+   (Decided 2026-11-03 after mocking alternatives: separate Selected/All
+   buttons, a shared "Apply to" dropdown, and per-button dropdowns were all
+   considered; the user found "Apply to" unclear and chose this.)
+   - **Track, Analyze and Export always act on the selected files**, and each
+     button shows how many, e.g. **Analyze (1)**.
+   - **Select all** selects every file in the list; once everything is
+     selected it reads **Select none**. Ctrl+A (Windows) / Cmd+A (Mac) does
+     the same.
+   - With nothing selected, the buttons say "Select a file first" instead of
+     doing nothing.
+   - The first file added is selected automatically, so running one file at a
+     time (the usual case for students) needs no extra clicks.
+5. **Multi-select in the file list** (Shift-click, Ctrl/Cmd-click), so the
+   buttons can act on a few chosen files.
+6. **One video setup window** with a step list on the left (1 Trim and crop,
+   2 Exclusions, 3 Reference, 4 Tracking check, 5 Regions, 6 Scale), each
+   step's instructions above the image, Back / Next, a **video 2 of 3**
+   switcher with arrows, **Start from previous video**, and a check mark on
+   finished steps.
+7. **Tracking settings are adjusted in step 4 (Tracking check)**, where their
+   effect is visible, and shown in the main window's Tracking section. They
+   are shared by every video in the load and lock at the first Track; step 4
+   says they apply to all videos.
+8. **Tracking progress in a bar at the bottom of the main window** with
+   Cancel, not a pop-up, so the window stays usable.
+9. **Path and Heatmap tabs** get the **Background** choice (Stage 6) and a
+   **Play video…** button for the selected video. No new tabs for now.
+10. **About button:** version, ezTrack credit and citation, and the GPL-3.0
+    license text, as the license requires.
+11. **Right-click menu on file rows** (Analyze, Export, Set up, Play video,
+    Remove) as a shortcut, buttons kept; right-click or Control-click on
+    Mac. Optional, low priority.
+12. **Room for later:** freezing and ASR plug in as their own settings
+    sections and tabs, shown by test type, without redoing this layout.
+
+**Planning for the video build is complete.** Build when the user says so.
+
 ### 13. Acoustic startle response (ASR) from video (requested 2026-11-03 — planned, not built)
 
 Measure the startle response from video with a **motion index**, following a

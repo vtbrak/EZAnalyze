@@ -994,6 +994,60 @@ CSVs) before building.
 - PPI and habituation details that depend on the log format (prepulse
   levels, block structure).
 
+### 14. Anaconda install (requested 2026-11-03 — planned, not built; do BEFORE the video build)
+
+Goal: anyone with **Anaconda or Miniconda** on a Mac or Windows PC gets the
+project folder, double-clicks **one install file** to build the program's
+environment, then double-clicks the **Open** file from then on. Build it on
+`main` and merge into `video-tracking`, so the installer is usable now and
+later packages (OpenCV, SciPy for video) are one line each.
+
+1. **`environment.yml`** (Anaconda's own format):
+   - **conda-forge channel only** (not Anaconda's default channel, whose
+     commercial terms can apply to larger institutions; conda-forge is free).
+   - One fixed Python version; pandas, numpy, matplotlib, openpyxl; OpenCV and
+     SciPy added when the video build needs them; `tkinterdnd2` through the
+     file's `pip:` section (may not be on conda-forge).
+   - One named environment, e.g. `behavior-tracker`, separate from anything
+     else on the computer.
+2. **Conda-finding helpers, one per system**, shared by the Install, Open and
+   Uninstall files so the search lives in one place:
+   - **`find_conda.sh` (Mac):** use `conda` if it already works or
+     `CONDA_EXE` is set; otherwise look in the usual install folders
+     (`anaconda3` / `miniconda3` in the home folder, `~/opt`, `/opt`,
+     `/opt/homebrew`, …); then load `etc/profile.d/conda.sh` so
+     `conda activate` works inside the script.
+   - **`find_conda.bat` (Windows):** same idea in Windows terms (`where
+     conda`, `%CONDA_EXE%`, `anaconda3` / `miniconda3` under
+     `%USERPROFILE%`, `%ProgramData%` and `%LOCALAPPDATA%`, …); activate
+     through `condabin\conda.bat`.
+   - If nothing is found: a plain message saying Anaconda needs installing,
+     then stop.
+   - If the user copies the `find_conda.sh` from their other program into the
+     folder, reuse what worked there (e.g. extra folders it checked).
+3. **Install files:** `Install Behavior Tracker.command` (Mac) and
+   `Install Behavior Tracker.bat` (Windows). First run creates the
+   environment from `environment.yml`; running again **updates** it to match
+   (how new packages arrive later). **Never upgrades pip.** Ends with a clear
+   Done/Failed message and keeps the window open.
+4. **Open files** (the existing `Open Behavior Tracker` launchers): use the
+   conda environment if it exists (on Windows, activate it properly first, or
+   numpy can fail to load); **fall back to the current `.venv` setup** on
+   computers without Anaconda; if the environment is missing, say "run the
+   installer first" instead of crashing; if `environment.yml` changed since
+   install (stored stamp), suggest re-running the installer.
+5. **Optional Uninstall file:** `conda env remove` for the environment; the
+   user's files are untouched.
+6. **Keep `requirements.txt` (venv fallback) and `environment.yml` in sync**;
+   the regression test fails if they list different packages.
+7. **README:** install Anaconda; get the folder (zip from GitHub or clone; the
+   repo is private, so others need access or a zip); double-click Install,
+   then Open; Mac first time: right-click → Open (macOS blocks downloaded
+   scripts); what to do if Windows SmartScreen warns.
+8. **PC test checklist:** installer finds Anaconda installed "just me" and
+   "all users"; works from a folder with spaces; re-running updates; Open
+   uses the conda environment; drag-and-drop still works.
+
 New requests are added to this list as they come in.
 
 ---
@@ -1051,6 +1105,8 @@ Done:
 11. ✅ **Test measures per time bin (§5b).**
 
 **Everything planned so far is built** (as of 2026-10-30). Still open:
+- **Anaconda install (§14)**: **next, before the video build** (build on
+  `main`, merge into `video-tracking`).
 - **Video analysis from ezTrack** (§12), on the `video-tracking` branch:
   Location Tracking walkthrough decided; Freeze Analysis logged but excluded
   from the current build; GUI review next, then build.

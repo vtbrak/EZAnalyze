@@ -95,6 +95,10 @@ summaries/playback → batch; then Freeze Analysis), deciding keep / drop /
 change for each. **Location Tracking Stages 1–7 are decided (ROADMAP
 §12). Freeze Analysis decisions are logged but EXCLUDED from the current
 build (Location Tracking first). Next is the GUI review.
+**Anaconda install (ROADMAP §14)** comes **before the video build**: an
+`environment.yml` (conda-forge), `find_conda.sh` / `find_conda.bat` helpers,
+Install files per system, and Open launchers that use the conda env with the
+`.venv` fallback. Build on `main`, merge into `video-tracking`. Not built yet.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion
 index with an adjustable 0–255 intensity threshold, default 15; PPI and
 habituation); not built. **When ASR work starts, first remind the user to put

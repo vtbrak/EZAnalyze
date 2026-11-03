@@ -1,10 +1,32 @@
 #!/bin/bash
 # Double-click launcher for the Behavior Tracker GUI (macOS).
-# Uses the project's own virtual environment; creates it on first run.
+# Uses the Anaconda environment from "Install Behavior Tracker.command" when
+# it's installed. On computers without Anaconda it falls back to the
+# project's own virtual environment (.venv), creating it on first run.
 
 # Move to this script's own directory (handles spaces in the path).
 cd "$(dirname "$0")" || exit 1
+. ./find_conda.sh
 
+if find_conda; then
+    if env_exists && conda activate "$ENV_NAME"; then
+        if ! cmp -s environment.yml "$CONDA_PREFIX/$STAMP_NAME"; then
+            echo "Note: the program's package list has changed since it was installed."
+            echo "Double-click \"Install Behavior Tracker.command\" to update."
+            echo
+        fi
+        exec python gui.py
+    fi
+    if [ ! -x ".venv/bin/python" ]; then
+        echo "The Behavior Tracker isn't installed yet."
+        echo "Double-click \"Install Behavior Tracker.command\" first."
+        echo
+        read -r -p "Press Return to close this window." _
+        exit 1
+    fi
+fi
+
+# No Anaconda environment: use the virtual environment instead.
 VENV=".venv"
 PY="$VENV/bin/python"
 

@@ -43,8 +43,16 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 - `region_dialog.py`: the Match regions dialog.
 - `tests/regress_gui.py`: workflow regression test. Run it after GUI changes
   (`.venv/bin/python tests/regress_gui.py`); it needs the sample CSVs.
-- `Open Behavior Tracker.command`: Mac double-click launcher (builds `.venv`
-  on first run from `requirements.txt`).
+- **Anaconda install (ROADMAP §14, built 2026-11-03):** `environment.yml`
+  (env `behavior-tracker`, conda-forge only; `tkinterdnd2` via its `pip:`
+  section), `find_conda.sh` / `find_conda.bat` (shared conda finders),
+  `Install` / `Uninstall Behavior Tracker` `.command` / `.bat`. The `Open`
+  launchers use the conda env when installed (Windows activates it first),
+  note when `environment.yml` changed since install (stamp copy inside the
+  env), and fall back to `.venv` without Anaconda. Keep `requirements.txt`
+  and `environment.yml` in step (the regression test checks). `.sh` and
+  `.command` are LF via `.gitattributes`.
+- `Open Behavior Tracker.command`: Mac double-click launcher.
 - Git repo pushed to GitHub `vtbrak/EZAnalyze` (private). `*.csv`,
   `config.json`, and export outputs (`*_analysis.xlsx`, `*_path.png`,
   `*_heatmap.png`) are gitignored.

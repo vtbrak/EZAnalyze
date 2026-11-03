@@ -105,5 +105,18 @@ app._on_close()
 c = json.load(open(cfg))
 check("settings saved", c["test_type"] == "Elevated Plus Maze" and c["bin_seconds"] == 30
       and c["min_entry_frames"] == 5 and c["min_seconds_between_entries"] == 2)
+
+# The two install routes must install the same packages: requirements.txt
+# (.venv fallback) and environment.yml (Anaconda; python and pip are conda's
+# own tooling, not program packages).
+def _names(lines):
+    return {l.split("#")[0].strip().lstrip("- ").split("=")[0].split("<")[0].split(">")[0].strip().lower()
+            for l in lines if l.split("#")[0].strip()}
+reqs = _names(open(os.path.join(ROOT, "requirements.txt")))
+env_lines = open(os.path.join(ROOT, "environment.yml")).read().split("dependencies:", 1)[1].splitlines()
+env = _names(l for l in env_lines if not l.strip().endswith(":")) - {"python", "pip"}
+check(f"requirements.txt and environment.yml list the same packages "
+      f"(only in requirements: {sorted(reqs - env)}, only in environment: {sorted(env - reqs)})",
+      reqs == env)
 print(f"\n{fails} failure(s)")
 sys.exit(1 if fails else 0)

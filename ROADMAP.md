@@ -750,8 +750,41 @@ Only distance is converted; X/Y and ROI coordinates stay in pixels.
 8. **One line, as in ezTrack.** A second (perpendicular) line could be added
    later if the camera angle makes horizontal and vertical lengths differ.
 
+**✅ Walkthrough, Stage 6 — Summaries, plots and playback (decided
+2026-11-03; not built).** Functions: `Summarize_Location`, `showtrace`,
+`Heatmap`, `PlayVideo`, `PlayVideo_ext`, `display_image`.
+1. **`Summarize_Location` dropped**: our Summary and Time Bins replace it.
+2. **`showtrace` and `Heatmap` dropped**: our Path and Heatmap stay (the
+   heatmap stays our square-cell grid, not ezTrack's blurred image). The
+   one thing taken from them is the reference image as a background
+   (Stage 2).
+3. **Background choices**, saved in `config.json`: **Path** — *None* or
+   *Reference image*; **Heatmap** — *None* (empty cells transparent), *Flat
+   color* (the current "Add background") or *Reference image*.
+4. **How the reference background looks:** grayscale; heatmap cells stay
+   fully colored on top, so the reference shows only where the animal never
+   went; with the reference on, the plot shows the whole reference image
+   (the cropped arena) instead of fitting to the ROIs and data; the exported
+   PNG is then not transparent.
+5. **Alignment:** the reference sits in the same pixel coordinates as X/Y
+   and the ROIs, top of the video at the top (guaranteed by Stage 4 item 8).
+6. **Files without a reference** (loaded CSVs): *Reference image* is greyed
+   out with a tooltip saying why; they fall back to *None*.
+7. **Playback kept, rebuilt as a tkinter window** for the selected file:
+   play/pause, scrub slider, speed choice; colored marker on the tracked
+   position plus an optional short trail; optional ROI outlines; frame
+   number, time and current region shown; unreadable frames marked (no
+   marker) instead of crashing (ezTrack's playback crashes on a blank
+   position). This is the main way to check the tracking.
+8. **Saving the playback as a video: optional button, off by default**,
+   writing `<name>_tracked.avi` next to the video at the video's **real**
+   frame rate (ezTrack always writes 20 fps), with marker and ROIs drawn
+   on, in a format that plays on Mac and Windows without extra software;
+   overwrites like the other exports (ezTrack always writes
+   `video_output.avi`, overwriting across videos).
+
 **Still to decide:** the remaining walkthrough stages
-(6 summaries/playback, 7 batch; then Freeze Analysis), and the details of the video windows.
+(7 batch; then Freeze Analysis), and the details of the video windows.
 
 **Last step of the planning, before building:** once every walkthrough stage
 is decided, **review the GUI as a whole**: how the new video steps (load,

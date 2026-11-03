@@ -4,25 +4,46 @@ Analyzes video-based locomotion tracking CSVs (`*_LocationOutput.csv`) — one r
 per video frame with position, zone, ROI, and distance data — and turns them into
 summary metrics, time-binned tables, path plots, and occupancy heatmaps.
 
-## Running
+## Installing and running
 
-**Mac:** double-click **`Open Behavior Tracker.command`**.
+### With Anaconda (recommended, Mac or Windows)
+1. Install [Anaconda or Miniconda](https://www.anaconda.com/download) if the
+   computer doesn't have it.
+2. Get the program folder: download the zip from GitHub (or `git clone`).
+   The repository is private, so others need access or a zip from you. Copy
+   the folder **without** its `.venv`, if it has one.
+3. Double-click **`Install Behavior Tracker.command`** (Mac) or
+   **`Install Behavior Tracker.bat`** (Windows). It finds Anaconda, builds the
+   program's own environment (`behavior-tracker`, from `environment.yml`,
+   using the free conda-forge channel), and says Done or Failed. It only needs
+   doing once; run it again after an update to bring the environment up to
+   date.
+4. From then on, double-click **`Open Behavior Tracker.command`** (Mac) or
+   **`Open Behavior Tracker.bat`** (Windows). If the program's package list has
+   changed since you installed, it says so; run the installer again.
 
-**Windows:** double-click **`Open Behavior Tracker.bat`**. It needs Python 3
-from [python.org](https://www.python.org/downloads/) (tick "Add python.exe to
-PATH" during setup). A console window stays open while the app runs and shows
-any error messages.
+**First time on a Mac:** macOS may block a downloaded script. Right-click the
+file → **Open** → **Open**; after that, double-clicking works.
+**On Windows:** if SmartScreen warns about the file, click **More info** →
+**Run anyway**. A console window stays open while the app runs and shows any
+error messages.
 
-On the first run either launcher builds a local Python environment (`.venv`)
-and installs dependencies automatically; after that it just launches the app.
-Get the code onto a PC with `git clone`, or copy the folder **without** its
-`.venv` (a Mac `.venv` doesn't work on Windows).
+**Uninstall:** `Uninstall Behavior Tracker.command` / `.bat` removes the
+environment only; the program folder and your data, results and settings
+stay.
+
+### Without Anaconda
+The Open launchers fall back to a local Python environment (`.venv`), built
+and filled automatically on the first run. On Windows this needs Python 3 from
+[python.org](https://www.python.org/downloads/) (tick "Add python.exe to
+PATH" during setup).
 
 To run from a terminal instead:
 
 ```bash
-./.venv/bin/python gui.py          # Mac
-.venv\Scripts\python.exe gui.py     # Windows
+conda activate behavior-tracker && python gui.py   # Anaconda
+./.venv/bin/python gui.py                          # .venv, Mac
+.venv\Scripts\python.exe gui.py                     # .venv, Windows
 ```
 
 ## What it computes
@@ -116,9 +137,12 @@ BehaviorTracker/
 ├── region_dialog.py Match regions dialog
 ├── tooltip.py       hover tooltips
 ├── dialogs.py       pop-up messages (same look on Mac and Windows)
-├── requirements.txt
-├── Open Behavior Tracker.command   double-click launcher (Mac)
-└── Open Behavior Tracker.bat       double-click launcher (Windows)
+├── environment.yml  Anaconda environment (keep in step with requirements.txt)
+├── requirements.txt packages for the .venv fallback
+├── find_conda.sh / find_conda.bat   locate Anaconda for the launchers
+├── Install Behavior Tracker.command / .bat     build or update the environment
+├── Open Behavior Tracker.command / .bat        start the app
+└── Uninstall Behavior Tracker.command / .bat   remove the environment
 ```
 
 The engine in `core/` is deliberately GUI-free so it can be scripted or, later,

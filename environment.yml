@@ -1,0 +1,21 @@
+# Anaconda environment for the Behavior Tracker.
+# Built by "Install Behavior Tracker" (.command on Mac, .bat on Windows);
+# run the installer again after changing this file to update the environment.
+# Keep the package list in step with requirements.txt (the .venv fallback);
+# tests/regress_gui.py checks that they match.
+#
+# conda-forge only: Anaconda's default channel has commercial terms that can
+# apply to larger institutions; conda-forge is free for everyone.
+name: behavior-tracker
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.12
+  - pandas
+  - numpy
+  - matplotlib
+  - openpyxl
+  - pip
+  - pip:
+      - tkinterdnd2  # drag-and-drop; not on conda-forge

@@ -783,8 +783,45 @@ Only distance is converted; X/Y and ROI coordinates stay in pixels.
    overwrites like the other exports (ezTrack always writes
    `video_output.avi`, overwriting across videos).
 
-**Still to decide:** the remaining walkthrough stages
-(7 batch; then Freeze Analysis), and the details of the video windows.
+**✅ Walkthrough, Stage 7 — Batch processing (decided 2026-11-03; not
+built).** Functions: `Batch_LoadFiles` (videos of one type in one folder),
+`Batch_Process` (per video: unreadable-frame check, own reference, track,
+save `_LocationOutput.csv`, add to `BatchSummary.csv`; crop, exclusions,
+ROIs and scale set once on the first video and reused) and `check_p_frames`
+(refuses a video if >1% of its first 300 frames are unreadable).
+1. **Adding videos:** Add File, Add Folder and drag-and-drop accept videos
+   (`.mp4`, `.avi`, `.mov`, `.wmv`, `.mpg`, `.mkv`) as well as CSVs; mixed
+   folders are fine; new videos show **"Not tracked"**.
+2. **Already tracked:** if a video has a `_LocationOutput.csv` beside it,
+   ask once for the batch: **Use existing tracking** (default) or **Track
+   again**.
+3. **"Set up each, then track all":** the interactive steps (trim, crop,
+   exclusions, ROIs, scale) are done per video up front, each starting from
+   the previous video's choices as a draft; then **Track All** runs every
+   set-up video unattended. Videos not fully set up are skipped and named
+   afterward. (ezTrack's shared first-video setup is dropped.)
+4. **Running:** one video at a time in the background (window stays
+   responsive); overall progress ("video 3 of 12") plus the current video's;
+   **Cancel** stops after the current frame, keeps finished videos, leaves
+   the rest "Not tracked"; a failure in one video doesn't stop the others and
+   is reported at the end.
+5. **After tracking:** each video becomes **"Not analyzed"**, like a loaded
+   CSV, and the existing Analyze Selected/All step runs as now ("always wait
+   for analyze"). Its `_LocationOutput.csv` and `_reference.png` are already
+   saved.
+6. **Tracking settings** (threshold, method, window, reference frame count,
+   downsampling) **lock at the first Track** for the whole load and unlock at
+   Clear, like test type, fps and bin size.
+7. **Frame rate:** read from each video; warn before Track if it differs from
+   the fps setting or from other videos in the load (option to continue);
+   the rate used is recorded in the outputs.
+8. **Unreadable-frame check kept as a warning, not a refusal**, when a video
+   is added; the file list shows the % found, and the warning keeps ezTrack's
+   suggestion to convert the video.
+9. **`BatchSummary.csv` and the combined plot layout dropped** (no summary
+   file, per the user; plots follow the selected file).
+
+**Still to decide:** Freeze Analysis, and the details of the video windows.
 
 **Last step of the planning, before building:** once every walkthrough stage
 is decided, **review the GUI as a whole**: how the new video steps (load,

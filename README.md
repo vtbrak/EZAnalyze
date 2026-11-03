@@ -6,6 +6,9 @@ summary metrics, time-binned tables, path plots, and occupancy heatmaps.
 
 ## Installing and running
 
+For a step-by-step guide written for non-programmers, including a method
+that needs no administrator password, see **[INSTALL.md](INSTALL.md)**.
+
 ### With Anaconda (recommended, Mac or Windows)
 1. Install [Anaconda or Miniconda](https://www.anaconda.com/download) if the
    computer doesn't have it.

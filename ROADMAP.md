@@ -672,9 +672,57 @@ built).** Functions: `Locate` (finds the animal in one frame), `TrackLocation`
    video, in ezTrack's format (plus the new column and settings), so a video
    only needs tracking once and can be reloaded later like any CSV.
 
-**Still to decide:** the remaining walkthrough stages (4 ROIs,
-5 scale, 6 summaries/playback, 7 batch; then Freeze Analysis), and the
-details of the video windows.
+**✅ Walkthrough, Stage 4 — Regions of interest (decided 2026-11-03; not
+built).** Functions: `ROI_plot` (draw named polygons on the reference),
+`ROI_Location` (per-frame True/False column per region, plus
+`ROI_coordinates`), `ROI_linearize` (`ROI_location` text label per frame) and
+`ROI_transitions` (`ROI_transition`, where that label changes).
+1. **Drawing tool rebuilt in tkinter** on the video's own reference image:
+   click to place points and close the polygon, drag points to adjust,
+   delete or redraw a region.
+2. **Test type first, then the tool offers that test's regions to draw**, so
+   each region knows its role as it's drawn (no "Match regions" step for
+   videos). EPM: open arm 1, open arm 2, closed arm 1, closed arm 2, center.
+   Names stay editable; extra regions can be added (role "ignore" or a chosen
+   role).
+3. **Open Field: draw the arena outline and the center**; periphery = inside
+   the outline and not in the center, so the two can't overlap by
+   construction. **Rule: a point in both center and periphery counts as
+   center** (applies anywhere they could coincide, e.g. a shared edge or a
+   center drawn partly outside the outline). The CSV side already resolves
+   overlaps to center (`frame_roles` checks center first) while still warning
+   that the file is in error.
+4. **Each video gets its own ROIs, including in batch** (ezTrack's batch mode
+   draws once and shares them; that's dropped). A new video can **start from
+   the previous video's ROIs as a draft** that must be looked at and adjusted
+   or confirmed; once confirmed, the lines belong to that video only.
+5. **Checks while drawing:** warn right away if Open Field center and
+   periphery would overlap; EPM arm/center overlaps stay allowed (count as
+   center); warn before Track if a required region hasn't been drawn.
+6. **Region test kept as ezTrack's** (pixel mask of each polygon, X/Y looked
+   up in it), so video results match ezTrack CSVs. Unreadable frames get
+   **blank** region values and a blank `ROI_location`.
+   - ezTrack does **not** fill in a missing position from the frames around
+     it (it stops tracking at the first unreadable frame).
+   - **Decided:** the raw `_LocationOutput.csv` keeps unreadable frames
+     blank. A **gap-filling option on the analysis side, off by default**,
+     fills short gaps with a straight line between the positions just before
+     and after (max gap length a saved setting, e.g. 5 frames); longer gaps
+     stay blank. Filled rows stay marked by `Frame_Unreadable`, the saved
+     data is never altered, and the option and max gap are recorded in the
+     export's Settings sheet. Region values for filled frames come from the
+     filled position against that file's own ROIs.
+7. **Output format kept exactly as ezTrack's**: one True/False column per
+   region, `ROI_coordinates`, `ROI_location`, `ROI_transition`, so the
+   existing loader and analysis read video results unchanged.
+8. **ROIs use the same coordinates as X/Y** (after crop and downsampling), so
+   the path and reference background line up; crop and downsampling are
+   recorded (Stage 3).
+9. **Videos without regions are allowed** (distance and plots only), with a
+   warning at Analyze since EPM and Open Field measures need regions.
+
+**Still to decide:** the remaining walkthrough stages (5 scale,
+6 summaries/playback, 7 batch; then Freeze Analysis), and the details of the video windows.
 
 **Last step of the planning, before building:** once every walkthrough stage
 is decided, **review the GUI as a whole**: how the new video steps (load,

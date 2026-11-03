@@ -721,8 +721,37 @@ built).** Functions: `ROI_plot` (draw named polygons on the reference),
 9. **Videos without regions are allowed** (distance and plots only), with a
    warning at Analyze since EPM and Open Field measures need regions.
 
-**Still to decide:** the remaining walkthrough stages (5 scale,
-6 summaries/playback, 7 batch; then Freeze Analysis), and the details of the video windows.
+**✅ Walkthrough, Stage 5 — Scale, pixels to cm (decided 2026-11-03; not
+built).** Functions: `DistanceTool` (click two points on the reference, shows
+the pixel length), `setScale` (real length and unit) and `ScaleDistance`
+(cm per pixel = real ÷ pixel length; `Distance_cm` = `Distance_px` × factor).
+Only distance is converted; X/Y and ROI coordinates stay in pixels.
+1. **Measuring tool rebuilt in tkinter** on the video's reference image:
+   click two points, drag to adjust, live pixel length, then type the real
+   length.
+   - **Guidance text above the drawing area** giving the arena sizes:
+     **Open Field: 40 cm, inside corner to inside corner along one wall.
+     EPM: 75 cm across** (end to end of opposite arms).
+2. **Unit fixed to cm** (no free-text unit; ezTrack names the column after
+   whatever is typed, which our analysis wouldn't find), so the output is
+   always `Distance_cm`.
+3. **Each video gets its own scale, including in batch** (ezTrack's batch
+   mode measures once and shares it; dropped). A new video starts from the
+   previous video's points and length as a draft to confirm or adjust.
+4. **The real length is remembered** in `config.json` (per test type,
+   starting at 40 cm for Open Field and 75 cm for EPM), so usually only the
+   two points need clicking.
+5. **The scale is recorded**: pixel length, real length and cm-per-pixel
+   factor go in the tracking output and the export's Settings sheet.
+6. **Missing scale: warn before Track**, with the option to go ahead; cm
+   measures are then blank, as for a CSV without `Distance_cm`.
+7. **Measured on the image tracking uses** (after crop and downsampling), so
+   the factor always matches X/Y.
+8. **One line, as in ezTrack.** A second (perpendicular) line could be added
+   later if the camera angle makes horizontal and vertical lengths differ.
+
+**Still to decide:** the remaining walkthrough stages
+(6 summaries/playback, 7 batch; then Freeze Analysis), and the details of the video windows.
 
 **Last step of the planning, before building:** once every walkthrough stage
 is decided, **review the GUI as a whole**: how the new video steps (load,

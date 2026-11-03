@@ -994,7 +994,7 @@ CSVs) before building.
 - PPI and habituation details that depend on the log format (prepulse
   levels, block structure).
 
-### 14. Anaconda install (requested 2026-11-03 — planned, not built; do BEFORE the video build)
+### 14. Anaconda install (requested 2026-11-03 — ✅ built 2026-11-03 on `main`, merged into `video-tracking`)
 
 Goal: anyone with **Anaconda or Miniconda** on a Mac or Windows PC gets the
 project folder, double-clicks **one install file** to build the program's
@@ -1025,6 +1025,8 @@ later packages (OpenCV, SciPy for video) are one line each.
      then stop.
    - If the user copies the `find_conda.sh` from their other program into the
      folder, reuse what worked there (e.g. extra folders it checked).
+   - Also searched: Miniforge/Mambaforge and Homebrew cask folders (Mac), and
+     the older `%LOCALAPPDATA%\Continuum` location (Windows).
 3. **Install files:** `Install Behavior Tracker.command` (Mac) and
    `Install Behavior Tracker.bat` (Windows). First run creates the
    environment from `environment.yml`; running again **updates** it to match
@@ -1047,6 +1049,13 @@ later packages (OpenCV, SciPy for video) are one line each.
 8. **PC test checklist:** installer finds Anaconda installed "just me" and
    "all users"; works from a folder with spaces; re-running updates; Open
    uses the conda environment; drag-and-drop still works.
+
+**Built as planned.** Notes: `tkinterdnd2` isn't on conda-forge, so it comes
+through `environment.yml`'s `pip:` section; Python is pinned to 3.12; the
+"changed since install" check compares `environment.yml` with a copy the
+installer leaves inside the environment; with Anaconda present but the
+environment not installed, Open still uses an existing `.venv` (so current
+setups keep working) and otherwise says to run the installer.
 
 New requests are added to this list as they come in.
 
@@ -1105,8 +1114,9 @@ Done:
 11. ✅ **Test measures per time bin (§5b).**
 
 **Everything planned so far is built** (as of 2026-10-30). Still open:
-- **Anaconda install (§14)**: **next, before the video build** (build on
-  `main`, merge into `video-tracking`).
+- ✅ **Anaconda install (§14)**: built 2026-11-03 on `main`, merged into
+  `video-tracking`. Tested on Mac (fresh install, clean environment, app
+  launch, regression test inside the conda env); **PC test pending**.
 - **Video analysis from ezTrack** (§12), on the `video-tracking` branch:
   Location Tracking walkthrough decided; Freeze Analysis logged but excluded
   from the current build; GUI review next, then build.

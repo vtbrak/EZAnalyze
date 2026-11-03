@@ -87,13 +87,19 @@ first PC test when they're ready). **ROADMAP "Build order" is
 the source of truth.**
 **Video analysis (ROADMAP §12) is in progress on the `video-tracking` branch**
 (started 2026-10-30): adapting ezTrack (GPL-3.0, github.com/denisecailab/ezTrack;
-local reference copy in `ezTrack/`, gitignored) for location tracking **and**
-freeze analysis. Freezing will use ezTrack's thresholds instead of the planned
-immobility. **Walkthrough of ezTrack's functions with the user, stage by
+local reference copy in `ezTrack/`, gitignored) for location tracking (freeze
+analysis is logged for later; it will use ezTrack's thresholds instead of the
+planned immobility). **Walkthrough of ezTrack's functions with the user, stage by
 stage** (Location Tracking: load/crop → reference → tracking → ROIs → scale →
 summaries/playback → batch; then Freeze Analysis), deciding keep / drop /
 change for each. **Location Tracking Stages 1–7 are decided (ROADMAP
-§12); next is Freeze Analysis. After all stages, a review of the GUI layout
+§12). Freeze Analysis decisions are logged but EXCLUDED from the current
+build (Location Tracking first). Next is the GUI review.
+**Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion
+index with an adjustable 0–255 intensity threshold, default 15; PPI and
+habituation); not built. **When ASR work starts, first remind the user to put
+a sample ASR video and its stimulus logs in the project folder.** The user
+cites papers outside the app (no in-app citation for ASR). After all stages, a review of the GUI layout
 and organization comes last, before building.** Decisions are recorded only; **don't build until the
 user says so.** Nothing from ezTrack is adapted yet. When code is adapted,
 keep the GPL-3.0 license and credit/cite ezTrack, as §12 requires.

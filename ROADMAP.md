@@ -821,13 +821,178 @@ ROIs and scale set once on the first video and reused) and `check_p_frames`
 9. **`BatchSummary.csv` and the combined plot layout dropped** (no summary
    file, per the user; plots follow the selected file).
 
-**Still to decide:** Freeze Analysis, and the details of the video windows.
+**⏸ Walkthrough — Freeze Analysis (recorded 2026-11-03; EXCLUDED from the
+current build).** The user asked for these to be logged but **not built for
+now**: the first video build is Location Tracking only. Nothing below goes
+into the build order until the user brings it back. Any freezing hooks
+mentioned elsewhere (e.g. FREEZING/ACTIVE in playback) are part of this
+deferral.
+
+ezTrack's module measures how much of the picture changes frame to frame (no
+reference image). Functions: `LoadAndCrop` (same as Stage 1), `Measure_Motion`
+(grayscale → downsample → crop → blur `SIGMA` → count pixels whose change >
+`mt_cutoff` = the frame's Motion), `Measure_Freezing` (freezing = Motion below
+`FreezeThresh` for ≥ `MinDuration` frames, back-filled to the bout start;
+0/100 per frame), `SaveData` (`_FreezingOutput.csv`), `Summarize`,
+`PlayVideo`/`PlayVideo_ext` (FREEZING/ACTIVE overlay), `Calibrate` (empty-arena
+video; `mt_cutoff` = 2 × the 99.99th percentile of pixel change), and the
+batch functions.
+
+Problems found in ezTrack's code: stops at the first unreadable frame (and
+drops a good one); the first frame can never be freezing; no exclusion shapes;
+`FreezeThresh` is a pixel count (depends on resolution/downsampling/crop);
+`MinDuration` is in frames (depends on fps); `Calibrate` ignores the crop.
+
+Decisions (as recommended):
+1. **Method kept as ezTrack's**, defaults `mt_cutoff` 10, `FreezeThresh` 200,
+   `MinDuration` 15 frames, `SIGMA` 1; saved boxes that lock at Track. Only
+   change to the math: fix the first-frame quirk.
+2. **"Measure freezing" checkbox** (saved): measured in the **same pass
+   through the video as tracking**; works for EPM and Open Field videos. New
+   test type **"Freezing only"** (e.g. fear conditioning) skips tracking and
+   regions.
+3. **`<name>_FreezingOutput.csv` kept separate, in ezTrack's format**, plus a
+   `Frame_Unreadable` column and all settings used; the loader joins it with
+   `_LocationOutput.csv` by frame; reloadable without the video.
+4. **Unreadable frames:** keep going, Motion blank, frame marked; a blank
+   frame **breaks** a bout and is left out of the % freezing denominator.
+5. **Stage 1 exclusion shapes also apply to motion** (addition to ezTrack).
+6. **Units kept as ezTrack's** (pixels, frames) so thresholds match the
+   published ones; each box shows its equivalent for the current video (e.g.
+   "15 frames = 0.75 s"); warn if downsampling/crop changed since the
+   thresholds were last used; all recorded in the export.
+7. **Measures:** % time and total time freezing, bout count, mean and
+   longest bout, latency to first freeze, mean Motion; in the Summary (new
+   "Freezing" column group) and per time bin (bouts counted in the bin where
+   they start).
+8. **Freezing by region role** when both tracking and freezing ran (EPM open/
+   closed/center; Open Field center/periphery).
+9. **Freezing tab**: Motion over time, freezing shaded, threshold line;
+   exported as `<name>_freezing.png`.
+10. **Playback** (Stage 6 window): FREEZING/ACTIVE and current Motion, also in
+    the optional saved video.
+11. **`Calibrate` kept as an optional tool**: empty-arena video or a stretch
+    with no animal; uses the crop; shows the histogram; suggested `mt_cutoff`
+    to accept or ignore.
+12. **Batch follows Stage 7** (one pass); `Summarize` dropped (our Summary and
+    Time Bins replace it); `SaveData`'s file kept (item 3).
+
+**Still to decide:** the details of the video windows (in the GUI review below).
 
 **Last step of the planning, before building:** once every walkthrough stage
 is decided, **review the GUI as a whole**: how the new video steps (load,
-crop, reference, track, ROIs, scale, freeze) fit with the existing CSV
+crop, reference, track, ROIs, scale, freeze, and ASR from §13) fit with the existing CSV
 workflow, how windows, tabs, toolbars and settings are organized, and what
 should be regrouped or simplified. Record the agreed layout here, then build.
+
+### 13. Acoustic startle response (ASR) from video (requested 2026-11-03 — planned, not built)
+
+Measure the startle response from video with a **motion index**, following a
+method described in a paper the user supplied. **The user cites papers
+outside the app**, so no citation is added in the app or exports for this.
+
+**⏰ Reminder when ASR work starts:** remind the user to put a **sample ASR
+video and its stimulus logs** into the project folder (gitignored like the
+CSVs) before building.
+
+**The method as described:**
+- Videos are recorded at **30 fps**.
+- For each pair of successive frames, subtract the later image from the
+  earlier one; every pixel whose intensity changed is a candidate, from tiny
+  changes (0 → 1) to large ones (0 → 255 and back).
+- A **pixel intensity threshold** separates noise from movement: changes
+  below it are noise, changes above it are the animal's movement. The paper
+  chose **15** by manual inspection and trials.
+- **Motion index** for a frame = above-threshold pixels ÷ total pixels in
+  the frame, as a **percentage**.
+- Sensitive to slight movements (a small head lift, minor limb movement), not
+  to ultra-fine ones like breathing; suited to gross startle movements.
+- **The ASR value is the maximum motion index** within the response period
+  (the paper's wording, "computed between two frames", is read as the peak
+  between the start and end frames of the response window; accepted by the
+  user 2026-11-03).
+
+**Plan:**
+1. **Motion index engine** (`core/asr.py`, GUI-free): read each frame, convert
+   to grayscale, absolute difference from the previous frame, count pixels
+   whose change is above the threshold, divide by the pixels analyzed, ×100.
+   Per frame, record the motion index (%), the above-threshold pixel count
+   and the total pixel count. The first frame has no predecessor and is left
+   blank.
+   - This is the same frame-differencing idea as ezTrack's freezing
+     `Measure_Motion` (§12, deferred). Share the reading/differencing code if
+     freezing is built later, but ASR follows the paper: no blur by default,
+     output as a percentage of pixels, threshold 15.
+2. **Adjustable intensity threshold (required):**
+   - A **threshold scale (slider) from 0 to 255 paired with an input box**,
+     default **15**, saved to `config.json`, locked at Analyze like other
+     settings, recorded in the export.
+   - **Live preview**: pick any frame (scrub slider) and see that frame
+     pair's difference image with **above-threshold pixels highlighted** in
+     color over the frame, plus the resulting motion index, updating as the
+     slider moves. A second view can show a histogram of pixel changes with
+     the threshold marked, to see where noise ends.
+   - Optional **noise check**: on a stretch where the animal is still, show
+     what share of pixels exceed the threshold (should be near 0%).
+3. **Area analyzed:** whole frame by default (as in the paper). Optional crop
+   to the animal's enclosure and exclusion shapes (reuse §12 Stage 1 tools)
+   so lights, timestamps or the chamber edge don't count; the percentage is
+   then out of the **analyzed** pixels. The choice and pixel count are
+   recorded, since they change the scale of the index.
+4. **Frame rate:** read from the video; warn if it isn't 30 fps (the method
+   and threshold were set at 30 fps). Note: at 30 fps one frame is 33 ms, so
+   startle latency (onset often within ~10–20 ms in rodents) can only be
+   resolved to the nearest frame.
+5. **Trials and the response window:** ASR is measured per startle stimulus,
+   so the app needs each stimulus's time. **Open question** (how stimulus
+   times are known):
+   - typed in or loaded from a file (e.g. the startle system's trial log:
+     onset time, trial type);
+   - a fixed schedule (first onset + interval);
+   - or detected from the video (e.g. a cue light) or its audio track.
+   For each trial: a **response window** after onset (start and length,
+   saved settings) and an optional **baseline window** before onset.
+6. **Per-trial measures:** **peak (maximum) motion index** in the response
+   window (the ASR value), frame/latency of the peak, mean motion index in the
+   window, baseline motion index, and peak minus baseline. Flag trials where
+   the animal was already moving at baseline (above a saved level), and
+   trials with unreadable frames in the window.
+7. **Session measures (decided 2026-11-03: measure both PPI and
+   habituation):**
+   - mean and median ASR across trials, per trial type;
+   - **Prepulse inhibition (PPI):** %PPI = 100 × (1 − mean prepulse+pulse ASR
+     ÷ mean pulse-alone ASR), per prepulse level and overall;
+   - **Habituation:** ASR across the session by trial number and by block
+     (block size a saved setting), e.g. first block vs last block and %
+     habituation = 100 × (1 − last-block ASR ÷ first-block ASR), plus the
+     trial-by-trial trend;
+   - trial types (pulse alone, prepulse + pulse at each level, no-stimulus)
+     come from the stimulus log; details settled once the sample logs are in
+     the folder.
+8. **Unreadable frames:** same rule as §12 — keep going, leave the motion
+   index blank, mark the frame (`Frame_Unreadable`), report the count.
+9. **Outputs** (next to the video, overwriting, like other exports):
+   - `<name>_MotionIndex.csv`: one row per frame (Frame, Time_s,
+     MotionIndex_pct, AboveThreshold_px, Total_px, Frame_Unreadable, and the
+     settings), so a video only needs processing once and can be reloaded;
+   - `<name>_ASR_analysis.xlsx`: Trials, Summary and Settings sheets;
+   - `<name>_ASR.png`: motion index over time with stimulus onsets and
+     response windows marked, plus a plot of all trials' traces aligned to
+     onset.
+10. **GUI:** a new test type **"Acoustic startle (ASR)"**, with its own
+    settings row (threshold scale, response window, baseline window, trial
+    source) and tabs (motion trace, trials table, threshold preview). Video
+    files are added and batched like §12 Stage 7. Exact placement is part of
+    the GUI review.
+11. **Validation:** check against a video the user has already scored by
+    hand or with the paper's method; confirm the threshold-15 result and the
+    peak values match.
+
+**Still open (to settle from the sample video and logs):**
+- How stimulus onset times and trial types are read from the logs (item 5),
+  and the default response/baseline window lengths.
+- PPI and habituation details that depend on the log format (prepulse
+  levels, block structure).
 
 New requests are added to this list as they come in.
 
@@ -887,7 +1052,11 @@ Done:
 
 **Everything planned so far is built** (as of 2026-10-30). Still open:
 - **Video analysis from ezTrack** (§12), on the `video-tracking` branch:
-  location tracking and freeze analysis. Function walkthrough next.
+  Location Tracking walkthrough decided; Freeze Analysis logged but excluded
+  from the current build; GUI review next, then build.
+- **Acoustic startle (ASR) from video** (§13): planned, including PPI and
+  habituation; not built. **When starting it, remind the user to add a sample
+  video and stimulus logs to the folder.**
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

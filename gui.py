@@ -71,6 +71,8 @@ from core.gaps import fill_gaps
 from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_video,
                         video_info)
 from core.video_setup import VideoSetup
+from core.tracking import TrackingParams
+from core.track_run import TrackRunner, existing_output, make_job
 from about import AboutDialog
 from region_dialog import RegionDialog
 from setup_window import SetupWindow, default_session_minutes
@@ -96,6 +98,8 @@ STATUS_COLORS = {"analyzed": "#2e7d32", "waiting": "#b26a00", "failed": "#c62828
 
 NEEDS_SETUP = "Needs setup"
 READY_TO_TRACK = "Ready to track"
+WAITING_TO_TRACK = "Waiting to track"
+FAILED = "Failed"
 
 LOCKED_TRACKING_TIP = (
     "Locked because videos have been tracked, so every video in this load is "
@@ -121,6 +125,11 @@ class FileEntry:
     summary: dict | None = None
     bins: pd.DataFrame | None = None
     video: VideoSetup | None = None
+    # While Track runs: "queued", "reference" or "tracking" (with track_pct);
+    # "failed" (with track_error) after a failed run. "" otherwise.
+    track_state: str = ""
+    track_pct: int = 0
+    track_error: str = ""
 
     @property
     def analyzed(self) -> bool:
@@ -148,6 +157,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._sel: list[int] = []                   # selected files (indices)
         self._summary_df = None                     # last Summary table (for export)
         self._redraw_job = None                     # pending debounced plot redraw
+        self._runner: TrackRunner | None = None     # tracking in progress
 
         self._build_controls()
         self._build_tabs()
@@ -172,7 +182,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         add_folder = ttk.Button(bar, text="Add folder…", command=self.open_folder)
         add_folder.pack(side=tk.LEFT, padx=(6, 0))
         Tooltip(add_folder, "Add every CSV and video in a folder to the list.")
-        remove = ttk.Button(bar, text="Remove", command=self.remove_selected)
+        remove = self.remove_btn = ttk.Button(bar, text="Remove",
+                                              command=self.remove_selected)
         remove.pack(side=tk.LEFT, padx=(6, 0))
         Tooltip(remove, "Take the selected files out of the list. The files "
                         "themselves aren't touched.")
@@ -199,6 +210,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         Tooltip(self.select_all_btn, "Select every file in the list, so Analyze and "
                                      "Export act on all of them. Ctrl+A (Cmd+A on a "
                                      "Mac) in the list does the same.")
+        # Track, shown only while videos are in the list.
+        self.track_btn = ttk.Button(bar, text="Track", width=12, command=self.track)
+        Tooltip(self.track_btn, "Track the selected videos, one at a time in the "
+                                "background. Each gets <name>_LocationOutput.csv and "
+                                "<name>_reference.png next to it. The number shows how "
+                                "many videos are selected.")
         self.analyze_btn = ttk.Button(bar, text="Analyze", width=12, command=self.analyze)
         self.analyze_btn.pack(side=tk.LEFT, padx=(6, 0))
         Tooltip(self.analyze_btn, "Analyze the selected files. The number shows how "
@@ -219,8 +236,22 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         )
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
+        # Tracking progress, above the status bar while Track runs.
+        self.track_bar = ttk.Frame(self, padding=(8, 4))
+        self.track_text = ttk.Label(self.track_bar, anchor=tk.W)
+        self.track_text.pack(side=tk.LEFT)
+        self.track_cancel_btn = ttk.Button(self.track_bar, text="Cancel",
+                                           command=self.cancel_tracking)
+        self.track_cancel_btn.pack(side=tk.RIGHT)
+        Tooltip(self.track_cancel_btn, "Stop tracking. Videos already finished are "
+                                       "kept; the one being tracked and the rest are "
+                                       "left untracked.")
+        self.track_progress = ttk.Progressbar(self.track_bar, mode="determinate",
+                                              maximum=100)
+        self.track_progress.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=8)
+
         # Body: settings panel on the left; file list over the tabs on the right.
-        body = ttk.Frame(self)
+        body = self.body = ttk.Frame(self)
         body.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         body.columnconfigure(1, weight=1)
         body.rowconfigure(0, weight=1)
@@ -718,6 +749,15 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             traceback.print_exc()  # settings just won't persist this time
 
     def _on_close(self) -> None:
+        if self._runner is not None:
+            if not ask_yes_no(self, "Tracking is running",
+                              "Tracking is still running. Stop it and close? Videos "
+                              "already finished are saved; the rest aren't tracked.",
+                              yes="Stop and Close", no="Keep Tracking"):
+                return
+            self._runner.cancel()
+            self._runner.join(timeout=10)  # it stops after the current frame
+            self._runner = None
         if self._redraw_job is not None:
             self.after_cancel(self._redraw_job)
         self._save_settings(self._fps(), self._bin_seconds())
@@ -839,6 +879,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
     def _update_action_buttons(self) -> None:
         n = len(self._sel)
         self.analyze_btn.configure(text=f"Analyze ({n})" if n else "Analyze")
+        videos = sum(self.files[i].video is not None for i in self._sel if i < len(self.files))
+        self.track_btn.configure(text=f"Track ({videos})" if videos else "Track")
         self.export_btn.configure(text=f"Export ({n})" if n else "Export")
         everything = bool(self.files) and n == len(self.files)
         self.select_all_btn.configure(text="Select none" if everything else "Select all")
@@ -1076,6 +1118,14 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 self.video_tools.pack(side=tk.LEFT, before=self.select_all_btn)
         else:
             self.video_tools.pack_forget()
+        if any(e.video is not None for e in self.files):
+            if not self.track_btn.winfo_manager():
+                self.track_btn.pack(side=tk.LEFT, padx=(6, 0), before=self.analyze_btn)
+        else:
+            self.track_btn.pack_forget()
+        running = self._runner is not None
+        for btn in (self.clear_btn, self.remove_btn, self.track_btn):
+            btn.configure(state="disabled" if running else "normal")
         self._apply_lock()
         self._fill_file_list()
         self._show_summary()
@@ -1084,8 +1134,16 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     def _file_status(self, entry: FileEntry) -> tuple[str, str]:
         """(status text, color tag) for the file list."""
+        if entry.track_state == "queued":
+            return WAITING_TO_TRACK, "waiting"
+        if entry.track_state == "reference":
+            return "Making reference", "waiting"
+        if entry.track_state == "tracking":
+            return f"Tracking {entry.track_pct}%", "waiting"
         if entry.analyzed:
             return ANALYZED, "analyzed"
+        if entry.track_state == "failed":
+            return FAILED, "failed"
         if entry.data is None:  # a video, not tracked yet
             if entry.video is not None and entry.video.ready:
                 return READY_TO_TRACK, "waiting"
@@ -1093,8 +1151,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         return NOT_ANALYZED, ""
 
     def _tracking_locked(self) -> bool:
-        """Tracking settings lock at the first Track of a load (until Clear)."""
-        return any(e.video is not None and e.data is not None for e in self.files)
+        """Tracking settings lock at the first Track of a load (until Clear),
+        and while a Track is running."""
+        return self._runner is not None or any(
+            e.video is not None and e.data is not None for e in self.files)
 
     def open_setup(self) -> None:
         """Open the video setup window at the selected video (or the first one
@@ -1252,6 +1312,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     def clear_files(self) -> None:
         """Empty the list and unlock the per-load settings."""
+        if self._runner is not None:
+            return  # the button is disabled while tracking
         self.files = []
         self._sel = []
         self._selected = None
@@ -1262,6 +1324,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     def remove_selected(self) -> None:
         """Take the selected files out of the list (the files aren't touched)."""
+        if self._runner is not None:
+            return  # the button is disabled while tracking
         if not self._sel:
             show_info(self, "No file selected", "Select files in the list first.")
             return
@@ -1270,6 +1334,275 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._sel = [0] if self.files else []
         self._selected = 0 if self.files else None
         self._refresh()
+
+    # -------------------------------------------------------------- tracking
+    @staticmethod
+    def _names(entries, limit: int = 10) -> str:
+        lines = "\n".join(f"• {e.label}" for e in entries[:limit])
+        if len(entries) > limit:
+            lines += f"\n…and {len(entries) - limit} more"
+        return lines
+
+    def track(self) -> None:
+        """Track the selected videos in the background, one at a time
+        (ROADMAP §12, Stage 7). Videos already tracked beside the file can
+        use that tracking instead."""
+        if self._runner is not None:
+            return
+        selected = self._selected_entries()
+        if not selected:
+            show_info(self, "No file selected",
+                      "Select a video in the list first, or click Select all.")
+            return
+        videos = [e for e in selected if e.video is not None]
+        if not videos:
+            show_info(self, "No videos selected",
+                      "Track works on videos. The selected files are CSVs, which "
+                      "are already tracked.")
+            return
+        # A video added twice is tracked once; every copy gets the result.
+        groups: dict[str, list[FileEntry]] = {}
+        for e in videos:
+            groups.setdefault(self._same_file_key(e.path), []).append(e)
+        todo = list(groups.values())
+
+        existing = [g for g in todo if existing_output(g[0].path)]
+        if existing:
+            use = ask_yes_no(
+                self, "Some videos are already tracked",
+                "Some videos already have a tracking file (_LocationOutput.csv) "
+                f"beside them.\n\n{self._names([g[0] for g in existing])}\n\n"
+                "Use that tracking, or track them again (replacing it)?",
+                yes="Use Existing Tracking", no="Track Again",
+            )
+            if use:
+                errors = []
+                for g in existing:
+                    try:
+                        data = load_csv(existing_output(g[0].path))
+                    except Exception as exc:
+                        errors.append(f"• {g[0].label}: {exc}")
+                        continue
+                    for e in g:
+                        e.data, e.summary, e.bins = data, None, None
+                        e.track_state = e.track_error = ""
+                    todo.remove(g)
+                if errors:
+                    show_warning(self, "Some tracking files couldn't be read",
+                                 "Some tracking files couldn't be read, so those "
+                                 "videos weren't loaded.\n\n" + "\n".join(errors))
+                    todo = [g for g in todo if g not in existing]
+                self._refresh()
+
+        not_ready = [g for g in todo if not g[0].video.ready]
+        ready = [g for g in todo if g[0].video.ready]
+        if not_ready:
+            show_info(self, "Some videos aren't set up yet",
+                      "Some videos aren't set up yet, so they weren't tracked.\n\n"
+                      f"{self._names([g[0] for g in not_ready])}\n\n"
+                      "Finish all six steps in Set up videos… for them, then click "
+                      "Track again.")
+        if not ready:
+            return
+
+        test = self.test_var.get()
+        dsmpl = float(self.config_data["video_downsample"])
+        gaps = []
+        for g in ready:
+            v = g[0].video
+            parts = []
+            missing = v.missing_regions(test)
+            if missing:
+                parts.append("regions not drawn: " + ", ".join(missing))
+            if v.scale(dsmpl) is None:
+                parts.append("no scale")
+            if parts:
+                gaps.append(f"• {g[0].label}: {'; '.join(parts)}")
+        if gaps and not ask_yes_no(
+                self, "Some videos are missing regions or a scale",
+                "Some videos are missing regions or a scale.\n\n"
+                + "\n".join(gaps[:10]) + ("\n…" if len(gaps) > 10 else "")
+                + "\n\nWithout their regions, those region measures will be missing. "
+                "Without a scale, distances are in pixels only. Track anyway?",
+                yes="Track Anyway", no="Cancel"):
+            return
+        if not self._check_frame_rates([g[0] for g in ready]):
+            return
+
+        c = self.config_data
+        params = TrackingParams(loc_thresh=float(c["loc_thresh"]), method=c["track_method"],
+                                use_window=bool(c["use_window"]),
+                                window_size=int(c["window_size"]),
+                                window_weight=float(c["window_weight"]))
+        try:
+            jobs = [make_job(g[0].video, params, dsmpl, int(c["reference_frames"]), test)
+                    for g in ready]
+        except Exception as exc:
+            traceback.print_exc()
+            show_error(self, "Tracking couldn't start", f"Tracking couldn't start.\n\n{exc}")
+            return
+        for g in ready:
+            for e in g:
+                e.track_state, e.track_pct, e.track_error = "queued", 0, ""
+        self._track_groups = ready
+        self._track_current = 0
+        self._track_results = {"done": 0, "failed": [], "cancelled": False}
+        self._runner = TrackRunner(jobs)
+        self._runner.start()
+        self.track_cancel_btn.configure(state="normal")
+        self.track_progress["value"] = 0
+        self.track_bar.pack(side=tk.BOTTOM, fill=tk.X, before=self.body)
+        self._show_track_progress()
+        self._refresh()
+        win = getattr(self, "_setup_win", None)
+        if win is not None and win.winfo_exists() and win.step == "tracking":
+            win._go("tracking")  # show its settings locked
+        self.after(150, self._poll_tracking)
+
+    def _check_frame_rates(self, entries) -> bool:
+        """Fill the frame-rate setting from the videos, or warn when they
+        disagree with it or with each other. False if the user cancels."""
+        tracked = [e for e in self.files if e.video is not None and e.data is not None]
+        rates = {}
+        for e in entries + tracked:
+            if e.video.info.fps:
+                rates.setdefault(round(e.video.info.fps, 2), []).append(e)
+        if not rates:
+            return True
+        locked = self._locked()
+        try:
+            setting = float(self.config_data["fps"] if locked else self.fps_var.get())
+        except ValueError:
+            setting = None
+        if len(rates) > 1:
+            lines = "\n".join(f"• {g[0].label}: {r:g} fps" + (
+                f" (and {len(g) - 1} more)" if len(g) > 1 else "")
+                for r, g in sorted(rates.items()))
+            return ask_yes_no(
+                self, "The videos have different frame rates",
+                "The videos weren't all recorded at the same frame rate.\n\n"
+                f"{lines}\n\nThe analysis uses one frame rate for every file "
+                f"({self.fps_var.get()} fps), so times for the others will be off. "
+                "Analyze videos with different rates in separate loads (Clear "
+                "between them). Track anyway?",
+                yes="Track Anyway", no="Cancel")
+        rate = next(iter(rates))
+        if setting is not None and abs(rate - setting) < 0.005:
+            return True
+        if locked:
+            return ask_yes_no(
+                self, "The video's frame rate isn't the analysis frame rate",
+                f"The videos were recorded at {rate:g} fps, but the analysis frame "
+                f"rate is locked at {setting:g} fps, so times will be off. Click Clear "
+                "to change it. Track anyway?",
+                yes="Track Anyway", no="Cancel")
+        if ask_yes_no(
+                self, "The video's frame rate isn't the frame rate setting",
+                f"The videos were recorded at {rate:g} fps, but the Frame rate setting "
+                f"is {self.fps_var.get()} fps. Use the videos' frame rate for the "
+                "analysis?",
+                yes=f"Use {rate:g} fps", no=f"Keep {self.fps_var.get()} fps"):
+            self.fps_var.set(f"{rate:g}")
+            self.config_data["fps"] = rate
+        return True
+
+    def cancel_tracking(self) -> None:
+        if self._runner is not None:
+            self._runner.cancel()
+            self.track_cancel_btn.configure(state="disabled")
+            self.track_text.configure(text="Stopping…")
+
+    def _update_row(self, entry: FileEntry) -> None:
+        """Refresh one file-list row's status (cheaper than rebuilding the list)."""
+        for i, e in enumerate(self.files):
+            if e is entry and self.file_tree.exists(str(i)):
+                status, tag = self._file_status(e)
+                self.file_tree.item(str(i), values=(e.label, e.kind, status),
+                                    tags=(tag,) if tag else ())
+
+    def _show_track_progress(self) -> None:
+        groups = self._track_groups
+        k = min(self._track_current, len(groups) - 1)
+        e = groups[k][0]
+        if self._runner is not None and self._runner.cancelled:
+            return  # "Stopping…" stays until the worker stops
+        what = ("making the reference image" if e.track_state == "reference"
+                else f"{e.track_pct}%")
+        self.track_text.configure(
+            text=f"Tracking video {k + 1} of {len(groups)}: {e.label}, {what}")
+        self.track_progress["value"] = e.track_pct
+
+    def _poll_tracking(self) -> None:
+        """Read the worker's messages (tkinter is only touched here, on the
+        main thread)."""
+        runner = self._runner
+        if runner is None:
+            return
+        finished = False
+        for msg in runner.poll():
+            kind, i = msg[0], (msg[1] if len(msg) > 1 else None)
+            group = self._track_groups[i] if i is not None else []
+            if i is not None:
+                self._track_current = i
+            for e in group:
+                if kind == "reference":
+                    e.track_state = "reference"
+                elif kind == "progress":
+                    e.track_state = "tracking"
+                    e.track_pct = int(100 * msg[2] / msg[3]) if msg[3] else 0
+                elif kind == "done":
+                    e.data, e.summary, e.bins = msg[2], None, None
+                    e.track_state = ""
+                elif kind == "failed":
+                    e.track_state, e.track_error = "failed", msg[2]
+                elif kind == "cancelled":
+                    e.track_state = ""
+                self._update_row(e)
+            if kind == "done":
+                self._track_results["done"] += 1
+            elif kind == "failed":
+                self._track_results["failed"].append(f"• {group[0].label}: {msg[2]}")
+            elif kind == "cancelled":
+                self._track_results["cancelled"] = True
+            elif kind == "finished":
+                finished = True
+        if not finished:
+            self._show_track_progress()
+            self.after(150, self._poll_tracking)
+            return
+        self._finish_tracking()
+
+    def _finish_tracking(self) -> None:
+        results, groups = self._track_results, self._track_groups
+        cancelled = results["cancelled"] or (self._runner is not None and self._runner.cancelled)
+        left = len(groups) - results["done"] - len(results["failed"])
+        for g in groups:
+            for e in g:
+                if e.track_state in ("queued", "reference", "tracking"):
+                    e.track_state = ""
+        self._runner = None
+        self.track_bar.pack_forget()
+        self._refresh()
+        win = getattr(self, "_setup_win", None)
+        if win is not None and win.winfo_exists() and win.step == "tracking":
+            win._go("tracking")
+        done = results["done"]
+        self.status.set(f"Tracked {done} video(s)." + (" Stopped early." if cancelled else ""))
+        if results["failed"]:
+            show_warning(self, "Some videos couldn't be tracked",
+                         f"{len(results['failed'])} video(s) couldn't be tracked.\n\n"
+                         + "\n".join(results["failed"])
+                         + ("\n\nThe others were tracked." if done else ""))
+        if cancelled:
+            show_info(self, "Tracking stopped",
+                      f"Tracking stopped. {done} video(s) finished and are kept"
+                      + (f"; {left} weren't tracked." if left else ".")
+                      + " Select them and click Track to track them.")
+        elif done:
+            show_info(self, "Tracking finished",
+                      f"Tracking finished for {done} video(s). Each has a "
+                      "_LocationOutput.csv and a _reference.png next to it. Select "
+                      "them and click Analyze.")
 
     def analyze(self) -> None:
         """Analyze the selected files."""

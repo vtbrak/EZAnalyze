@@ -106,7 +106,7 @@ def load_csv(path: str) -> TrackingData:
 
     Raises ValueError if the file is missing required position columns.
     """
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, low_memory=False)  # blank region values mix types
 
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:

@@ -1084,10 +1084,29 @@ test) before each commit.
     above the image; when zoomed, right-drag, Control-drag or the arrow keys
     move around. Only the visible part of the image is scaled, so high zoom
     stays fast; pixels show sharp from 4x.
-- [ ] **C7. Tracking runs:** Track on the selection in a background thread,
+- [x] **C7. Tracking runs:** Track on the selection in a background thread,
   bottom progress bar with Cancel, status steps, existing-tracking prompt,
   settings lock at first Track, fps mismatch warning, results loaded as
   "Not analyzed".
+  Built 2026-11-04. `core/track_run.py` (GUI-free): `make_job` snapshots a
+  video's setup when Track is clicked (editing a setup during a run can't
+  change a queued video); `TrackRunner` tracks the jobs one at a time on a
+  daemon thread and reports through a queue that the main window polls, so
+  tkinter is only touched on the main thread. The setup window's reference is
+  reused when current, else the run makes one ("Making reference" status).
+  Main window: **Track (n)** button (videos only, shown while videos are
+  listed); bottom bar "Tracking video 2 of 3: name, 45%" with a progress bar
+  and Cancel; statuses Waiting to track → Making reference → Tracking 45% →
+  Not analyzed, or Failed (reason listed at the end; the other videos carry
+  on). Before a run: an existing `_LocationOutput.csv` asks once **Use
+  Existing Tracking** / Track Again; videos not fully set up are skipped and
+  named; missing regions or scale asks Track Anyway / Cancel; frame rate:
+  if the videos share one rate that differs from the setting, offers "Use
+  N fps" (fills the setting), or Track Anyway when the analysis is locked;
+  different rates between videos ask Track Anyway / Cancel. Tracking settings
+  lock from the moment Track starts; Clear, Remove and Track are disabled
+  during a run; closing the app mid-run asks first. A video added twice is
+  tracked once and every copy gets the result.
 - [ ] **C8. Plots and playback:** reference-image background for Path and
   Heatmap; playback window; optional `<name>_tracked.avi`.
 - [ ] **C9. Finish:** exported Settings sheet gains tracking/scale/crop

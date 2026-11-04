@@ -107,7 +107,7 @@ settings panel, always-visible file list, Track / Analyze / Export acting on
 the selected files with a Select all button, one video setup window. **Planning is complete;
 build when the user says so.**
 **Video build in progress (ROADMAP §12, "Video build progress" checklist):**
-C0–C6 (with C5b) done; next is **C7** (tracking runs). Each chunk is committed and pushed when done.
+C0–C7 (with C5b) done; next is **C8** (plots on the reference background, playback, optional `_tracked.avi`). Each chunk is committed and pushed when done.
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion

@@ -266,7 +266,60 @@ if os.path.exists(CLIP):
     log.clear(); app._set_selection([0]); app.analyze(); app.update()
     check("Analyze skips an untracked video", "Videos not tracked yet" in log)
     check("gap-filling section shown when videos are listed", app.gaps_section.winfo_ismapped())
-    app.test_var.set("Elevated Plus Maze")
+
+    # Track (C7): a short session so it's quick; outputs land beside the clip
+    # (in the gitignored ezTrack folder) and are removed afterwards.
+    import time
+    outs = [os.path.splitext(CLIP)[0] + s for s in ("_LocationOutput.csv", "_reference.png")]
+    for f in outs:
+        if os.path.exists(f):
+            os.remove(f)
+    def pump(limit=120):
+        t = time.time()
+        while app._runner is not None and time.time() - t < limit:
+            app.update(); time.sleep(0.02)
+        app.update()
+    check("Track button shown with the selected count",
+          app.track_btn.winfo_manager() and app.track_btn.cget("text") == "Track (1)")
+    v.length_s = 4  # the reference no longer matches, so the run makes its own
+    app.fps_var.set("20"); log.clear(); yesno[:] = [True]
+    app.track(); app.update()
+    check("tracking settings lock while tracking", app._tracking_locked()
+          and app.track_bar.winfo_manager() and str(app.clear_btn.cget("state")) == "disabled")
+    pump()
+    want = v.end_frame - v.start
+    check("fps setting filled from the video", "isn't the frame rate setting" in " ".join(log)
+          and abs(float(app.fps_var.get()) - round(v.info.fps, 2)) < 1e-9)
+    check("tracked: Not analyzed, outputs saved, progress bar gone",
+          app.file_tree.item("0", "values")[2] == "Not analyzed"
+          and all(os.path.exists(f) for f in outs) and not app.track_bar.winfo_manager()
+          and "Tracking finished" in log)
+    d = app.files[0].data
+    check("tracking file has the session's frames, regions and cm distance",
+          d is not None and d.n_frames == want and set(d.regions) == {"periphery", "center"}
+          and "Distance_cm" in d.df.columns)
+    check("tracking settings stay locked after Track", app._tracking_locked())
+    log.clear(); yesno[:] = [True]; app.track(); app.update()
+    check("already tracked: use existing tracking, no run",
+          "Some videos are already tracked" in log and app._runner is None
+          and app.files[0].data is not None)
+    log.clear(); yesno[:] = [False]; app.track(); app.cancel_tracking(); pump()
+    check("Track again, then Cancel: stopped, earlier tracking kept",
+          "Tracking stopped" in log and app._runner is None
+          and app.file_tree.item("0", "values")[2] == "Not analyzed")
+    log.clear(); app.analyze(); app.update()
+    check("a tracked video analyzes", app.files[0].analyzed
+          and app.file_tree.item("0", "values")[2] == "Analyzed")
+    app.files[0].video.steps_done.discard("scale"); app.files[0].summary = None
+    app.clear_files(); app.add_files([CLIP]); app.update(); log.clear(); yesno[:] = [False]
+    app.track(); app.update()
+    check("a video not set up is skipped and named", "Some videos aren't set up yet" in log
+          and app._runner is None)
+    for f in outs:
+        if os.path.exists(f):
+            os.remove(f)
+    app.clear_files()
+    app.test_var.set("Elevated Plus Maze"); app._on_test_type()
 else:
     print("skip video checks (ezTrack practice clip not present)")
 

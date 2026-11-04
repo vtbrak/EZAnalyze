@@ -951,10 +951,15 @@ test) before each commit.
 - [x] **C0. Groundwork:** OpenCV (`opencv-python-headless`), SciPy and Pillow
   in `requirements.txt` and `environment.yml`; GPL-3.0 `LICENSE`; ezTrack
   credit and citation in the README; this checklist.
-- [ ] **C1. Video reading (`core/video.py`):** open a video, report frame
+- [x] **C1. Video reading (`core/video.py`):** open a video, report frame
   count / fps / size, read frame N as grayscale with downsampling and crop
   (ezTrack `LoadAndCrop` / `cropframe`), unreadable-frame check as a warning
   (`check_p_frames`), exclusion-shape mask from polygons (`Mask_select`).
+  Built 2026-11-04, tested by `tests/test_video.py`. Notes: ezTrack's resize
+  call actually uses bilinear interpolation (it passes `INTER_NEAREST` in the
+  `dst` slot), kept for matching results; a run of unreadable frames at the
+  very end of a video is dropped (files often report a few frames more than
+  they hold), while unreadable frames before the end are kept as blank rows.
 - [ ] **C2. Tracking engine (`core/tracking.py`):** reference image
   (`Reference`, median of N evenly spaced frames, unreadable frames
   replaced), `locate` (`Locate` minus wire removal; window size scaled by

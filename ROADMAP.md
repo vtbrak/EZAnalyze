@@ -1070,6 +1070,20 @@ test) before each commit.
   Regions and scale may be skipped after a yes/no; a video whose six steps
   are all done shows **Ready to track**. "Start from previous video" now also
   copies regions, scale and session length.
+  **Added 2026-11-04 (user's request after trying regions):**
+  - **Points lock onto each other** so neighboring regions share a border
+    instead of overlapping: a region point placed or dragged within 10 screen
+    px of another region's point lands exactly on it (else on the nearest
+    edge within 10 px); a white ring shows where it will lock. Points at the
+    same place move together when dragged. A checkbox ("Lock onto other
+    regions' points and edges", on by default) turns this off, which also
+    lets a locked point be moved on its own. A press on a point drags it
+    only if the mouse moves; a plain click places a new locked point there.
+  - **Zoom on every image drawn on** (all setup steps): mouse wheel /
+    trackpad scroll zooms at the pointer (up to 16x), − / + / Fit buttons
+    above the image; when zoomed, right-drag, Control-drag or the arrow keys
+    move around. Only the visible part of the image is scaled, so high zoom
+    stays fast; pixels show sharp from 4x.
 - [ ] **C7. Tracking runs:** Track on the selection in a background thread,
   bottom progress bar with Cancel, status steps, existing-tracking prompt,
   settings lock at first Track, fps mismatch warning, results loaded as

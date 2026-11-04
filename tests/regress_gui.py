@@ -215,6 +215,41 @@ if os.path.exists(CLIP):
     win._region_drag(type("E", (), dict(zip("xy", win.canvas.to_screen(320, 210))))())
     win._region_release(None)
     check("dragging a point moves it", np.allclose(v.regions["center"][0][0], 420))
+    scr = lambda x, y, dx=0, dy=0: (lambda p: type("E", (), {"x": p[0] + dx, "y": p[1] + dy})())(
+        win.canvas.to_screen(x, y))
+    win._extra_names.append("test zone"); win._fill_region_list(select="test zone")
+    tap = lambda ev: (win._region_press(ev), win._region_release(ev))
+    tap(scr(320, 210, 4, 3))      # a click near the center's corner (not a drag)
+    tap(scr(510, 205, 0, -4))     # near the middle of the center's top edge
+    tap(scr(450, 60))
+    tap(scr(320, 210, 4, 3))      # on the first point: closes
+    tz, cz = v.regions["test zone"], v.regions["center"]
+    check("a point near another region's point locks onto it exactly",
+          (tz[0][0], tz[1][0]) == (cz[0][0], cz[1][0]))
+    (ax, bx), (ay, by) = cz[0][:2], cz[1][:2]
+    cross = (bx - ax) * (tz[1][1] - ay) - (by - ay) * (tz[0][1] - ax)
+    check("a point near another region's edge lands on that edge", abs(cross) < 1e-6)
+    win._region_press(scr(320, 210)); win._region_drag(scr(330, 215)); win._region_release(None)
+    check("locked points move together", tz[0][0] == cz[0][0] and tz[1][0] == cz[1][0]
+          and np.allclose([cz[0][0], cz[1][0]], [430, 265]))
+    win.snap_var.set(False)
+    win._region_press(scr(330, 215)); win._region_drag(scr(340, 215)); win._region_release(None)
+    check("with locking off, a point moves on its own",
+          np.isclose(cz[0][0], 440) and np.isclose(tz[0][0], 430))
+    win.snap_var.set(True)
+    win._current_region = "test zone"; win._delete_region()
+    cz[0][0], cz[1][0] = 420, 260
+    sx, sy = win.canvas.to_screen(500, 300)
+    win.canvas.zoom_by(2, sx, sy)
+    check("zoom keeps the point under the pointer in place",
+          win.canvas.zoom == 2 and np.allclose(win.canvas.to_image(sx, sy), (500, 300))
+          and "200%" in win.zoom_text.cget("text"))
+    win.canvas.zoom_by(100); check("zoom is capped", win.canvas.zoom == win.canvas.MAX_ZOOM)
+    win.canvas._pan_start(type("E", (), {"x": 100, "y": 100})())
+    before = win.canvas.center
+    win.canvas._pan_move(type("E", (), {"x": 140, "y": 100})())
+    check("dragging pans when zoomed", win.canvas.center[0] < before[0])
+    win.canvas.reset_view(); check("Fit returns to the whole image", win.canvas.zoom == 1)
     win._step_by(1); app.update()
     check("regions done, on to scale", win.step == "scale" and "regions" in v.steps_done)
     check("scale uses the Open Field length (40 cm)", win.cm_var.get() == "40"

@@ -51,6 +51,7 @@ SCALE_GUIDE = {
 }
 CLOSE_DISTANCE = 10  # screen pixels: clicking this near the first point closes a shape
 GRAB_DISTANCE = 8    # screen pixels: clicking this near a point grabs it to drag
+SNAP_DISTANCE = 10   # screen pixels: a region point this near another region's point or edge locks onto it
 BORDER = 40          # screen pixels of black border around every image
 SHAPE_COLOR = "#ff4d4d"
 CROP_COLOR = "#2f9bff"
@@ -74,9 +75,15 @@ def _number(text: str) -> float:
 
 
 class FrameCanvas(tk.Canvas):
-    """Shows one image, scaled to fit inside a black border, and converts
-    between screen and image pixels. Callers draw overlays in image pixels
-    with the helpers below; points may lie in the border (outside the image)."""
+    """Shows one image inside a black border, and converts between screen
+    and image pixels. Callers draw overlays in image pixels with the helpers
+    below; points may lie in the border (outside the image).
+
+    Zoom: the mouse wheel (or trackpad scroll) zooms in and out at the
+    pointer; right-drag, Control-drag or the arrow keys move around when
+    zoomed in. `zoom_by` and `reset_view` drive the + / - / Fit buttons."""
+
+    MAX_ZOOM = 16.0
 
     def __init__(self, parent, **kw):
         super().__init__(parent, background="#000000", highlightthickness=0, **kw)
@@ -85,12 +92,79 @@ class FrameCanvas(tk.Canvas):
         self.message = "No image"
         self.scale = 1.0
         self.offset = (0, 0)
+        self.zoom = 1.0
+        self.center = None             # image point at the middle of the view
+        self._pan_from = None
         self.redraw_overlay = lambda: None  # set by the current step
+        self.on_view_change = lambda: None  # e.g. to update a zoom label
         self.bind("<Configure>", lambda _e: self._render())
+        self.bind("<MouseWheel>", self._wheel)          # Windows and Mac
+        self.bind("<Button-4>", lambda e: self.zoom_by(1.25, e.x, e.y))  # Linux
+        self.bind("<Button-5>", lambda e: self.zoom_by(0.8, e.x, e.y))
+        for press, drag in (("<ButtonPress-2>", "<B2-Motion>"),
+                            ("<ButtonPress-3>", "<B3-Motion>"),
+                            ("<Control-ButtonPress-1>", "<Control-B1-Motion>")):
+            self.bind(press, self._pan_start)
+            self.bind(drag, self._pan_move)
+        for key, dx, dy in (("<Left>", -1, 0), ("<Right>", 1, 0),
+                            ("<Up>", 0, -1), ("<Down>", 0, 1)):
+            self.bind(key, lambda _e, dx=dx, dy=dy: self._pan_step(dx, dy))
+        self.bind("<Enter>", lambda _e: self.focus_set())
 
     def show(self, array: np.ndarray | None, message: str = "No image") -> None:
+        if (array is None or self._array is None
+                or array.shape[:2] != self._array.shape[:2]):
+            self.zoom, self.center = 1.0, None   # a different image: start fitted
         self._array = array
         self.message = message
+        self._render()
+
+    def reset_view(self) -> None:
+        self.zoom, self.center = 1.0, None
+        self._render()
+        self.on_view_change()
+
+    def _fit_scale(self, w: int, h: int) -> float:
+        iw, ih = self.image_size()
+        return min(max(w - 2 * BORDER, 20) / iw, max(h - 2 * BORDER, 20) / ih)
+
+    def zoom_by(self, factor: float, sx: float | None = None, sy: float | None = None) -> None:
+        """Zoom by `factor`, keeping the image point under (sx, sy) in place
+        (the middle of the view if not given)."""
+        if self._array is None:
+            return
+        w, h = max(self.winfo_width(), 50), max(self.winfo_height(), 50)
+        sx = w / 2 if sx is None else sx
+        sy = h / 2 if sy is None else sy
+        ix, iy = self.to_image(sx, sy)
+        new_zoom = min(max(self.zoom * factor, 1.0), self.MAX_ZOOM)
+        new_scale = self._fit_scale(w, h) * new_zoom
+        ox, oy = sx - ix * new_scale, sy - iy * new_scale
+        self.zoom = new_zoom
+        self.center = ((w / 2 - ox) / new_scale, (h / 2 - oy) / new_scale)
+        self._render()
+        self.on_view_change()
+
+    def _wheel(self, e) -> None:
+        if e.delta:
+            self.zoom_by(1.25 if e.delta > 0 else 0.8, e.x, e.y)
+
+    def _pan_start(self, e) -> None:
+        self._pan_from = (e.x, e.y)
+
+    def _pan_move(self, e) -> None:
+        if self._pan_from is None or self.center is None:
+            return
+        dx, dy = e.x - self._pan_from[0], e.y - self._pan_from[1]
+        self._pan_from = (e.x, e.y)
+        self.center = (self.center[0] - dx / self.scale, self.center[1] - dy / self.scale)
+        self._render()
+
+    def _pan_step(self, dx: int, dy: int) -> None:
+        if self.center is None or self.zoom <= 1.0:
+            return
+        step = max(self.winfo_width(), 50) / 6 / self.scale
+        self.center = (self.center[0] + dx * step, self.center[1] + dy * step)
         self._render()
 
     def _render(self) -> None:
@@ -104,15 +178,32 @@ class FrameCanvas(tk.Canvas):
         if a.dtype != np.uint8:
             a = np.clip(a, 0, 255).astype(np.uint8)
         img = Image.fromarray(a if a.ndim == 2 else cv2.cvtColor(a, cv2.COLOR_BGR2RGB))
-        room_w, room_h = max(w - 2 * BORDER, 20), max(h - 2 * BORDER, 20)
-        self.scale = min(room_w / img.width, room_h / img.height)
-        size = (max(1, int(img.width * self.scale)), max(1, int(img.height * self.scale)))
-        self.offset = ((w - size[0]) // 2, (h - size[1]) // 2)
-        self._photo = ImageTk.PhotoImage(img.resize(size))
-        self.create_image(*self.offset, image=self._photo, anchor="nw")
+        iw, ih = img.width, img.height
+        self.scale = self._fit_scale(w, h) * self.zoom
+        if self.zoom <= 1.0 or self.center is None:
+            self.zoom, self.center = 1.0, (iw / 2, ih / 2)
+        # Keep the view on the image (the border may show at the edges).
+        cx = min(max(self.center[0], 0), iw)
+        cy = min(max(self.center[1], 0), ih)
+        self.center = (cx, cy)
+        ox, oy = w / 2 - cx * self.scale, h / 2 - cy * self.scale
+        self.offset = (ox, oy)
+        # Only the visible part of the image is scaled (fast at high zoom).
+        x0 = max(0, int(np.floor(-ox / self.scale)))
+        y0 = max(0, int(np.floor(-oy / self.scale)))
+        x1 = min(iw, int(np.ceil((w - ox) / self.scale)))
+        y1 = min(ih, int(np.ceil((h - oy) / self.scale)))
+        if x1 > x0 and y1 > y0:
+            part = img.crop((x0, y0, x1, y1))
+            size = (max(1, int(round((x1 - x0) * self.scale))),
+                    max(1, int(round((y1 - y0) * self.scale))))
+            resample = Image.NEAREST if self.zoom >= 4 else Image.BILINEAR
+            self._photo = ImageTk.PhotoImage(part.resize(size, resample))
+            self.create_image(ox + x0 * self.scale, oy + y0 * self.scale,
+                              image=self._photo, anchor="nw")
         # A thin line marks the video's edge inside the black border.
-        x0, y0 = self.offset
-        self.create_rectangle(x0 - 1, y0 - 1, x0 + size[0], y0 + size[1], outline="#555555")
+        self.create_rectangle(ox - 1, oy - 1, ox + iw * self.scale, oy + ih * self.scale,
+                              outline="#555555")
         self.redraw_overlay()
 
     def to_image(self, sx: float, sy: float) -> tuple[float, float]:
@@ -176,6 +267,7 @@ class SetupWindow(tk.Toplevel):
         self._points: list[tuple[float, float]] = []   # shape being drawn (image px)
         self._drag_start = None
         self._drag = None               # (what, index) of a point being dragged
+        self._press = None              # a press on a region point: drag or click?
         self._extra_names: list[str] = []   # added regions not drawn yet
 
         self._build()
@@ -220,7 +312,19 @@ class SetupWindow(tk.Toplevel):
         right.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.instructions = ttk.Label(right, wraplength=760, justify=tk.LEFT)
         self.instructions.pack(fill=tk.X, pady=(0, 6))
+        zoom = ttk.Frame(right)
+        zoom.pack(fill=tk.X, pady=(0, 4))
         self.canvas = FrameCanvas(right)
+        ttk.Label(zoom, text="Zoom:").pack(side=tk.LEFT)
+        for text, cmd in (("−", lambda: self.canvas.zoom_by(0.8)),
+                          ("+", lambda: self.canvas.zoom_by(1.25)),
+                          ("Fit", self.canvas.reset_view)):
+            ttk.Button(zoom, text=text, width=4 if text != "Fit" else 5,
+                       command=cmd).pack(side=tk.LEFT, padx=(4, 0))
+        self.zoom_text = ttk.Label(zoom, foreground="gray")
+        self.zoom_text.pack(side=tk.LEFT, padx=(10, 0))
+        self.canvas.on_view_change = self._update_zoom_text
+        self._update_zoom_text()
         self.canvas.pack(fill=tk.BOTH, expand=True)
         self.controls = ttk.Frame(right)
         self.controls.pack(fill=tk.X, pady=(8, 0))
@@ -233,6 +337,13 @@ class SetupWindow(tk.Toplevel):
         Tooltip(self.done_btn, "Close the setup window. Everything set so far is kept.")
         self.next_step_btn = ttk.Button(nav, command=lambda: self._step_by(1))
         self.next_step_btn.pack(side=tk.RIGHT, padx=(0, 6))
+
+    def _update_zoom_text(self) -> None:
+        z = self.canvas.zoom
+        self.zoom_text.configure(text=(
+            f"{z * 100:.0f}%. Scroll to zoom at the pointer"
+            + ("; right-drag, Control-drag, or the arrow keys move around." if z > 1
+               else ".")))
 
     # --------------------------------------------------------------- helpers
     @property
@@ -265,7 +376,8 @@ class SetupWindow(tk.Toplevel):
             self._scrub_job = None
         for child in self.controls.winfo_children():
             child.destroy()
-        for seq in ("<Button-1>", "<B1-Motion>", "<ButtonRelease-1>", "<Double-Button-1>"):
+        for seq in ("<Button-1>", "<B1-Motion>", "<ButtonRelease-1>", "<Double-Button-1>",
+                    "<Motion>"):
             self.canvas.unbind(seq)
         self.canvas.redraw_overlay = lambda: None
         self._drag = None
@@ -989,9 +1101,11 @@ class SetupWindow(tk.Toplevel):
         self.instructions.configure(text=(
             f"Draw the {test} regions on the reference. Pick a region in the list, "
             "then click points around it; click the first point (or double-click) to "
-            "close it. Drag a point to move it. Points can go in the black border, so "
-            f"a region reaches the video's edge. {extra}The test type is set in the "
-            "main window."))
+            "close it. Drag a point to move it. A point placed near another region's "
+            "point or edge locks onto it (a ring shows where), so neighboring regions "
+            "share their border without overlapping; locked points move together. "
+            "Points can go in the black border, so a region reaches the video's edge. "
+            f"{extra}Zoom in for precision. The test type is set in the main window."))
         row = ttk.Frame(self.controls)
         row.pack(fill=tk.X)
         self.region_list = ttk.Treeview(row, columns=("region", "status"), show="headings",
@@ -1024,6 +1138,14 @@ class SetupWindow(tk.Toplevel):
         add.pack(side=tk.LEFT, padx=(6, 0))
         Tooltip(add, "Add another region with the name typed. Its role (open arm, "
                      "center, ignore, ...) is chosen with Regions… in the main window.")
+        self.snap_var = tk.BooleanVar(value=True)
+        snap = ttk.Checkbutton(side, text="Lock onto other regions' points and edges",
+                               variable=self.snap_var)
+        snap.pack(anchor="w", pady=(6, 0))
+        Tooltip(snap, "On: a point placed or dragged near another region's point or "
+                      "edge locks exactly onto it, so the regions meet without gaps or "
+                      "overlap. Points locked together move together. Turn off to place "
+                      "points freely, or to move a locked point on its own.")
         self.region_note = ttk.Label(side, foreground="#b26a00", wraplength=420,
                                      justify=tk.LEFT)
         self.region_note.pack(fill=tk.X, pady=(6, 0))
@@ -1032,6 +1154,7 @@ class SetupWindow(tk.Toplevel):
         self.canvas.bind("<B1-Motion>", self._region_drag)
         self.canvas.bind("<ButtonRelease-1>", self._region_release)
         self.canvas.bind("<Double-Button-1>", lambda _e: self._close_region())
+        self.canvas.bind("<Motion>", self._region_hover)
         self.canvas.redraw_overlay = self._draw_regions
         self.canvas.show(self._prepared_image())
         self._current_region = None
@@ -1067,10 +1190,10 @@ class SetupWindow(tk.Toplevel):
             ix, iy = self._to_image(xs, ys)
             color = ROLE_COLORS.get(self._region_role(name), OTHER_COLOR)
             self.canvas.polygon(ix, iy, color, label=name)
-        if self._points:
+        if self._points:  # the region being drawn, in full-size pixels
             color = ROLE_COLORS.get(self._region_role(self._current_region or ""), OTHER_COLOR)
-            self.canvas.polygon([p[0] for p in self._points], [p[1] for p in self._points],
-                                color, closed=False)
+            ix, iy = self._to_image([p[0] for p in self._points], [p[1] for p in self._points])
+            self.canvas.polygon(ix, iy, color, closed=False)
 
     def _redraw_regions(self) -> None:
         self.canvas.delete("overlay")
@@ -1085,12 +1208,85 @@ class SetupWindow(tk.Toplevel):
                     return key, i
         return None
 
+    def _linked(self, name: str, i: int) -> list[tuple[str, int]]:
+        """Every region point at exactly the same place as point i of `name`
+        (points locked together), including that point."""
+        xs, ys = self.setup.regions[name]
+        x, y = xs[i], ys[i]
+        return [(n, j) for n, (pxs, pys) in self.setup.regions.items()
+                for j, (px, py) in enumerate(zip(pxs, pys))
+                if abs(px - x) < 1e-6 and abs(py - y) < 1e-6]
+
+    def _snap(self, e, skip: set[str] = frozenset()) -> tuple[float, float, bool]:
+        """Full-size position for a click at screen (e.x, e.y): exactly on
+        another region's point if one is near, else on the nearest edge if
+        one is near, else where clicked. Regions named in `skip` are
+        ignored. Returns (x, y, snapped)."""
+        fx, fy = self._to_full(*([v] for v in self.canvas.to_image(e.x, e.y)))
+        here = (fx[0], fy[0], False)
+        if not getattr(self, "snap_var", None) or not self.snap_var.get():
+            return here
+        others = {n: p for n, p in self.setup.regions.items() if n not in skip and p[0]}
+        best, best_d = None, SNAP_DISTANCE
+        for xs, ys in others.values():          # points first
+            sx, sy = self._screen_points(xs, ys)
+            for x, y, px, py in zip(xs, ys, sx, sy):
+                d = np.hypot(px - e.x, py - e.y)
+                if d <= best_d:
+                    best, best_d = (x, y, True), d
+        if best:
+            return best
+        for xs, ys in others.values():          # then edges
+            sx, sy = self._screen_points(xs, ys)
+            n = len(xs)
+            for k in range(n):
+                ax, ay, bx, by = sx[k], sy[k], sx[(k + 1) % n], sy[(k + 1) % n]
+                vx, vy = bx - ax, by - ay
+                seg = vx * vx + vy * vy
+                if seg == 0:
+                    continue
+                t = min(max(((e.x - ax) * vx + (e.y - ay) * vy) / seg, 0.0), 1.0)
+                d = np.hypot(ax + t * vx - e.x, ay + t * vy - e.y)
+                if d <= best_d:
+                    x0, y0 = xs[k], ys[k]
+                    x1, y1 = xs[(k + 1) % n], ys[(k + 1) % n]
+                    best, best_d = (x0 + t * (x1 - x0), y0 + t * (y1 - y0), True), d
+        return best or here
+
+    def _screen_points(self, xs, ys):
+        ix, iy = self._to_image(xs, ys)
+        pts = [self.canvas.to_screen(x, y) for x, y in zip(ix, iy)]
+        return [p[0] for p in pts], [p[1] for p in pts]
+
+    def _show_snap(self, x: float, y: float) -> None:
+        self.canvas.delete("snap")
+        (ix,), (iy,) = self._to_image([x], [y])
+        sx, sy = self.canvas.to_screen(ix, iy)
+        self.canvas.create_oval(sx - 7, sy - 7, sx + 7, sy + 7, outline="white", width=2,
+                                tags=("overlay", "snap"))
+
+    def _region_hover(self, e) -> None:
+        """Show a ring where a click would lock on."""
+        self.canvas.delete("snap")
+        if self._drag:
+            return
+        x, y, snapped = self._snap(e)
+        if snapped and self._current_region not in self.setup.regions:
+            self._show_snap(x, y)
+
     def _region_press(self, e) -> None:
+        """A press near a drawn point may be a drag (if the mouse moves) or a
+        click that places a point locked onto it (if it doesn't)."""
+        self._press = None
         if not self._points:
             hit = self._grab(e, self.setup.regions)
-            if hit:
-                self._drag = hit
+            if hit:  # with locking off, a point moves on its own
+                group = self._linked(*hit) if self.snap_var.get() else [hit]
+                self._press = (group, e.x, e.y)
                 return
+        self._place_region_point(e)
+
+    def _place_region_point(self, e) -> None:
         name = self._current_region
         if not name:
             return
@@ -1098,33 +1294,50 @@ class SetupWindow(tk.Toplevel):
             self.region_note.configure(text=f"{name} is already drawn: drag its points, "
                                             "or click Redraw to draw it again.")
             return
-        if len(self._points) >= 3 and self.canvas.near(e.x, e.y, *self._points[0],
-                                                       CLOSE_DISTANCE):
-            self._close_region()
-            return
-        self._points.append(self.canvas.to_image(e.x, e.y))
+        if len(self._points) >= 3:
+            (fx,), (fy,) = self._to_image([self._points[0][0]], [self._points[0][1]])
+            if self.canvas.near(e.x, e.y, fx, fy, CLOSE_DISTANCE):
+                self._close_region()
+                return
+        x, y, _ = self._snap(e)
+        self._points.append((x, y))
         self._redraw_regions()
 
     def _region_drag(self, e) -> None:
+        if not self._drag and self._press:
+            group, px, py = self._press
+            if abs(e.x - px) + abs(e.y - py) < 4:
+                return  # not moved enough to be a drag yet
+            self._drag, self._press = group, None
         if not self._drag:
             return
-        name, i = self._drag
-        xs, ys = self.setup.regions[name]
-        fx, fy = self._to_full(*([v] for v in self.canvas.to_image(e.x, e.y)))
-        xs[i], ys[i] = fx[0], fy[0]
+        x, y, snapped = self._snap(e, skip={n for n, _ in self._drag})
+        for name, i in self._drag:              # locked points move together
+            xs, ys = self.setup.regions[name]
+            xs[i], ys[i] = x, y
         self._redraw_regions()
+        if snapped:
+            self._show_snap(x, y)
 
-    def _region_release(self, _e) -> None:
+    def _region_release(self, e) -> None:
+        if self._press:  # a click on a point, not a drag: place a locked point
+            _group, px, py = self._press
+            self._press = None
+            self._place_region_point(type("E", (), {"x": px, "y": py})())
+            return
         if self._drag:
             self._drag = None
+            self.canvas.delete("snap")
+            self.setup.steps_done.discard("regions")
+            self._update_step_list()
             self._check_regions()
             self.app._refresh()
 
     def _close_region(self) -> None:
         name = self._current_region
         if name and len(self._points) >= 3:
-            xs, ys = self._to_full([p[0] for p in self._points], [p[1] for p in self._points])
-            self.setup.regions[name] = (list(xs), list(ys))
+            self.setup.regions[name] = ([p[0] for p in self._points],
+                                        [p[1] for p in self._points])
             self.setup.steps_done.discard("regions")
             self._points = []
             nxt = next((n for n in self._region_names() if n not in self.setup.regions), name)

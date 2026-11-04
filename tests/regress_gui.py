@@ -135,6 +135,18 @@ if os.path.exists(CLIP):
     v = app.files[0].video
     check("new video gets the test's default session length (EPM 5 min)", v.length_s == 300)
     win.scrub.set(100); win._load_scrub_frame(); win._set_start()
+    # The user's slip: Set end here with the slider still at the start, then
+    # leaving the length box. Must ask, and never save a tiny default.
+    yesno.append(False); log.clear(); win._set_end()
+    check("Set end at the start asks first; length kept",
+          "Very short session" in log and v.length_s == 300)
+    yesno.append(True); win._set_end(); win._apply_length(quiet=True)
+    check("a rounded length shown in the box isn't read back as a new length",
+          v.end_frame == 101 and app.config_data["session_minutes"]["Elevated Plus Maze"] == 5)
+    app.config_data["session_minutes"]["Elevated Plus Maze"] = 0.001
+    check("a tiny saved length falls back to the standard 5 min",
+          gui.default_session_minutes(app.config_data, "Elevated Plus Maze") == 5)
+    app.config_data["session_minutes"]["Elevated Plus Maze"] = 5.0
     win.length_var.set("0.5"); win._apply_length()
     check("typed session length sets the end", v.end_frame == 100 + round(30 * v.info.fps))
     win.length_var.set("600"); win._apply_length()
@@ -159,7 +171,15 @@ if os.path.exists(CLIP):
     ref = v.reference
     check("reference made at the crop's size", ref is not None and ref.shape == (600, 1000)
           and "reference" in v.steps_done)
+    with setup_window.VideoReader(v.path, v.prep(1.0)) as r:
+        first = r.read_at(v.start).astype(float)
+    check("reference is made from frames across the trial, not just the start",
+          np.abs(ref - first).mean() > 0.5)
     win._step_by(1); app.update()
+    win.scrub.set(500); win._load_scrub_frame(); shown500 = win.canvas._array.copy()
+    win.scrub.set(850); win._load_scrub_frame()
+    check("tracking check scrubs to different frames",
+          win.scrub.cget("to") == 899 and not np.array_equal(shown500, win.canvas._array))
     check("tracking check previews a position", win.step == "tracking" and win._found
           and np.isfinite(win._found[0]) and "found at" in win.found_text.cget("text"))
     win.view_var.set("dif"); win._preview()

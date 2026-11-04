@@ -73,7 +73,7 @@ from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_vi
 from core.video_setup import VideoSetup
 from about import AboutDialog
 from region_dialog import RegionDialog
-from setup_window import SetupWindow
+from setup_window import SetupWindow, default_session_minutes
 from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
 
@@ -1203,8 +1203,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             try:
                 if is_video(p):
                     setup = VideoSetup(path=p, info=video_info(p))
-                    setup.length_s = 60 * float(self.config_data["session_minutes"].get(
-                        self.test_var.get(), 5.0))
+                    setup.length_s = 60 * default_session_minutes(self.config_data,
+                                                                  self.test_var.get())
                     setup.unreadable = check_readable(p)
                     bad, checked = setup.unreadable
                     if checked and bad / checked > UNREADABLE_WARN:

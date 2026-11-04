@@ -1040,6 +1040,14 @@ test) before each commit.
   on every side. Next on the last step reads "Next video" (moves to the next
   video's step 1) or "Finish" (closes the window); the old Done button is now
   Close.
+  **Fix (2026-11-04, from the user's try):** clicking Set end here with the
+  slider still at the start made a one-frame trial, and the rounded length in
+  the box (0.001 min) was then saved as the EPM default, so every reference,
+  region image and tracking-check slider used only the start frame. Now a
+  displayed length is never read back as a new one, a trial under 10 s asks
+  first, lengths under 10 s are never remembered (a bad saved value falls back
+  to 5 / 60 min), and the Reference step shows the trial length and warns if
+  it's shorter than the frames used.
 - [x] **C6. Setup steps 4–6:** tracking check (preview, scrub, settings),
   regions (draw/edit; EPM five regions, Open Field outline + center), scale
   (two points, guidance text, remembered length).

@@ -42,6 +42,8 @@ LENGTH_CHOICES = {
     "Elevated Plus Maze": ("5",),
     "Open Field": ("60  (1 hour)", "90  (1.5 hours)"),
 }
+DEFAULT_MINUTES = {"Elevated Plus Maze": 5.0, "Open Field": 60.0}
+MIN_LENGTH_S = 10    # a shorter trial is almost surely a slip: ask before using it
 SCALE_GUIDE = {
     "Elevated Plus Maze": "Elevated Plus Maze: 75 cm across, from the end of one arm "
                           "to the end of the opposite arm.",
@@ -56,6 +58,14 @@ ROLE_COLORS = {"open_arm": "#ff9f1a", "closed_arm": "#2f9bff", "center": "#39d35
                "outline": "#d36bff"}
 OTHER_COLOR = "#cccccc"
 SCALE_COLOR = "#ffd23f"
+
+
+def default_session_minutes(config: dict, test: str) -> float:
+    """The test's remembered session length, or its standard one if the
+    remembered value is too short to be a real session."""
+    fallback = DEFAULT_MINUTES.get(test, 5.0)
+    m = float(config["session_minutes"].get(test, fallback))
+    return m if m * 60 >= MIN_LENGTH_S else fallback
 
 
 def _number(text: str) -> float:
@@ -449,7 +459,16 @@ class SetupWindow(tk.Toplevel):
 
     # --------------------------------------------------- step 1: trim + crop
     def _default_minutes(self) -> float:
-        return float(self.app.config_data["session_minutes"].get(self._test(), 5.0))
+        """The test's remembered session length (its standard one if the
+        remembered value is too short to be a real session)."""
+        return default_session_minutes(self.app.config_data, self._test())
+
+    def _show_length(self, minutes: float) -> None:
+        """Put a length in the box, remembering exactly what was shown so a
+        rounded display is never read back as a new length."""
+        text = f"{minutes:.2f}".rstrip("0").rstrip(".") if minutes >= 0.01 else f"{minutes:.4g}"
+        self._length_shown = text
+        self.length_var.set(text)
 
     def _step_trim(self) -> None:
         s = self.setup
@@ -483,7 +502,8 @@ class SetupWindow(tk.Toplevel):
         row2 = ttk.Frame(self.controls)
         row2.pack(fill=tk.X, pady=(6, 0))
         ttk.Label(row2, text="Session length (min):").pack(side=tk.LEFT)
-        self.length_var = tk.StringVar(value=f"{(s.length_s or 0) / 60:g}")
+        self.length_var = tk.StringVar()
+        self._show_length((s.length_s or 0) / 60)
         length_box = ttk.Combobox(row2, textvariable=self.length_var, width=16,
                                   values=LENGTH_CHOICES.get(self._test(), ()))
         length_box.pack(side=tk.LEFT, padx=(4, 6))
@@ -521,8 +541,12 @@ class SetupWindow(tk.Toplevel):
         self.end_text.configure(text=text, foreground=color)
 
     def _apply_length(self, quiet: bool = False) -> bool:
-        """Use the typed session length. False (after a warning) if invalid."""
+        """Use the typed session length. False (after a warning) if invalid.
+        `quiet` (leaving the box) never warns or asks; it only applies a
+        sensible new length."""
         text = self.length_var.get().strip()
+        if text == getattr(self, "_length_shown", None):
+            return True  # unchanged: keep the exact length (it may be a scrubbed one)
         try:
             minutes = _number(text)
             if minutes <= 0:
@@ -533,14 +557,18 @@ class SetupWindow(tk.Toplevel):
                              "The session length must be a number of minutes above 0, "
                              "such as 5 or 60.")
             return False
+        if minutes * 60 < MIN_LENGTH_S:
+            if quiet or not ask_yes_no(
+                    self, "Very short session",
+                    f"A session of {minutes * 60:.1f} s is very short. Use it anyway?"):
+                return False
         s = self.setup
-        new = minutes * 60
-        if s.length_s is None or abs(new - s.length_s) > 1e-6:
-            s.length_s = new
+        s.length_s = minutes * 60
+        if minutes * 60 >= MIN_LENGTH_S:  # only real session lengths are remembered
             self.app.config_data["session_minutes"][self._test()] = minutes
-            self.app._refresh()
-        self.length_var.set(f"{minutes:g}")
+        self._show_length(minutes)
         self._update_trim_text()
+        self.app._refresh()
         return True
 
     def _set_start(self) -> None:
@@ -566,8 +594,15 @@ class SetupWindow(tk.Toplevel):
                          "The end has to come after the start. Move the start first.")
             return
         if s.info.fps:
-            s.length_s = (f - s.start) / s.info.fps
-            self.length_var.set(f"{s.length_s / 60:.3f}".rstrip("0").rstrip("."))
+            length = (f - s.start) / s.info.fps
+            if length < MIN_LENGTH_S and not ask_yes_no(
+                    self, "Very short session",
+                    f"The end would be only {length:.1f} s ({f - s.start} frames) after the "
+                    "start. To set the end, scrub to where the trial ends first, then "
+                    "click Set end here. Use this end anyway?"):
+                return
+            s.length_s = length
+            self._show_length(length / 60)
         else:
             s.length_s, s.end = None, f
         self._update_trim_text()
@@ -735,12 +770,19 @@ class SetupWindow(tk.Toplevel):
     def _show_reference(self) -> None:
         s = self.setup
         self.canvas.show(s.reference, message="No reference yet. Click Make reference.")
+        n = s.end_frame - s.start
+        trial = f"Trial: {n:,} frames ({self._secs(n)}). "
         if self._reference_ok():
-            self.ref_text.configure(text="Reference is up to date.")
+            text = trial + "Reference is up to date."
         else:
-            self.ref_text.configure(text=(
-                "No reference yet." if s.reference is None else
-                "The trim, crop, or settings changed since this was made. Make it again."))
+            text = trial + ("No reference yet." if s.reference is None else
+                            "The trim, crop, or settings changed since this was made. "
+                            "Make it again.")
+        short = n < self._ref_frames()
+        if short:
+            text += (" The trial is shorter than the frames used, so the reference "
+                     "can't hide the animal: check the trim in step 1.")
+        self.ref_text.configure(text=text, foreground="#b26a00" if short else "gray")
 
     def _make_reference(self) -> None:
         try:

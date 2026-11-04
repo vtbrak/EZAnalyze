@@ -1013,6 +1013,26 @@ test) before each commit.
   previous video" copies crop and exclusions as a draft (steps un-ticked).
   **Moved to C7:** filling the fps setting from the video and the fps
   mismatch warning (they belong with Track).
+- [ ] **C5b. Fixes from the user's first try of the setup window
+  (2026-11-04; do these before C6):**
+  1. **Start = time 0:** the start is set by scrubbing and becomes frame 0 of
+     the analysis (as now; keep it).
+  2. **End as a session length, not a scrubbed frame** (scrubbing isn't
+     accurate enough for the end): Elevated Plus Maze defaults to **5 min**,
+     with the option to scrub or type a different length; Open Field offers
+     **1 hour** and **1.5 hours**, with the option to type another length.
+     The end frame = start + length × the video's fps (clamped to the video's
+     end, with a note if the video is shorter than the length).
+  3. **Black border on all four sides** of every image drawn on (crop,
+     exclusions, and C6's regions and scale), outside the video, so points
+     can be placed past the edge and a zone reaches the video's edge.
+     Currently there's only spare room left and right (from fitting the
+     image), none above or below. Points outside the video are kept as
+     placed (polygons are clipped to the frame when used).
+  4. **Next is never a dead end:** every step's Next either moves on or says
+     what's missing (e.g. "Make the reference first"). The user thought the
+     program had stopped when Next was greyed out on the Reference step
+     (steps 4–6 weren't built yet).
 - [ ] **C6. Setup steps 4–6:** tracking check (preview, scrub, settings),
   regions (draw/edit; EPM five regions, Open Field outline + center), scale
   (two points, guidance text, remembered length).

@@ -14,6 +14,8 @@ import os
 import sys
 import tempfile
 
+import numpy as np
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 cfg = os.path.join(tempfile.mkdtemp(), "config.json")
@@ -114,6 +116,41 @@ names = set(sheets["Settings"]["Setting"])
 check("settings sheet lists entry rule, bins, plot style",
       {"Min entry (frames)", "Bin size (s)", "Point size", "Colormap", "Add background"} <= names)
 check("export finished message", "Export finished" in log)
+
+# Videos (ezTrack's short practice clip, if present): added as "Needs setup",
+# set up in the setup window, skipped by Analyze until tracked.
+CLIP = os.path.join(ROOT, "ezTrack", "PracticeVideos", "LocationTracking_Clip.mp4")
+if os.path.exists(CLIP):
+    app.clear_files(); log.clear(); app.add_files([CLIP]); app.update()
+    vals = app.file_tree.item("0", "values")
+    check("video listed as Video / Needs setup", vals[1] == "Video" and vals[2] == "Needs setup")
+    check("Set up videos button shown", app.setup_btn.winfo_ismapped())
+    app.open_setup(); app.update()
+    win = app._setup_win
+    check("setup window opens on the video", win.winfo_exists() and "Clip" in win.video_label.cget("text"))
+    win.scrub.set(100); win._load_scrub_frame(); win._set_start()
+    win.scrub.set(899); win._load_scrub_frame(); win._set_end()
+    check("trim set", (app.files[0].video.start, app.files[0].video.end_frame) == (100, 900))
+    app.files[0].video.crop = (100, 50, 1100, 650)
+    win._step_by(1); app.update()
+    check("Next marks trim done and goes to exclusions",
+          win.step == "exclusions" and "trim" in app.files[0].video.steps_done)
+    for x, y in ((10, 10), (60, 10), (60, 60)):
+        sx, sy = win.canvas.to_screen(x, y)
+        win._shape_click(type("E", (), {"x": sx, "y": sy})())
+    win._finish_shape()
+    check("exclusion shape stored in full-size pixels",
+          np.allclose(app.files[0].video.exclusions[0], [[110, 160, 160], [60, 60, 110]]))
+    win._step_by(1); win.ref_var.set("10"); win._make_reference(); app.update()
+    ref = app.files[0].video.reference
+    check("reference made at the crop's size", ref is not None and ref.shape == (600, 1000)
+          and "reference" in app.files[0].video.steps_done)
+    log.clear(); app._set_selection([0]); app.analyze(); app.update()
+    check("Analyze skips an untracked video", "Videos not tracked yet" in log)
+    win._close(); app.update()
+    check("gap-filling section shown when videos are listed", app.gaps_section.winfo_ismapped())
+else:
+    print("skip video checks (ezTrack practice clip not present)")
 
 app.show_about(); app.update()
 about = [w for w in app.winfo_children() if w.winfo_class() == "Toplevel"]

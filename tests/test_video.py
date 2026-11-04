@@ -103,5 +103,20 @@ if os.path.exists(EPM_CSV):
 else:
     print("skip EPM.csv comparison (EPM.csv not in the project folder)")
 
+# --- core/video_setup.py: full-size shapes line up with prepared frames ---
+from core.video_setup import VideoSetup
+vs = VideoSetup(path=EPM_VIDEO, info=info, crop=(101, 51, 701, 551),
+                exclusions=[([201, 301, 301, 201], [151, 151, 251, 251])])
+for d in (1.0, 0.5):
+    with video.VideoReader(EPM_VIDEO, vs.prep(d)) as r:
+        shape = r.read_at(0).shape
+    check(f"prepared shape at downsample {d}", vs.prepared_shape(d) == shape)
+    check(f"exclusion mask matches the frame at downsample {d}",
+          vs.exclusion_mask(d).shape == shape)
+    xs, ys = vs.to_prepared([301], [251], d)
+    back = vs.from_prepared(xs, ys, d)
+    check(f"coordinates round-trip at downsample {d}", np.allclose(back, [[301], [251]]))
+check("crop corner maps to 0,0 at full size", vs.to_prepared([101], [51], 1.0) == ([0], [0]))
+
 print(f"\n{fails} failure(s)")
 sys.exit(1 if fails else 0)

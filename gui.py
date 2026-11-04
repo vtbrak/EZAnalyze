@@ -68,8 +68,12 @@ from core import (
 )
 from core.export import output_paths, save_figure, settings_table, write_analysis_workbook
 from core.gaps import fill_gaps
+from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_video,
+                        video_info)
+from core.video_setup import VideoSetup
 from about import AboutDialog
 from region_dialog import RegionDialog
+from setup_window import SetupWindow
 from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
 
@@ -90,6 +94,13 @@ ANALYZED = "Analyzed"
 # Status text color in the file list (readable on light and dark themes).
 STATUS_COLORS = {"analyzed": "#2e7d32", "waiting": "#b26a00", "failed": "#c62828"}
 
+NEEDS_SETUP = "Needs setup"
+
+LOCKED_TRACKING_TIP = (
+    "Locked because videos have been tracked, so every video in this load is "
+    "tracked the same way. Click Clear to change it."
+)
+
 LOCKED_TIP = (
     "Locked because files have been analyzed, so every file in this load uses "
     "the same settings. Click Clear to change it."
@@ -98,13 +109,17 @@ LOCKED_TIP = (
 
 @dataclass
 class FileEntry:
-    """One file in the list. `summary`/`bins` are filled in by Analyze."""
+    """One file in the list. `summary`/`bins` are filled in by Analyze.
+
+    A video has `video` (its setup) and no `data` until it's tracked; a CSV
+    has `data` from the start."""
 
     path: str
-    data: TrackingData
+    data: TrackingData | None
     label: str                      # name shown in the Summary ("x (2)" for repeats)
     summary: dict | None = None
     bins: pd.DataFrame | None = None
+    video: VideoSetup | None = None
 
     @property
     def analyzed(self) -> bool:
@@ -112,10 +127,12 @@ class FileEntry:
 
     @property
     def kind(self) -> str:
-        return "CSV"
+        return "Video" if self.video is not None else "CSV"
 
 
 class BehaviorTrackerApp(tk.Tk, _DnDMixin):
+    LOCKED_TRACKING_TIP = LOCKED_TRACKING_TIP
+
     def __init__(self):
         super().__init__()
         self.title("Behavior Tracker")
@@ -149,11 +166,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         bar.pack(side=tk.TOP, fill=tk.X)
         add_file = ttk.Button(bar, text="Add files…", command=self.open_file)
         add_file.pack(side=tk.LEFT)
-        Tooltip(add_file, "Add CSV files to the list. You can also drag files or "
-                          "folders onto the window.")
+        Tooltip(add_file, "Add tracking CSVs or videos to the list. You can also "
+                          "drag files or folders onto the window.")
         add_folder = ttk.Button(bar, text="Add folder…", command=self.open_folder)
         add_folder.pack(side=tk.LEFT, padx=(6, 0))
-        Tooltip(add_folder, "Add every CSV in a folder to the list.")
+        Tooltip(add_folder, "Add every CSV and video in a folder to the list.")
         remove = ttk.Button(bar, text="Remove", command=self.remove_selected)
         remove.pack(side=tk.LEFT, padx=(6, 0))
         Tooltip(remove, "Take the selected files out of the list. The files "
@@ -164,6 +181,16 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                                 "can choose them again (e.g. after analyzing one file, "
                                 "before running a folder).")
         ttk.Separator(bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
+
+        # Video steps, shown only while videos are in the list.
+        self.video_tools = ttk.Frame(bar)
+        self.setup_btn = ttk.Button(self.video_tools, text="Set up videos…",
+                                    command=self.open_setup)
+        self.setup_btn.pack(side=tk.LEFT)
+        Tooltip(self.setup_btn, "Trim, crop, and prepare each video for tracking, one "
+                                "at a time.")
+        self.video_sep = ttk.Separator(self.video_tools, orient=tk.VERTICAL)
+        self.video_sep.pack(side=tk.LEFT, fill=tk.Y, padx=10)
 
         self.select_all_btn = ttk.Button(bar, text="Select all", width=10,
                                          command=self.toggle_select_all)
@@ -302,8 +329,9 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             (self.session_section, True),
             (self.entries_section, True),
             (self.of_bar, self.test_var.get() == "Open Field"),
-            (self.gaps_section, any("Frame_Unreadable" in e.data.df.columns
-                                    for e in getattr(self, "files", []))),
+            (self.gaps_section, any(e.video is not None or (
+                e.data is not None and "Frame_Unreadable" in e.data.df.columns)
+                for e in getattr(self, "files", []))),
         ]
         for widget, _ in sections:
             widget.pack_forget()
@@ -871,6 +899,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         frames: dict[str, int] = {}
         total = 0
         for e in self.files if entries is None else entries:
+            if e.data is None:
+                continue  # a video not tracked yet
             total += e.data.n_frames
             for r in e.data.regions:
                 frames[r] = frames.get(r, 0) + int(e.data.df[r].sum())
@@ -953,7 +983,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if not overview:
             show_info(self, "No regions", "Add a file with region columns first.")
             return
-        preview = next((e.data for e in entries if e.data.regions), None)
+        preview = next((e.data for e in entries if e.data is not None and e.data.regions),
+                       None)
         dlg = RegionDialog(
             self, self.test_var.get(), overview, self._current_roles(entries),
             preview=preview, reason=reason,
@@ -1019,6 +1050,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     def _refresh(self) -> None:
         """Re-sync everything that depends on the file list."""
+        if any(e.video is not None for e in self.files):
+            if not self.video_tools.winfo_ismapped():
+                self.video_tools.pack(side=tk.LEFT, before=self.select_all_btn)
+        else:
+            self.video_tools.pack_forget()
         self._apply_lock()
         self._fill_file_list()
         self._show_summary()
@@ -1027,7 +1063,31 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     def _file_status(self, entry: FileEntry) -> tuple[str, str]:
         """(status text, color tag) for the file list."""
-        return (ANALYZED, "analyzed") if entry.analyzed else (NOT_ANALYZED, "")
+        if entry.analyzed:
+            return ANALYZED, "analyzed"
+        if entry.data is None:
+            return NEEDS_SETUP, "waiting"  # a video, not tracked yet
+        return NOT_ANALYZED, ""
+
+    def _tracking_locked(self) -> bool:
+        """Tracking settings lock at the first Track of a load (until Clear)."""
+        return any(e.video is not None and e.data is not None for e in self.files)
+
+    def open_setup(self) -> None:
+        """Open the video setup window at the selected video (or the first one
+        that still needs setting up)."""
+        videos = [e for e in self.files if e.video is not None]
+        if not videos:
+            show_info(self, "No videos", "Add a video first.")
+            return
+        win = getattr(self, "_setup_win", None)
+        if win is not None and win.winfo_exists():
+            win.lift()
+            return
+        chosen = [e for e in self._selected_entries() if e.video is not None]
+        start = chosen[0] if chosen else next(
+            (e for e in videos if e.data is None), videos[0])
+        self._setup_win = SetupWindow(self, videos, videos.index(start))
 
     def _fill_file_list(self) -> None:
         self.file_tree.delete(*self.file_tree.get_children())
@@ -1040,44 +1100,51 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     # --------------------------------------------------------------- actions
     def open_file(self):
+        videos = " ".join(f"*{ext}" for ext in VIDEO_EXTENSIONS)
         paths = filedialog.askopenfilenames(
-            title="Add LocationOutput CSV file(s)",
-            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            title="Add tracking CSVs or videos",
+            filetypes=[("CSVs and videos", f"*.csv {videos}"), ("CSV files", "*.csv"),
+                       ("Videos", videos), ("All files", "*.*")],
         )
         if paths:
             self.add_files(list(paths))
 
     def open_folder(self):
-        folder = filedialog.askdirectory(title="Add a folder of CSVs")
+        folder = filedialog.askdirectory(title="Add a folder of CSVs or videos")
         if not folder:
             return
-        csvs = self._csvs_in(folder)
-        if not csvs:
-            show_info(self, "No CSVs", "That folder has no .csv files.")
+        found = self._files_in(folder)
+        if not found:
+            show_info(self, "Nothing to add", "That folder has no CSVs or videos.")
             return
-        self.add_files(csvs)
+        self.add_files(found)
 
     def _on_drop(self, event):
-        """Dropped CSVs and folders (their CSVs) are added to the list.
-        Anything else is ignored."""
-        csvs = []
+        """Dropped CSVs, videos, and folders (their CSVs and videos) are added
+        to the list. Anything else is ignored."""
+        found = []
         for p in self.tk.splitlist(event.data):
             if os.path.isdir(p):
-                csvs.extend(self._csvs_in(p))
-            elif os.path.isfile(p) and p.lower().endswith(".csv"):
-                csvs.append(p)
-        if csvs:
-            self.add_files(csvs)
+                found.extend(self._files_in(p))
+            elif os.path.isfile(p) and self._addable(p):
+                found.append(p)
+        if found:
+            self.add_files(found)
         else:
-            show_info(self, "No CSVs", "Nothing dropped was a .csv file or folder.")
+            show_info(self, "Nothing to add",
+                      "Nothing dropped was a CSV, a video, or a folder of them.")
         return event.action
 
     @staticmethod
-    def _csvs_in(folder: str) -> list[str]:
+    def _addable(path: str) -> bool:
+        return path.lower().endswith(".csv") or is_video(path)
+
+    @classmethod
+    def _files_in(cls, folder: str) -> list[str]:
         return sorted(
             os.path.join(folder, f)
             for f in os.listdir(folder)
-            if f.lower().endswith(".csv")
+            if cls._addable(f) and not f.startswith(".")
         )
 
     @staticmethod
@@ -1106,18 +1173,46 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if not paths:
             return
 
-        errors = []
+        errors, hard_to_read = [], []
         first_new = len(self.files)
+        new = []
         for p in paths:
             try:
-                data = load_csv(p)
+                if is_video(p):
+                    setup = VideoSetup(path=p, info=video_info(p))
+                    setup.unreadable = check_readable(p)
+                    bad, checked = setup.unreadable
+                    if checked and bad / checked > UNREADABLE_WARN:
+                        hard_to_read.append((p, bad, checked))
+                    data, name = None, os.path.basename(p)
+                else:
+                    setup, data = None, load_csv(p)
+                    name = data.name
             except Exception as exc:  # report bad files, keep the good ones
                 errors.append(f"{os.path.basename(p)}: {exc}")
                 continue
+            new.append((p, data, setup, name))
+
+        if hard_to_read:
+            lines = "\n".join(f"• {os.path.basename(p)}: {bad} of the first {checked} "
+                              f"frames" for p, bad, checked in hard_to_read)
+            keep = ask_yes_no(
+                self, "Some videos are hard to read",
+                "Some videos have frames that couldn't be read.\n\n"
+                f"{lines}\n\nThese frames are kept as blank rows when tracking, but "
+                "if there are many, converting the video (e.g. to .mp4 with H.264) "
+                "usually fixes it. Add these videos anyway?",
+                yes="Add Anyway", no="Skip Them",
+            )
+            if not keep:
+                skip = {p for p, _, _ in hard_to_read}
+                new = [n for n in new if n[0] not in skip]
+
+        for p, data, setup, name in new:
             key = self._same_file_key(p)
             copies = sum(self._same_file_key(e.path) == key for e in self.files)
-            label = data.name if not copies else f"{data.name} ({copies + 1})"
-            self.files.append(FileEntry(path=p, data=data, label=label))
+            label = name if not copies else f"{name} ({copies + 1})"
+            self.files.append(FileEntry(path=p, data=data, label=label, video=setup))
 
         if not self._sel and len(self.files) > first_new:
             self._sel = [first_new]  # the first new file, ready for Analyze
@@ -1160,6 +1255,15 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if not targets:
             show_info(self, "No file selected",
                       "Select a file in the list first, or click Select all.")
+            return
+        untracked = [e for e in targets if e.data is None]
+        targets = [e for e in targets if e.data is not None]
+        if untracked:
+            names = "\n".join(f"• {e.label}" for e in untracked[:10])
+            show_info(self, "Videos not tracked yet",
+                      "These videos haven't been tracked, so they can't be analyzed "
+                      f"yet.\n\n{names}\n\nSet them up and track them first.")
+        if not targets:
             return
 
         if not self._locked():

@@ -34,6 +34,10 @@ DEFAULTS: dict = {
     # default; when on, gaps up to this many frames get straight-line positions.
     "fill_gaps": False,
     "fill_gaps_max_frames": 5,
+    # Video tracking settings shared by every video in a load (ROADMAP §12,
+    # Stage 7): downsampling (1 = full size) and frames in each reference image.
+    "video_downsample": 1.0,
+    "reference_frames": 50,
     # Plot style.
     "plot": {
         "point_size": 4.0,  # float so sizes like 2.5 survive a reload

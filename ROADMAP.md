@@ -1001,8 +1001,18 @@ test) before each commit.
   `Frame_Unreadable` column. Set up videos… and Track buttons are added in
   C5/C7. Not yet checked by eye: screen capture isn't available to the
   assistant, so the user should look over the new layout.
-- [ ] **C5. Video setup window, steps 1–3:** trim (scrub), crop, exclusions,
+- [x] **C5. Video setup window, steps 1–3:** trim (scrub), crop, exclusions,
   reference; video switcher; start from previous video; fps from the video.
+  Built 2026-11-04: `setup_window.py` (window + drawing canvas),
+  `core/video_setup.py` (each video's setup). Shapes are stored in full-size
+  video pixels and converted at tracking time, so changing downsampling never
+  invalidates them. Downsampling and reference frame count are shared
+  settings (config `video_downsample`, `reference_frames`) that lock at the
+  first Track. Videos join the file list as Video / "Needs setup"; adding a
+  video with >1% unreadable frames asks "Add anyway / Skip". "Start from
+  previous video" copies crop and exclusions as a draft (steps un-ticked).
+  **Moved to C7:** filling the fps setting from the video and the fps
+  mismatch warning (they belong with Track).
 - [ ] **C6. Setup steps 4–6:** tracking check (preview, scrub, settings),
   regions (draw/edit; EPM five regions, Open Field outline + center), scale
   (two points, guidance text, remembered length).

@@ -126,7 +126,8 @@ def locate(frame: np.ndarray, reference: np.ndarray, params: TrackingParams,
         weights[slice(max(ymin, 0), max(ymax, 0)), slice(max(xmin, 0), max(xmax, 0))] = 1
         dif = dif * weights
     dif[dif < np.percentile(dif, params.loc_thresh)] = 0
-    y, x = ndimage.center_of_mass(dif)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        y, x = ndimage.center_of_mass(dif)  # all zero (nothing found): NaN, quietly
     return y, x, dif
 
 

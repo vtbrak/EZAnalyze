@@ -128,6 +128,8 @@ if os.path.exists(CLIP):
     app.clear_files(); log.clear(); app.add_files([CLIP]); app.update()
     vals = app.file_tree.item("0", "values")
     check("video listed as Video / Needs setup", vals[1] == "Video" and vals[2] == "Needs setup")
+    check("status bar before any regions are drawn points to setup",
+          "draw them in Set up videos" in app.status.get())
     check("Set up videos button shown", app.setup_btn.winfo_ismapped())
     app.open_setup(); app.update()
     win = app._setup_win
@@ -263,6 +265,8 @@ if os.path.exists(CLIP):
     win._step_by(1); app.update()
     check("Finish closes the window; video Ready to track",
           not win.winfo_exists() and app.file_tree.item("0", "values")[2] == "Ready to track")
+    check("status bar counts regions drawn in setup (no 'no center' warning)",
+          "⚠" not in app.status.get() and "1 Center" in app.status.get())
     log.clear(); app._set_selection([0]); app.analyze(); app.update()
     check("Analyze skips an untracked video", "Videos not tracked yet" in log)
     check("gap-filling section shown when videos are listed", app.gaps_section.winfo_ismapped())

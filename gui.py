@@ -970,7 +970,16 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         return [(r, 100.0 * n / total if total else 0.0) for r, n in frames.items()]
 
     def _current_roles(self, entries=None) -> dict[str, str]:
+        """Role of every region in these files: tracked files' region columns,
+        plus regions drawn in the setup window for videos not tracked yet
+        (named as tracking will write them)."""
         names = [r for r, _ in self._region_overview(entries)]
+        test = self.test_var.get()
+        dsmpl = float(self.config_data["video_downsample"])
+        for e in self.files if entries is None else entries:
+            if e.data is None and e.video is not None:
+                names += [r.name for r in e.video.tracking_regions(dsmpl, test)
+                          if r.name not in names]
         return resolve_roles(names, self.config_data["region_roles"])
 
     def _unfit(self, entries) -> list[tuple[FileEntry, list[str]]]:
@@ -1087,6 +1096,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         roles = self._current_roles()
         problems = check_roles(self.test_var.get(), roles)
         regions = f"⚠ {'; '.join(problems)}" if problems else describe_roles(roles)
+        if not roles and any(e.video is not None for e in self.files):
+            regions = "draw them in Set up videos…"  # nothing drawn or tracked yet
         if self._locked():
             settings = (f"{self.test_var.get()}, {self._fps_locked():g} fps, "
                         f"{self._bin_seconds_locked():g} s bins, "

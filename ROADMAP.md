@@ -960,7 +960,7 @@ test) before each commit.
   `dst` slot), kept for matching results; a run of unreadable frames at the
   very end of a video is dropped (files often report a few frames more than
   they hold), while unreadable frames before the end are kept as blank rows.
-- [ ] **C2. Tracking engine (`core/tracking.py`):** reference image
+- [x] **C2. Tracking engine (`core/tracking.py`):** reference image
   (`Reference`, median of N evenly spaced frames, unreadable frames
   replaced), `locate` (`Locate` minus wire removal; window size scaled by
   downsampling), `track_video` generator (progress, cancel, unreadable frames
@@ -970,6 +970,16 @@ test) before each commit.
   `<name>_LocationOutput.csv` + `<name>_reference.png`. Validate on the
   practice video against `EPM.csv` (close, not identical: wire removal
   dropped).
+  Built 2026-11-04, tested by `tests/test_video.py`. **Validation:** `EPM.csv`
+  was tracked on a cropped frame (ezTrack coordinates start at the crop
+  corner); the best-matching crop is (165, 5)–(745, 575). With it and the
+  notebook settings, over the whole session: median position difference
+  2.0 px (95th percentile 6 px); region membership agrees on 97.2–99.6% of
+  frames per region; open-arm time 0.7% vs 1.4% (ol) and 5.9% vs 7.4% (or),
+  closed and center within 0.7 points. The remaining difference fits the
+  dropped wire removal and the unrecorded exclusion shapes and random
+  reference frames. We keep one more row than ezTrack (it drops the last
+  frame). Tracking speed: ~6,000 frames in 30–45 s on this Mac.
 - [ ] **C3. Analysis for unreadable frames:** loader treats `Frame_Unreadable`
   as a non-region column; unreadable frames add no time, distance or entries
   (entry rule carries the previous place through a gap); Summary and Time Bins

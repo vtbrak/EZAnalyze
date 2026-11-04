@@ -66,6 +66,7 @@ from core import (
     resolve_roles,
 )
 from core.export import output_paths, save_figure, settings_table, write_analysis_workbook
+from core.gaps import fill_gaps
 from region_dialog import RegionDialog
 from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
@@ -1011,31 +1012,36 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         try:
             test = self.test_var.get()
             min_entry = self.config_data["min_entry_frames"]
+            fill = bool(self.config_data["fill_gaps"])
+            fill_max = int(self.config_data["fill_gaps_max_frames"])
             for e in targets:
-                summary = summary_metrics(e.data, fps=fps)
+                # Gap filling works on a copy; the file's own data is untouched.
+                data = fill_gaps(e.data, fill_max) if fill else e.data
+                summary = summary_metrics(data, fps=fps)
                 roles = self._current_roles([e])
                 # Record the settings behind these numbers in the row itself, so
                 # an exported table shows how it was produced.
-                settings = {"Test": test, "MinEntryFrames": min_entry}
-                bins = binned_metrics(e.data, fps=fps, bin_seconds=bin_s)
+                settings = {"Test": test, "MinEntryFrames": min_entry,
+                            "FillGaps": fill, "FillGapsMaxFrames": fill_max}
+                bins = binned_metrics(data, fps=fps, bin_seconds=bin_s)
                 test_bins = None
                 if test == "Elevated Plus Maze":
                     summary.update(epm_metrics(
-                        e.data, roles, fps=fps, min_entry_frames=min_entry,
+                        data, roles, fps=fps, min_entry_frames=min_entry,
                     ))
-                    test_bins = epm_binned(e.data, roles, fps=fps, bin_seconds=bin_s,
+                    test_bins = epm_binned(data, roles, fps=fps, bin_seconds=bin_s,
                                            min_entry_frames=min_entry)
                 elif test == "Open Field":
                     gap = self.config_data["min_seconds_between_entries"]
                     adj = self.config_data["min_center_seconds_adjoining"]
                     smooth = self.config_data["speed_smoothing_frames"]
                     summary.update(of_metrics(
-                        e.data, roles, fps=fps, min_entry_frames=min_entry,
+                        data, roles, fps=fps, min_entry_frames=min_entry,
                         min_between_entries_s=gap, min_center_adjoining_s=adj,
                         speed_smoothing_frames=smooth,
                     ))
                     test_bins = of_binned(
-                        e.data, roles, fps=fps, bin_seconds=bin_s,
+                        data, roles, fps=fps, bin_seconds=bin_s,
                         min_entry_frames=min_entry, min_between_entries_s=gap,
                         min_center_adjoining_s=adj, speed_smoothing_frames=smooth,
                     )
@@ -1060,6 +1066,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             "Test": test,
             "Frame rate (fps)": row.get("FPS"),
             "Min entry (frames)": row.get("MinEntryFrames"),
+            "Fill gaps of unreadable frames": bool(row.get("FillGaps", False)),
+            "Fill gaps up to (frames)": row.get("FillGapsMaxFrames"),
         }
         if test == "Open Field":
             analysis.update({

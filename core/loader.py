@@ -13,6 +13,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 # Columns we expect in a LocationOutput file. The program still runs if some
@@ -26,10 +27,22 @@ SETTINGS_COLUMNS = [
     "Window_Weight",
     "Window_Size",
     "Start_Frame",
+    # Added by this app's own tracking (not in ezTrack's files).
+    "Method",
+    "Downsample",
+    "Crop",
+    "Reference_Frames",
+    "Exclusion_Shapes",
+    "Scale_px",
+    "Scale_cm",
+    "Scale_cm_per_px",
+    "Video_FPS",
 ]
 
-# True/False columns that are not regions (Use_Window is a tracking setting).
-NON_REGION_BOOL_COLUMNS = {"ROI_transition", "Use_Window"}
+# True/False columns that are not regions (Use_Window is a tracking setting;
+# Frame_Unreadable marks video frames that couldn't be read, and Frame_Filled
+# marks those given a position by gap filling).
+NON_REGION_BOOL_COLUMNS = {"ROI_transition", "Use_Window", "Frame_Unreadable", "Frame_Filled"}
 
 _BOOL_TEXT = {"true": True, "false": False, "1": True, "0": False}
 
@@ -56,6 +69,19 @@ class TrackingData:
     @property
     def n_frames(self) -> int:
         return len(self.df)
+
+    @property
+    def unreadable(self) -> np.ndarray:
+        """Per-frame True where the video frame couldn't be read and has no
+        position (gap-filled frames count as readable). Files without a
+        Frame_Unreadable column (e.g. ezTrack's own) are all readable."""
+        n = len(self.df)
+        if "Frame_Unreadable" not in self.df.columns:
+            return np.zeros(n, dtype=bool)
+        bad = self.df["Frame_Unreadable"].to_numpy(dtype=bool)
+        if "Frame_Filled" in self.df.columns:
+            bad = bad & ~self.df["Frame_Filled"].to_numpy(dtype=bool)
+        return bad
 
 
 def _to_bool(series: pd.Series) -> pd.Series:

@@ -56,10 +56,34 @@ def held_entries(roles: np.ndarray, min_frames: int) -> list[tuple[str, int]]:
     return held_states(roles, min_frames)[1:]
 
 
+def carry_over_gaps(labels: np.ndarray, unreadable: np.ndarray) -> np.ndarray:
+    """`labels` with each unreadable frame given the label of the last
+    readable frame before it (frames before the first readable one take its
+    label). Used for entries and crossings, so a gap of unreadable video
+    frames neither creates nor breaks up an entry."""
+    if not unreadable.any() or unreadable.all():
+        return labels
+    idx = np.where(unreadable, -1, np.arange(len(labels)))
+    np.maximum.accumulate(idx, out=idx)
+    idx[idx < 0] = int(np.argmax(~unreadable))
+    return labels[idx]
+
+
+def _roles_and_gaps(data: TrackingData, roles: dict[str, str]):
+    """Per-frame roles with unreadable frames marked "unreadable" (so they
+    count toward no region's time), the unreadable mask, and the roles with
+    the place before each gap carried through it (for the entry rule)."""
+    bad = data.unreadable
+    per_frame = frame_roles(data, roles)
+    if bad.any():
+        per_frame = np.where(bad, "unreadable", per_frame)
+    return per_frame, bad, carry_over_gaps(per_frame, bad)
+
+
 def _epm_events(data: TrackingData, roles: dict[str, str], min_entry_frames: int):
     """Per-frame roles and the session's entries [(role, start frame), ...]."""
-    per_frame = frame_roles(data, roles)
-    return per_frame, held_entries(per_frame, min_entry_frames)
+    per_frame, _bad, carried = _roles_and_gaps(data, roles)
+    return per_frame, held_entries(carried, min_entry_frames)
 
 
 def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float) -> dict:
@@ -156,6 +180,7 @@ def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
     df = data.df
     n = len(df)
     duration_s = n / fps if fps else float("nan")
+    bad = data.unreadable
 
     dist_cm = float(df["Distance_cm"].sum()) if "Distance_cm" in df else float("nan")
     dist_px = float(df["Distance_px"].sum()) if "Distance_px" in df else float("nan")
@@ -168,7 +193,12 @@ def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
         "Duration_min": round(duration_s / 60.0, 3),
         "TotalDistance_cm": round(dist_cm, 2),
         "TotalDistance_px": round(dist_px, 1),
+        # Video frames that couldn't be read: no position, so they add no
+        # time, distance or entries (always 0 for ezTrack's own files).
+        "UnreadableFrames": int(bad.sum()),
     }
+    if "Frame_Filled" in df.columns:
+        out["FilledFrames"] = int(df["Frame_Filled"].sum())
 
     # Mean speed over the whole session.
     if duration_s and not np.isnan(dist_cm):
@@ -188,10 +218,11 @@ def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
             out[f"Time_ROI_{safe}_s"] = round(frames_in / fps, 2) if fps else float("nan")
             out[f"Percent_ROI_{safe}"] = round(100.0 * frames_in / n, 1) if n else 0.0
 
-    # Zone entries: count rising edges (False -> True) per zone.
+    # Zone entries: count rising edges (False -> True) per zone, with the
+    # zone carried through unreadable gaps so a gap isn't a new entry.
     for zone in data.regions:
-        entries = int(((~df[zone].shift(1, fill_value=False)) & df[zone]).sum())
-        out[f"Entries_{zone}"] = entries
+        z = carry_over_gaps(df[zone].to_numpy(dtype=bool), bad)
+        out[f"Entries_{zone}"] = int(z[0]) + int((z[1:] & ~z[:-1]).sum()) if n else 0
 
     # ROI transitions flagged in the data.
     if "ROI_transition" in df.columns:
@@ -272,7 +303,7 @@ def _of_events(
     the frames where counted center entries start, and the counted crossings
     as (start frame, kind, average speed, peak speed). Kind is "lr", "tb", or
     "adj"; a crossing starts when the animal leaves side A for the center."""
-    per_frame = frame_roles(data, roles)
+    per_frame, bad, _carried = _roles_and_gaps(data, roles)
     in_center = per_frame == "center"
     ev = {"n": len(per_frame), "in_center": in_center,
           "periphery": per_frame == "periphery", "place": None,
@@ -280,7 +311,8 @@ def _of_events(
 
     # Center entries, with the debounce: re-entering within the minimum gap
     # after leaving continues the same visit.
-    states = held_states(np.where(in_center, "center", "out"), min_entry_frames)
+    states = held_states(carry_over_gaps(np.where(in_center, "center", "out"), bad),
+                         min_entry_frames)
     min_gap = min_between_entries_s * fps
     last_exit = None
     for k, (label, start) in enumerate(states):
@@ -314,7 +346,7 @@ def _of_events(
     ev["place"] = place
 
     # Crossings: side A -> center -> side B, using held places.
-    states = held_states(place, min_entry_frames)
+    states = held_states(carry_over_gaps(place, bad), min_entry_frames)
     speed = None
     if "Distance_cm" in data.df.columns:
         # Per-frame speed, smoothed so a one-frame tracking jump can't set the peak.
@@ -462,6 +494,7 @@ def binned_metrics(
     df["_bin"] = (np.arange(n) // frames_per_bin).astype(int)
 
     zones = data.regions
+    df["_unreadable"] = data.unreadable
     rows = []
     for bin_idx, g in df.groupby("_bin"):
         gframes = len(g)
@@ -474,6 +507,7 @@ def binned_metrics(
             "Frames": gframes,
             "Distance_cm": round(dist_cm, 2),
             "MeanSpeed_cm_s": round(dist_cm / bin_dur_s, 3) if bin_dur_s else float("nan"),
+            "UnreadableFrames": int(g["_unreadable"].sum()),
         }
         for zone in zones:
             frames_in = int(g[zone].sum())
@@ -485,7 +519,8 @@ def binned_metrics(
 
 
 _BASICS = ("Duration_min", "TotalDistance_cm", "MeanSpeed_cm_s")
-_DETAILS = ("Frames", "FPS", "Duration_s", "TotalDistance_px")
+_DETAILS = ("Frames", "FPS", "Duration_s", "TotalDistance_px", "UnreadableFrames",
+            "FilledFrames")
 
 
 def summary_column_groups(columns) -> dict[str, list[str]]:

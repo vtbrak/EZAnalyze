@@ -30,6 +30,10 @@ DEFAULTS: dict = {
     "min_center_seconds_adjoining": 0.5,
     # Crossing speed is smoothed with a rolling mean over this many frames.
     "speed_smoothing_frames": 5,
+    # Gap filling for unreadable video frames (ROADMAP §12, Stage 4): off by
+    # default; when on, gaps up to this many frames get straight-line positions.
+    "fill_gaps": False,
+    "fill_gaps_max_frames": 5,
     # Plot style.
     "plot": {
         "point_size": 4.0,  # float so sizes like 2.5 survive a reload

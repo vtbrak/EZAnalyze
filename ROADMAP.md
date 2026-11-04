@@ -980,11 +980,18 @@ test) before each commit.
   dropped wire removal and the unrecorded exclusion shapes and random
   reference frames. We keep one more row than ezTrack (it drops the last
   frame). Tracking speed: ~6,000 frames in 30–45 s on this Mac.
-- [ ] **C3. Analysis for unreadable frames:** loader treats `Frame_Unreadable`
+- [x] **C3. Analysis for unreadable frames:** loader treats `Frame_Unreadable`
   as a non-region column; unreadable frames add no time, distance or entries
   (entry rule carries the previous place through a gap); Summary and Time Bins
   report unreadable counts; plots skip them; optional gap filling (off by
   default, max gap saved, recorded in Settings).
+  Built 2026-11-04, tested by `tests/test_unreadable.py` (gaps injected into
+  both sample files: entries and crossings unchanged, time and distance
+  reduced only by the gap). Gap filling lives in `core/gaps.py` (config
+  `fill_gaps`, `fill_gaps_max_frames`; works on a copy, filled rows marked
+  `Frame_Filled`); its on-screen control comes with the C4 settings panel.
+  Summary gains `UnreadableFrames` (and `FilledFrames` when filling), in the
+  Details group; Time Bins gain `UnreadableFrames`.
 - [ ] **C4. Main window re-layout (GUI review items 1–5, 10):** settings panel,
   file list above the tabs with Type and Status, Remove, Select all,
   Track/Analyze/Export on the selection with counts, multi-select, About

@@ -35,6 +35,9 @@ import setup_window
 setup_window.show_info = gui.show_info
 setup_window.show_warning = gui.show_warning
 setup_window.ask_yes_no = gui.ask_yes_no
+import playback_window
+playback_window.show_info = gui.show_info
+playback_window.show_warning = gui.show_warning
 gui.BehaviorTrackerApp.wait_window = lambda self, w=None: None
 E = os.path.join(ROOT, "EPM.csv"); O = os.path.join(ROOT, "Open Field.csv")
 if not (os.path.exists(E) and os.path.exists(O)):
@@ -118,8 +121,17 @@ check("workbook sheets", list(sheets) == ["Summary", "Time Bins", "Settings"])
 check("exported Time Bins sheet has the EPM measures", "EPM_AnxietyIndex" in sheets["Time Bins"].columns)
 names = set(sheets["Settings"]["Setting"])
 check("settings sheet lists entry rule, bins, plot style",
-      {"Min entry (frames)", "Bin size (s)", "Point size", "Colormap", "Add background"} <= names)
+      {"Min entry (frames)", "Bin size (s)", "Point size", "Colormap", "Background"} <= names)
 check("export finished message", "Export finished" in log)
+# A CSV without a reference image: the choice falls back with a note; an
+# ezTrack file (no recorded crop) can't be played back.
+app.path_bg_var.set("Reference image"); app.bg_var.set("Reference image"); app._redraw_plots()
+check("no reference image: note shown, plots still drawn",
+      "no reference" in app.path_bg_note.cget("text") and "no reference" in app.heat_bg_note.cget("text"))
+log.clear(); app.play_video(); app.update()
+check("ezTrack CSV without its video or crop can't be played back",
+      "This file can't be played back" in log)
+app.path_bg_var.set("None"); app.bg_var.set("None"); app._on_background()
 
 # Videos (ezTrack's short practice clip, if present): added as "Needs setup",
 # set up in the setup window, skipped by Analyze until tracked.
@@ -312,6 +324,44 @@ if os.path.exists(CLIP):
           "Tracking stopped" in log and app._runner is None
           and app.file_tree.item("0", "values")[2] == "Not analyzed")
     log.clear(); app.analyze(); app.update()
+    # C8: reference background, playback, saved video.
+    e0 = app.files[0]
+    app.path_bg_var.set("Reference image"); app.bg_var.set("Reference image")
+    p = app._plot_settings()
+    pf, hf = app._path_fig(e0, p), app._heat_fig(e0, p) if e0.analyzed else (None, None)
+    check("Path on the reference image: image drawn, whole image shown, PNG not transparent",
+          pf.axes[0].images and pf.opaque and pf.axes[0].get_xlim()[1] >= e0.data.df.X.max()
+          and pf.axes[0].get_ylim()[0] > pf.axes[0].get_ylim()[1]
+          and abs(pf.axes[0].get_xlim()[1] - (app._reference(e0).shape[1] - 0.5)) < 1e-6)
+    hf = app._heat_fig(e0, p)
+    check("Heatmap on the reference image (gray image under the cells)",
+          len(hf.axes[0].images) == 2 and hf.opaque)
+    app.path_bg_var.set("None"); app.bg_var.set("None")
+    log.clear(); app._set_selection([0]); app.play_video(); app.update()
+    pw = [w for w in app.winfo_children() if isinstance(w, gui.PlaybackWindow)]
+    check("Play video opens the playback window", len(pw) == 1 and not log)
+    pw = pw[0]; pw.update(); pw.show(10); pw.update()
+    check("playback shows the frame with its info",
+          pw.canvas._array is not None and "Frame 11 of" in pw.info.cget("text")
+          and pw.canvas._array.shape[:2] == app._reference(e0).shape[:2])
+    pw.speed_var.set("8x"); pw.play()
+    t = time.time()
+    while pw.playing and time.time() - t < 20:
+        pw.update(); time.sleep(0.01)
+    check("plays to the end and stops", not pw.playing and pw.row == pw.pb.n_frames - 1)
+    pw.step(-5); check("frame step back", pw.row == pw.pb.n_frames - 6)
+    from core.playback import tracked_video_path
+    tv = tracked_video_path(CLIP); outs.append(tv); log.clear()
+    pw.save_video()
+    t = time.time()
+    while pw._save is not None and time.time() - t < 60:
+        pw.update(); time.sleep(0.02)
+    import cv2
+    cap = cv2.VideoCapture(tv); nf = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    vfps = cap.get(cv2.CAP_PROP_FPS); cap.release()
+    check(f"saved _tracked.mp4: every frame, at the video's frame rate ({nf} frames, {vfps:.2f} fps)",
+          "Video saved" in log and nf == pw.pb.n_frames and abs(vfps - v.info.fps) < 0.05)
+    pw.close(); app.update()
     check("a tracked video analyzes", app.files[0].analyzed
           and app.file_tree.item("0", "values")[2] == "Analyzed")
     app.files[0].video.steps_done.discard("scale"); app.files[0].summary = None

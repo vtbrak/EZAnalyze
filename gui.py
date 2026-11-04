@@ -73,13 +73,20 @@ from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_vi
 from core.video_setup import VideoSetup
 from core.tracking import TrackingParams
 from core.track_run import TrackRunner, existing_output, make_job
+from core.playback import load_reference, open_playback
 from about import AboutDialog
 from region_dialog import RegionDialog
 from setup_window import SetupWindow, default_session_minutes
+from playback_window import PlaybackWindow
 from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
 
 HEATMAP_CMAPS = ["inferno", "viridis", "magma", "plasma", "hot", "jet", "gray"]
+PATH_BACKGROUNDS = {"none": "None", "reference": "Reference image"}
+HEATMAP_BACKGROUNDS = {"none": "None", "color": "Flat color", "reference": "Reference image"}
+NO_REFERENCE_TIP = ("Reference image: the empty arena behind the plot. Only files "
+                    "tracked in this app have one (<name>_reference.png beside the "
+                    "tracking file); for others the plot has no background.")
 
 # Summary-table column groups, in checkbox order (keys match summary_column_groups).
 SUMMARY_GROUP_LABELS = {
@@ -150,6 +157,14 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.minsize(900, 600)
 
         self.config_data = load_config()
+        p = self.config_data["plot"]
+        if p["heatmap_bg_mode"] not in HEATMAP_BACKGROUNDS:
+            p["heatmap_bg_mode"] = "none"
+        if p["heatmap_bg_mode"] == "none" and p["heatmap_background"]:
+            p["heatmap_bg_mode"] = "color"  # from before the background choice
+        if p["path_background"] not in PATH_BACKGROUNDS:
+            p["path_background"] = "none"
+        self._references: dict[str, object] = {}    # tracking file -> reference image
 
         # The file list (not saved: it resets when the app closes).
         self.files: list[FileEntry] = []
@@ -451,9 +466,26 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         )
         self.color_swatch.pack(side=tk.LEFT, padx=(4, 0))
 
-        for var in (self.size_var, self.alpha_var):
+        ttk.Label(bar, text="Background:").pack(side=tk.LEFT, padx=(12, 0))
+        self.path_bg_var = tk.StringVar(value=PATH_BACKGROUNDS[p["path_background"]])
+        box = ttk.Combobox(bar, textvariable=self.path_bg_var, state="readonly", width=15,
+                           values=list(PATH_BACKGROUNDS.values()))
+        box.pack(side=tk.LEFT, padx=(4, 0))
+        Tooltip(box, NO_REFERENCE_TIP)
+        self.path_bg_note = ttk.Label(bar, foreground="gray")
+        self.path_bg_note.pack(side=tk.LEFT, padx=(6, 0))
+        self._play_button(bar)
+
+        for var in (self.size_var, self.alpha_var, self.path_bg_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
         self._on_color_mode(redraw=False)
+
+    def _play_button(self, bar) -> None:
+        btn = ttk.Button(bar, text="Play video…", command=self.play_video)
+        btn.pack(side=tk.RIGHT)
+        Tooltip(btn, "Play the selected file's video with its tracked position drawn "
+                     "on, to check the tracking. Needs the video in the same folder as "
+                     "the tracking file.")
 
     def _build_heatmap_controls(self, parent):
         """Heatmap-tab styling row. Changes redraw the plots."""
@@ -476,15 +508,15 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             state="readonly", width=10,
         ).pack(side=tk.LEFT, padx=(4, 16))
 
-        self.bg_var = tk.BooleanVar(value=p["heatmap_background"])
-        bg_check = ttk.Checkbutton(
-            bar, text="Add background", variable=self.bg_var,
-            command=self._on_background,
-        )
-        bg_check.pack(side=tk.LEFT, padx=(0, 8))
-        Tooltip(bg_check, "Fill every cell the animal never entered with one flat "
-                          "color. Off: those cells are left empty, and transparent "
-                          "in a saved PNG.")
+        ttk.Label(bar, text="Background:").pack(side=tk.LEFT)
+        self.bg_var = tk.StringVar(value=HEATMAP_BACKGROUNDS[p["heatmap_bg_mode"]])
+        bg_box = ttk.Combobox(bar, textvariable=self.bg_var, state="readonly", width=15,
+                              values=list(HEATMAP_BACKGROUNDS.values()))
+        bg_box.pack(side=tk.LEFT, padx=(4, 8))
+        bg_box.bind("<<ComboboxSelected>>", lambda _e: self._on_background())
+        Tooltip(bg_box, "What shows in cells the animal never entered. None: empty "
+                        "(transparent in a saved PNG). Flat color: one color, easy to "
+                        "recolor in an image editor. " + NO_REFERENCE_TIP)
         self.bg_color = p["heatmap_bg_color"]
         self.bg_btn = ttk.Button(bar, text="Background color…", command=self._pick_bg_color)
         self.bg_btn.pack(side=tk.LEFT)
@@ -492,6 +524,9 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             bar, width=2, background=self.bg_color, relief=tk.SOLID, borderwidth=1
         )
         self.bg_swatch.pack(side=tk.LEFT, padx=(4, 0))
+        self.heat_bg_note = ttk.Label(bar, foreground="gray")
+        self.heat_bg_note.pack(side=tk.LEFT, padx=(6, 0))
+        self._play_button(bar)
 
         for var in (self.hbins_var, self.cmap_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
@@ -659,9 +694,28 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         p["heatmap_cmap"] = self.cmap_var.get() or p["heatmap_cmap"]
         p["color_by_speed"] = bool(self.speed_var.get())
         p["point_color"] = self.point_color
-        p["heatmap_background"] = bool(self.bg_var.get())
+        p["heatmap_bg_mode"] = self._choice(HEATMAP_BACKGROUNDS, self.bg_var.get())
+        p["heatmap_background"] = p["heatmap_bg_mode"] == "color"
+        p["path_background"] = self._choice(PATH_BACKGROUNDS, self.path_bg_var.get())
         p["heatmap_bg_color"] = self.bg_color
         return p
+
+    @staticmethod
+    def _choice(choices: dict, label: str) -> str:
+        return next((k for k, v in choices.items() if v == label), "none")
+
+    def _reference(self, entry) -> "np.ndarray | None":
+        """The file's reference image (cached), or None if it has none."""
+        if entry is None or entry.data is None:
+            return None
+        key = entry.data.path
+        if key not in self._references:
+            try:
+                self._references[key] = load_reference(entry.data)
+            except Exception:
+                traceback.print_exc()
+                self._references[key] = None
+        return self._references[key]
 
     def _schedule_redraw(self) -> None:
         """Redraw plots shortly after the last change, not on every keystroke."""
@@ -675,6 +729,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         entry = self._selected_entry()
         if entry is None or not entry.analyzed:
             return
+        missing = "(this file has no reference image)" if self._reference(entry) is None else ""
+        self.path_bg_note.configure(
+            text=missing if p["path_background"] == "reference" else "")
+        self.heat_bg_note.configure(
+            text=missing if p["heatmap_bg_mode"] == "reference" else "")
         try:
             self._show_figure(self.path_area, self._path_fig(entry, p))
             self._show_figure(self.heat_area, self._heat_fig(entry, p))
@@ -683,21 +742,22 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     # The same builders draw the on-screen plots and the exported images, so
     # exports always match what's shown.
-    @staticmethod
-    def _path_fig(entry, p):
+    def _path_fig(self, entry, p):
         return path_figure(
             entry.data,
             color_by_speed=p["color_by_speed"],
             point_size=p["point_size"],
             point_color=p["point_color"],
             alpha=p["alpha"],
+            reference=self._reference(entry) if p["path_background"] == "reference" else None,
         )
 
-    @staticmethod
-    def _heat_fig(entry, p):
+    def _heat_fig(self, entry, p):
         return heatmap_figure(
             entry.data, bins=p["heatmap_bins"], cmap=p["heatmap_cmap"],
-            background=p["heatmap_bg_color"] if p["heatmap_background"] else None,
+            background=p["heatmap_bg_color"] if p["heatmap_bg_mode"] == "color" else None,
+            reference=(self._reference(entry) if p["heatmap_bg_mode"] == "reference"
+                       else None),
         )
 
     def _on_color_mode(self, redraw: bool = True) -> None:
@@ -708,8 +768,9 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self._schedule_redraw()
 
     def _on_background(self, redraw: bool = True) -> None:
-        # The color only matters while the background is on.
-        self.bg_btn.configure(state=tk.NORMAL if self.bg_var.get() else tk.DISABLED)
+        # The color only matters for a flat-color background.
+        color = self.bg_var.get() == HEATMAP_BACKGROUNDS["color"]
+        self.bg_btn.configure(state=tk.NORMAL if color else tk.DISABLED)
         if redraw:
             self._schedule_redraw()
 
@@ -1328,7 +1389,31 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.files = []
         self._sel = []
         self._selected = None
+        self._references.clear()
         self._refresh()
+
+    def play_video(self) -> None:
+        """Open the playback window for the file the tabs show."""
+        entry = self._selected_entry()
+        if entry is None:
+            show_info(self, "No file selected", "Select a file in the list first.")
+            return
+        if entry.data is None:
+            show_info(self, "Not tracked yet",
+                      f"{entry.label} hasn't been tracked yet, so there's nothing to "
+                      "play back. Set it up and click Track first.")
+            return
+        try:
+            pb = open_playback(entry.data, entry.video.path if entry.video else None)
+        except ValueError as exc:
+            show_info(self, "This file can't be played back",
+                      f"This file can't be played back.\n\n{exc}")
+            return
+        try:
+            PlaybackWindow(self, pb, entry.label)
+        except Exception as exc:
+            traceback.print_exc()
+            show_error(self, "Playback couldn't start", f"Playback couldn't start.\n\n{exc}")
 
     def show_about(self) -> None:
         AboutDialog(self)
@@ -1562,6 +1647,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                     e.track_state = "tracking"
                     e.track_pct = int(100 * msg[2] / msg[3]) if msg[3] else 0
                 elif kind == "done":
+                    self._references.pop(msg[2].path, None)  # a new reference image
                     e.data, e.summary, e.bins = msg[2], None, None
                     e.track_state = ""
                 elif kind == "failed":
@@ -1729,11 +1815,16 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 "Transparency (alpha)": plot["alpha"],
                 "Color by speed": plot["color_by_speed"],
                 "Point color": plot["point_color"],
+                "Background": PATH_BACKGROUNDS[plot["path_background"]]
+                + ("" if plot["path_background"] != "reference"
+                   or self._reference(entry) is not None else " (none for this file)"),
             },
             "Heatmap": {
                 "Bins": plot["heatmap_bins"],
                 "Colormap": plot["heatmap_cmap"],
-                "Add background": plot["heatmap_background"],
+                "Background": HEATMAP_BACKGROUNDS[plot["heatmap_bg_mode"]]
+                + ("" if plot["heatmap_bg_mode"] != "reference"
+                   or self._reference(entry) is not None else " (none for this file)"),
                 "Background color": plot["heatmap_bg_color"],
             },
             "Tracking (from file)": dict(entry.data.settings),

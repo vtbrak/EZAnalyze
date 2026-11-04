@@ -61,6 +61,11 @@ DEFAULTS: dict = {
         # cells are transparent in a saved PNG).
         "heatmap_background": False,
         "heatmap_bg_color": "#cccccc",
+        # Backgrounds (ROADMAP §12, Stage 6): Path "none" / "reference";
+        # Heatmap "none" / "color" / "reference" (heatmap_background above
+        # is kept in step with "color" for older configs).
+        "path_background": "none",
+        "heatmap_bg_mode": "none",
     },
     # Which Summary-table column groups are shown on screen (export has all).
     "summary_groups": {

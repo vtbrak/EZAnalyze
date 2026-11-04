@@ -56,11 +56,12 @@ def _fit_columns(sheet, df: pd.DataFrame) -> None:
 
 
 def save_figure(fig: Figure, png_path: str) -> None:
-    """Save a plot as PNG with a transparent background."""
+    """Save a plot as PNG, with a transparent background unless it's drawn
+    over a reference image (`fig.opaque`)."""
     FigureCanvasAgg(fig)  # figures built for the GUI may not have a canvas yet
     # "tight" sizes the image to everything drawn (labels, colorbar, region
     # names outside the plot), so nothing is clipped at the edges.
-    fig.savefig(png_path, dpi=IMAGE_DPI, transparent=True,
+    fig.savefig(png_path, dpi=IMAGE_DPI, transparent=not getattr(fig, "opaque", False),
                 bbox_inches="tight", pad_inches=0.1)
 
 

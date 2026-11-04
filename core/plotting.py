@@ -20,7 +20,30 @@ from .regions import match_polygons
 FIGSIZE = (5, 4.5)
 
 
-def _draw_rois(ax, data: TrackingData, labels: bool = True) -> None:
+REFERENCE_ROI_COLOR = "#ffd23f"  # ROI lines on a reference image (gray on gray is hard to see)
+
+
+def _draw_reference(ax, reference: np.ndarray) -> tuple[float, float, float, float]:
+    """The arena's reference image in gray behind the plot, in the same pixels
+    as X/Y (pixel i covers i-0.5..i+0.5, top of the video at the top).
+    Returns its extent (left, right, bottom, top)."""
+    h, w = reference.shape[:2]
+    extent = (-0.5, w - 0.5, h - 0.5, -0.5)
+    ax.imshow(reference, cmap="gray", vmin=0, vmax=255, extent=extent, zorder=0,
+              interpolation="antialiased")
+    return extent
+
+
+def _show_whole(ax, extent) -> None:
+    """Widen the view to at least the whole reference image."""
+    left, right, bottom, top = extent
+    x0, x1 = ax.get_xlim()
+    y0, y1 = ax.get_ylim()  # inverted: y0 is the bottom (larger)
+    ax.set_xlim(min(x0, x1, left), max(x0, x1, right))
+    ax.set_ylim(max(y0, y1, bottom), min(y0, y1, top))
+
+
+def _draw_rois(ax, data: TrackingData, labels: bool = True, color: str = "0.6") -> None:
     """Overlay the ROI polygon outlines (closed), each labeled with its region."""
     if "ROI_coordinates" not in data.df.columns or not len(data.df):
         return
@@ -28,7 +51,7 @@ def _draw_rois(ax, data: TrackingData, labels: bool = True) -> None:
     for xs, ys in zip(rois.get("xs", []), rois.get("ys", [])):
         if xs and ys:
             ax.plot(list(xs) + [xs[0]], list(ys) + [ys[0]],
-                    color="0.6", linewidth=1.0, zorder=1)
+                    color=color, linewidth=1.0, zorder=1)
     if not labels:
         return
     for region, (cx, cy) in _label_points(match_polygons(data)).items():
@@ -60,7 +83,7 @@ def _label_points(polys: dict[str, tuple[list, list]]) -> dict[str, tuple[float,
     return points
 
 
-def _outside_labels(ax, polys: dict[str, tuple[list, list]]) -> None:
+def _outside_labels(ax, polys: dict[str, tuple[list, list]], boxed: bool = False) -> None:
     """Label each region *outside* every ROI, with a thin line to its region,
     so labels never cover the data (used on the heatmap).
 
@@ -116,6 +139,8 @@ def _outside_labels(ax, polys: dict[str, tuple[list, list]]) -> None:
             va="top" if direction[1] > 0.3 else "bottom" if direction[1] < -0.3 else "center",
             arrowprops=dict(arrowstyle="-", color="0.35", linewidth=0.8),
             annotation_clip=False,
+            bbox=(dict(boxstyle="round,pad=0.2", fc="white", ec="0.5", alpha=0.8)
+                  if boxed else None),
         )
 
     # Widen the view so the labels (and a little text room) are on the plot.
@@ -133,13 +158,18 @@ def path_figure(
     point_size: float = 4,
     point_color: str = "#1f77b4",
     alpha: float = 0.8,
+    reference: np.ndarray | None = None,
 ) -> Figure:
-    """Trajectory plot of X/Y points, colored by speed or a single solid color."""
+    """Trajectory plot of X/Y points, colored by speed or a single solid color.
+    With `reference` (the arena's reference image), the plot sits on it and
+    shows the whole image."""
     df = data.df
     fig = Figure(figsize=FIGSIZE, dpi=100, layout="constrained")
+    fig.opaque = reference is not None  # export: not transparent over an image
     ax = fig.add_subplot(111)
 
-    _draw_rois(ax, data)
+    extent = _draw_reference(ax, reference) if reference is not None else None
+    _draw_rois(ax, data, color=REFERENCE_ROI_COLOR if extent else "0.6")
 
     x = df["X"].to_numpy()
     y = df["Y"].to_numpy()
@@ -160,8 +190,13 @@ def path_figure(
     ax.set_title(f"Path — {data.name}")
     ax.set_xlabel("X (px)")
     ax.set_ylabel("Y (px)")
-    ax.set_aspect("equal", adjustable="datalim")
-    ax.invert_yaxis()  # image coordinates: origin top-left
+    if extent:
+        ax.set_xlim(extent[0], extent[1])
+        ax.set_ylim(extent[2], extent[3])  # image coordinates: origin top-left
+        ax.set_aspect("equal", adjustable="box")
+    else:
+        ax.set_aspect("equal", adjustable="datalim")
+        ax.invert_yaxis()  # image coordinates: origin top-left
     return fig
 
 
@@ -190,8 +225,13 @@ def heatmap_figure(
     bins: int = 50,
     cmap: str = "inferno",
     background: str | None = None,
+    reference: np.ndarray | None = None,
 ) -> Figure:
     """Occupancy heatmap: where the animal spent the most time.
+
+    With `reference` (the arena's reference image) it is drawn in gray under
+    the cells, so it shows only where the animal never went, and the plot
+    shows the whole image (`background` is then ignored).
 
     Cells the animal never entered are left empty, so they're transparent in a
     saved PNG. Pass `background` (a color) to fill those cells with one flat
@@ -200,7 +240,11 @@ def heatmap_figure(
     """
     df = data.df
     fig = Figure(figsize=FIGSIZE, dpi=100, layout="constrained")
+    fig.opaque = reference is not None
     ax = fig.add_subplot(111)
+    extent_ref = _draw_reference(ax, reference) if reference is not None else None
+    if extent_ref:
+        background = None
 
     x = df["X"].to_numpy()
     y = df["Y"].to_numpy()
@@ -246,8 +290,11 @@ def heatmap_figure(
     fig.colorbar(im, cax=cax, label="Frames in cell")
     fig.get_layout_engine().set(w_pad=0.1)
 
-    _draw_rois(ax, data, labels=False)
-    _outside_labels(ax, polys)
+    _draw_rois(ax, data, labels=False,
+               color=REFERENCE_ROI_COLOR if extent_ref else "0.6")
+    _outside_labels(ax, polys, boxed=extent_ref is not None)
+    if extent_ref:
+        _show_whole(ax, extent_ref)
 
     ax.set_title(f"Occupancy — {data.name}")
     ax.set_xlabel("X (px)")

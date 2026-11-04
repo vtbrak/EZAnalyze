@@ -1107,8 +1107,31 @@ test) before each commit.
   lock from the moment Track starts; Clear, Remove and Track are disabled
   during a run; closing the app mid-run asks first. A video added twice is
   tracked once and every copy gets the result.
-- [ ] **C8. Plots and playback:** reference-image background for Path and
+- [x] **C8. Plots and playback:** reference-image background for Path and
   Heatmap; playback window; optional `<name>_tracked.avi`.
+  Built 2026-11-04. **Backgrounds:** Path tab "Background: None / Reference
+  image"; Heatmap tab "Background: None / Flat color / Reference image"
+  (replaces the Add background checkbox; old configs with it on become Flat
+  color). Saved in config (`path_background`, `heatmap_bg_mode`). The
+  reference is `<name>_reference.png` beside a `<name>_LocationOutput.csv`,
+  so CSVs tracked earlier in this app get it too; files without one show
+  "(this file has no reference image)" and draw without it. On the
+  reference: gray image in the same pixels as X/Y, ROI lines yellow, the
+  whole image shown, exported PNG not transparent; heatmap labels get a
+  white box. The Settings sheet's "Add background" is now "Background".
+  **Playback** (`playback_window.py`, `core/playback.py`): **Play video…** on
+  the Path and Heatmap tabs, for any tracked file whose video is beside it
+  (File column) and that records its crop/downsampling (ezTrack's own CSVs
+  don't, so they're refused with the reason). Color frames prepared like
+  tracking's (downsample, crop); play/pause (space), frame steps, slider,
+  speed 0.25x–8x (frames skipped to keep time), red marker, 1 s trail,
+  region outlines, zoom/pan (the setup window's canvas); info line: frame,
+  time, video frame, region, or "unreadable frame (no position)".
+  **Save as video…** writes **`<name>_tracked.mp4`** (changed from `.avi`:
+  QuickTime can't open AVI; OpenCV's MPEG-4 `mp4v` writes on Mac and
+  Windows and plays in QuickTime and Windows' player) at the video's real
+  frame rate, with the marker, trail and regions as shown and time/region
+  text, in the background with Cancel; a cancelled save is deleted.
 - [ ] **C9. Finish:** exported Settings sheet gains tracking/scale/crop
   settings; README and INSTALL updates; PC test checklist.
 

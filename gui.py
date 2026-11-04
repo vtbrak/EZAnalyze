@@ -2,14 +2,15 @@
 Behavior Tracker — GUI front end.
 
 A tkinter desktop app over the `core` analysis engine. Files (added one at a
-time, by folder, or by drag-and-drop) build up a list in the Summary table.
-Nothing is computed until Analyze; the row selected in the Summary drives the
-Time Bins, Path, and Heatmap tabs.
+time, by folder, or by drag-and-drop) build up the file list, which stays
+visible above the tabs. Analyze and Export act on the selected files (Select
+all selects every one); the focused file drives the Time Bins, Path, and
+Heatmap tabs. Nothing is computed until Analyze.
 
-Test type, fps, and bin size can be changed after adding files, and lock at
-the first Analyze, so every file in a load is analyzed the same way. Clear
-empties the list and unlocks them. Plot styling (Path/Heatmap tabs) is never
-locked. The list itself is not saved between sessions.
+The settings in the left-hand panel can be changed after adding files, and
+lock at the first Analyze, so every file in a load is analyzed the same way.
+Clear empties the list and unlocks them. Plot styling (Path/Heatmap tabs) is
+never locked. The list itself is not saved between sessions.
 
 Run:  python gui.py     (or use the "Open Behavior Tracker.command" launcher)
 """
@@ -67,6 +68,7 @@ from core import (
 )
 from core.export import output_paths, save_figure, settings_table, write_analysis_workbook
 from core.gaps import fill_gaps
+from about import AboutDialog
 from region_dialog import RegionDialog
 from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
@@ -85,6 +87,8 @@ SUMMARY_GROUP_LABELS = {
 
 NOT_ANALYZED = "Not analyzed"
 ANALYZED = "Analyzed"
+# Status text color in the file list (readable on light and dark themes).
+STATUS_COLORS = {"analyzed": "#2e7d32", "waiting": "#b26a00", "failed": "#c62828"}
 
 LOCKED_TIP = (
     "Locked because files have been analyzed, so every file in this load uses "
@@ -106,19 +110,24 @@ class FileEntry:
     def analyzed(self) -> bool:
         return self.summary is not None
 
+    @property
+    def kind(self) -> str:
+        return "CSV"
+
 
 class BehaviorTrackerApp(tk.Tk, _DnDMixin):
     def __init__(self):
         super().__init__()
         self.title("Behavior Tracker")
         self.geometry("1080x720")
-        self.minsize(940, 560)  # widest toolbar row is ~900 px
+        self.minsize(900, 600)
 
         self.config_data = load_config()
 
         # The file list (not saved: it resets when the app closes).
         self.files: list[FileEntry] = []
-        self._selected: int | None = None           # index into self.files
+        self._selected: int | None = None           # file the tabs show (index)
+        self._sel: list[int] = []                   # selected files (indices)
         self._summary_df = None                     # last Summary table (for export)
         self._redraw_job = None                     # pending debounced plot redraw
 
@@ -135,82 +144,128 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     # ------------------------------------------------------------------ UI
     def _build_controls(self):
-        bar = ttk.Frame(self, padding=8)
+        # Toolbar, in working order: files | (video steps) | act on the selection.
+        bar = ttk.Frame(self, padding=(8, 8, 8, 6))
         bar.pack(side=tk.TOP, fill=tk.X)
-
-        # Row 1: files and analysis.
-        files_bar = ttk.Frame(self, padding=(8, 8, 8, 4))
-        files_bar.pack(side=tk.TOP, fill=tk.X)
-        add_file = ttk.Button(files_bar, text="Add File…", command=self.open_file)
+        add_file = ttk.Button(bar, text="Add files…", command=self.open_file)
         add_file.pack(side=tk.LEFT)
-        Tooltip(add_file, "Add one CSV to the list. You can also drag files or "
+        Tooltip(add_file, "Add CSV files to the list. You can also drag files or "
                           "folders onto the window.")
-        add_folder = ttk.Button(files_bar, text="Add Folder…", command=self.open_folder)
+        add_folder = ttk.Button(bar, text="Add folder…", command=self.open_folder)
         add_folder.pack(side=tk.LEFT, padx=(6, 0))
         Tooltip(add_folder, "Add every CSV in a folder to the list.")
-        self.clear_btn = ttk.Button(files_bar, text="Clear", command=self.clear_files)
-        self.clear_btn.pack(side=tk.LEFT, padx=(6, 16))
-        Tooltip(self.clear_btn, "Clears the file list and unlocks Test, frame rate, "
-                                "and bin size so you can choose them again (e.g. "
-                                "after analyzing one file, before running a folder).")
+        remove = ttk.Button(bar, text="Remove", command=self.remove_selected)
+        remove.pack(side=tk.LEFT, padx=(6, 0))
+        Tooltip(remove, "Take the selected files out of the list. The files "
+                        "themselves aren't touched.")
+        self.clear_btn = ttk.Button(bar, text="Clear", command=self.clear_files)
+        self.clear_btn.pack(side=tk.LEFT, padx=(6, 0))
+        Tooltip(self.clear_btn, "Clears the file list and unlocks the settings so you "
+                                "can choose them again (e.g. after analyzing one file, "
+                                "before running a folder).")
+        ttk.Separator(bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
 
-        self.analyze_sel_btn = ttk.Button(
-            files_bar, text="Analyze Selected", command=lambda: self.analyze(True)
-        )
-        self.analyze_sel_btn.pack(side=tk.LEFT)
-        Tooltip(self.analyze_sel_btn, "Analyze the file selected in the Summary table.")
-        self.analyze_all_btn = ttk.Button(
-            files_bar, text="Analyze All", command=lambda: self.analyze(False)
-        )
-        self.analyze_all_btn.pack(side=tk.LEFT, padx=(6, 0))
-        Tooltip(self.analyze_all_btn, "Analyze every file in the list.")
+        self.select_all_btn = ttk.Button(bar, text="Select all", width=10,
+                                         command=self.toggle_select_all)
+        self.select_all_btn.pack(side=tk.LEFT)
+        Tooltip(self.select_all_btn, "Select every file in the list, so Analyze and "
+                                     "Export act on all of them. Ctrl+A (Cmd+A on a "
+                                     "Mac) in the list does the same.")
+        self.analyze_btn = ttk.Button(bar, text="Analyze", width=12, command=self.analyze)
+        self.analyze_btn.pack(side=tk.LEFT, padx=(6, 0))
+        Tooltip(self.analyze_btn, "Analyze the selected files. The number shows how "
+                                  "many are selected.")
+        self.export_btn = ttk.Button(bar, text="Export", width=12, command=self.export)
+        self.export_btn.pack(side=tk.LEFT, padx=(6, 0))
+        Tooltip(self.export_btn, "Export the selected files that have been analyzed. "
+                                 "Each gets <name>_analysis.xlsx, <name>_path.png, and "
+                                 "<name>_heatmap.png next to its CSV (existing files "
+                                 "are overwritten).")
+        about = ttk.Button(bar, text="About", command=self.show_about)
+        about.pack(side=tk.RIGHT)
+        Tooltip(about, "Credits, citation, and license.")
 
-        self.export_all_btn = ttk.Button(
-            files_bar, text="Export All", command=lambda: self.export(False)
+        self.status = tk.StringVar()
+        status_bar = ttk.Label(
+            self, textvariable=self.status, relief=tk.SUNKEN, anchor=tk.W, padding=4
         )
-        self.export_all_btn.pack(side=tk.RIGHT)
-        Tooltip(self.export_all_btn, "Export every analyzed file. Each gets "
-                                     "<name>_analysis.xlsx, <name>_path.png, and "
-                                     "<name>_heatmap.png next to its CSV (existing "
-                                     "files are overwritten).")
-        self.export_sel_btn = ttk.Button(
-            files_bar, text="Export Selected", command=lambda: self.export(True)
-        )
-        self.export_sel_btn.pack(side=tk.RIGHT, padx=(0, 6))
-        Tooltip(self.export_sel_btn, "Export the file selected in the Summary table: "
-                                     "<name>_analysis.xlsx, <name>_path.png, and "
-                                     "<name>_heatmap.png next to its CSV (existing "
-                                     "files are overwritten).")
+        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
-        # Row 2: the settings locked per load, plus region roles.
-        bar = ttk.Frame(self, padding=(8, 0, 8, 8))
-        bar.pack(side=tk.TOP, fill=tk.X)
+        # Body: settings panel on the left; file list over the tabs on the right.
+        body = ttk.Frame(self)
+        body.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        body.columnconfigure(1, weight=1)
+        body.rowconfigure(0, weight=1)
+        self.settings_panel = ttk.Frame(body, padding=(8, 0, 4, 8))
+        self.settings_panel.grid(row=0, column=0, sticky="ns")
+        self._build_settings_panel(self.settings_panel)
+        self.content = ttk.PanedWindow(body, orient=tk.VERTICAL)
+        self.content.grid(row=0, column=1, sticky="nsew", padx=(4, 8), pady=(0, 8))
+        self._build_file_list(self.content)
 
-        ttk.Label(bar, text="Test:").pack(side=tk.LEFT)
+    def _setting_row(self, section, row: int, label: str, widget) -> None:
+        ttk.Label(section, text=label, wraplength=130, justify=tk.LEFT).grid(
+            row=row, column=0, sticky="w", pady=2)
+        widget.grid(row=row, column=1, sticky="e", padx=(8, 0), pady=2)
+        section.columnconfigure(0, weight=1)
+
+    def _build_settings_panel(self, panel) -> None:
+        """Settings in sections. The analysis settings lock at the first Analyze
+        of a load (so every file is analyzed the same way) and unlock at Clear."""
+        self.lock_note = ttk.Label(panel, text="Locked. Clear to change.",
+                                   foreground="gray")
+
+        # Session.
+        self.session_section = ttk.LabelFrame(panel, text="Session", padding=6)
         if self.config_data["test_type"] not in TEST_TYPES:  # hand-edited config
             self.config_data["test_type"] = TEST_TYPES[0]
         self.test_var = tk.StringVar(value=self.config_data["test_type"])
         self.test_box = ttk.Combobox(
-            bar, textvariable=self.test_var, values=TEST_TYPES,
+            self.session_section, textvariable=self.test_var, values=TEST_TYPES,
             state="readonly", width=17,
         )
-        self.test_box.pack(side=tk.LEFT, padx=(4, 16))
         self.test_box.bind("<<ComboboxSelected>>", lambda _e: self._on_test_type())
-
-        ttk.Label(bar, text="Frame rate (fps):").pack(side=tk.LEFT)
+        self._setting_row(self.session_section, 0, "Test", self.test_box)
         self.fps_var = tk.StringVar(value=f"{self.config_data['fps']:g}")
-        self.fps_entry = ttk.Entry(bar, textvariable=self.fps_var, width=6)
-        self.fps_entry.pack(side=tk.LEFT, padx=(4, 16))
-
-        ttk.Label(bar, text="Bin size (s):").pack(side=tk.LEFT)
+        self.fps_entry = ttk.Entry(self.session_section, textvariable=self.fps_var, width=6)
+        self._setting_row(self.session_section, 1, "Frame rate (fps)", self.fps_entry)
         self.bin_var = tk.StringVar(value=f"{self.config_data['bin_seconds']:g}")
-        self.bin_entry = ttk.Entry(bar, textvariable=self.bin_var, width=6)
-        self.bin_entry.pack(side=tk.LEFT, padx=(4, 16))
+        self.bin_entry = ttk.Entry(self.session_section, textvariable=self.bin_var, width=6)
+        self._setting_row(self.session_section, 2, "Bin size (s)", self.bin_entry)
 
-        ttk.Label(bar, text="Min entry (frames):").pack(side=tk.LEFT)
+        # Entries and regions.
+        self.entries_section = ttk.LabelFrame(panel, text="Entries and regions", padding=6)
         self.entry_var = tk.StringVar(value=str(self.config_data["min_entry_frames"]))
-        self.entry_entry = ttk.Entry(bar, textvariable=self.entry_var, width=4)
-        self.entry_entry.pack(side=tk.LEFT, padx=(4, 16))
+        self.entry_entry = ttk.Entry(self.entries_section, textvariable=self.entry_var, width=6)
+        self._setting_row(self.entries_section, 0, "Min entry (frames)", self.entry_entry)
+        regions_btn = ttk.Button(self.entries_section, text="Regions…",
+                                 command=self.open_region_dialog)
+        regions_btn.grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
+        Tooltip(regions_btn, "Choose what each region in the files represents "
+                             "(open arm, center, ...). Saved for next time.")
+
+        # Open Field thresholds, shown only when the test is Open Field.
+        self.of_bar = ttk.LabelFrame(panel, text="Open Field", padding=6)
+        self.gap_var = tk.StringVar(value=f"{self.config_data['min_seconds_between_entries']:g}")
+        self.gap_entry = ttk.Entry(self.of_bar, textvariable=self.gap_var, width=6)
+        self._setting_row(self.of_bar, 0, "Min gap between center entries (s)", self.gap_entry)
+        self.adj_var = tk.StringVar(value=f"{self.config_data['min_center_seconds_adjoining']:g}")
+        self.adj_entry = ttk.Entry(self.of_bar, textvariable=self.adj_var, width=6)
+        self._setting_row(self.of_bar, 1, "Min center time, adjoining (s)", self.adj_entry)
+        self.smooth_var = tk.StringVar(value=str(self.config_data["speed_smoothing_frames"]))
+        self.smooth_entry = ttk.Entry(self.of_bar, textvariable=self.smooth_var, width=6)
+        self._setting_row(self.of_bar, 2, "Speed smoothing (frames)", self.smooth_entry)
+
+        # Unreadable video frames, shown only when a listed file has them marked.
+        self.gaps_section = ttk.LabelFrame(panel, text="Unreadable video frames", padding=6)
+        self.fill_var = tk.BooleanVar(value=self.config_data["fill_gaps"])
+        self.fill_check = ttk.Checkbutton(self.gaps_section, text="Fill short gaps",
+                                          variable=self.fill_var)
+        self.fill_check.grid(row=0, column=0, columnspan=2, sticky="w")
+        self.fill_max_var = tk.StringVar(value=str(self.config_data["fill_gaps_max_frames"]))
+        self.fill_max_entry = ttk.Entry(self.gaps_section, textvariable=self.fill_max_var,
+                                        width=6)
+        self._setting_row(self.gaps_section, 1, "Up to (frames)", self.fill_max_entry)
 
         for widget, unlocked in (
             (self.test_box, "Which test these files are. Locks when you click Analyze."),
@@ -219,29 +274,6 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             (self.entry_entry, "Entry rule: the animal must stay in a region at least "
                                "this many frames for it to count as an entry (filters "
                                "boundary jitter). Locks when you click Analyze."),
-        ):
-            Tooltip(widget, lambda u=unlocked: LOCKED_TIP if self._locked() else u)
-
-        regions_btn = ttk.Button(bar, text="Regions…", command=self.open_region_dialog)
-        regions_btn.pack(side=tk.LEFT)
-        Tooltip(regions_btn, "Choose what each region in the files represents "
-                             "(open arm, center, ...). Saved for next time.")
-
-        # Row 3: Open Field thresholds, shown only when the test is Open Field.
-        self.of_bar = ttk.Frame(self, padding=(8, 0, 8, 8))
-        ttk.Label(self.of_bar, text="Min gap between center entries (s):").pack(side=tk.LEFT)
-        self.gap_var = tk.StringVar(value=f"{self.config_data['min_seconds_between_entries']:g}")
-        self.gap_entry = ttk.Entry(self.of_bar, textvariable=self.gap_var, width=5)
-        self.gap_entry.pack(side=tk.LEFT, padx=(4, 16))
-        ttk.Label(self.of_bar, text="Min center time, adjoining (s):").pack(side=tk.LEFT)
-        self.adj_var = tk.StringVar(value=f"{self.config_data['min_center_seconds_adjoining']:g}")
-        self.adj_entry = ttk.Entry(self.of_bar, textvariable=self.adj_var, width=5)
-        self.adj_entry.pack(side=tk.LEFT, padx=(4, 16))
-        ttk.Label(self.of_bar, text="Speed smoothing (frames):").pack(side=tk.LEFT)
-        self.smooth_var = tk.StringVar(value=str(self.config_data["speed_smoothing_frames"]))
-        self.smooth_entry = ttk.Entry(self.of_bar, textvariable=self.smooth_var, width=4)
-        self.smooth_entry.pack(side=tk.LEFT, padx=(4, 0))
-        for widget, unlocked in (
             (self.gap_entry, "Returning to the center sooner than this after leaving "
                              "it counts as the same visit, not a new entry. Locks "
                              "when you click Analyze."),
@@ -252,14 +284,59 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             (self.smooth_entry, "Crossing speeds use speed averaged over this many "
                                 "frames, so a one-frame tracking jump can't set the "
                                 "peak. 1 = no smoothing. Locks when you click Analyze."),
+            (self.fill_check, "Video frames that couldn't be read have no position. "
+                              "Off: they're left out (no time, distance, or entries). "
+                              "On: short gaps get positions on a straight line between "
+                              "the frames before and after. The saved tracking file is "
+                              "never changed. Locks when you click Analyze."),
+            (self.fill_max_entry, "Longest gap, in frames, that gets filled. Longer "
+                                  "gaps stay blank. Locks when you click Analyze."),
         ):
             Tooltip(widget, lambda u=unlocked: LOCKED_TIP if self._locked() else u)
+        self._layout_sections()
 
-        self.status = tk.StringVar()
-        status_bar = ttk.Label(
-            self, textvariable=self.status, relief=tk.SUNKEN, anchor=tk.W, padding=4
-        )
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+    def _layout_sections(self) -> None:
+        """Show the settings sections that apply, in a fixed order."""
+        sections = [
+            (self.lock_note, self._locked()),
+            (self.session_section, True),
+            (self.entries_section, True),
+            (self.of_bar, self.test_var.get() == "Open Field"),
+            (self.gaps_section, any("Frame_Unreadable" in e.data.df.columns
+                                    for e in getattr(self, "files", []))),
+        ]
+        for widget, _ in sections:
+            widget.pack_forget()
+        for widget, show in sections:
+            if show:
+                widget.pack(side=tk.TOP, fill=tk.X, pady=(0, 8), anchor="n")
+
+    def _build_file_list(self, parent) -> None:
+        """The file list (always visible) above the tabs. Several files can be
+        selected; the focused one drives the Time Bins, Path, and Heatmap tabs."""
+        wrap = ttk.Frame(parent)
+        parent.add(wrap, weight=1)
+        self.file_tree = ttk.Treeview(wrap, columns=("File", "Type", "Status"),
+                                      show="headings", selectmode="extended", height=6)
+        for col, width, anchor in (("File", 360, tk.W), ("Type", 70, tk.CENTER),
+                                   ("Status", 140, tk.CENTER)):
+            self.file_tree.heading(col, text=col)
+            self.file_tree.column(col, width=width, anchor=anchor,
+                                  stretch=(col == "File"))
+        for tag, color in STATUS_COLORS.items():
+            self.file_tree.tag_configure(tag, foreground=color)
+        vsb = ttk.Scrollbar(wrap, orient="vertical", command=self.file_tree.yview)
+        self.file_tree.configure(yscrollcommand=vsb.set)
+        self.file_tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        wrap.rowconfigure(0, weight=1)
+        wrap.columnconfigure(0, weight=1)
+        self.file_tree.bind("<<TreeviewSelect>>", self._on_select)
+        for seq in ("<Control-a>", "<Command-a>"):
+            try:
+                self.file_tree.bind(seq, lambda _e: (self.select_all(), "break")[1])
+            except tk.TclError:
+                pass  # <Command-a> only exists on a Mac
 
     def _build_path_controls(self, parent):
         """Path-tab styling row. Changes redraw the plots."""
@@ -369,16 +446,17 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             traceback.print_exc()  # fall back to the Open buttons only
 
     def _build_tabs(self):
-        self.nb = ttk.Notebook(self)
-        self.nb.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        self.nb = ttk.Notebook(self.content)
+        self.content.add(self.nb, weight=3)
 
-        # Summary tab (column-group checkboxes over a Treeview table).
+        # Summary tab (column-group checkboxes over a Treeview table). Clicking
+        # a row selects that file in the file list.
         self.tab_summary = ttk.Frame(self.nb)
         self.nb.add(self.tab_summary, text="Summary")
         self._build_summary_controls(self.tab_summary)
         self.summary_tree = self._make_tree(self.tab_summary)
 
-        self.summary_tree.bind("<<TreeviewSelect>>", self._on_select)
+        self.summary_tree.bind("<<TreeviewSelect>>", self._on_summary_select)
 
         # Time-bins tab: a note line (which file / why empty) over the table.
         self.tab_bins = ttk.Frame(self.nb)
@@ -576,6 +654,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
     def _save_settings(self, fps: float, bin_s: float) -> None:
         self.config_data["fps"] = fps
         self.config_data["bin_seconds"] = bin_s
+        self.config_data["fill_gaps"] = bool(self.fill_var.get())
+        try:
+            self.config_data["fill_gaps_max_frames"] = max(1, int(float(self.fill_max_var.get())))
+        except ValueError:
+            pass  # keep the last good value
         self._plot_settings()
         self.config_data["summary_groups"] = {
             k: bool(v.get()) for k, v in self.group_vars.items()
@@ -614,11 +697,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             if var.get():
                 cols += groups.get(key, [])  # group order, so Details stay last
         self._fill_tree(self.summary_tree, df[cols], iids=[str(i) for i in df.index])
-        if self._selected is not None:
-            # Restoring the selection fires <<TreeviewSelect>>; _on_select
-            # ignores it because the index hasn't changed.
-            self.summary_tree.selection_set(str(self._selected))
-            self.summary_tree.see(str(self._selected))
+        self._sync_summary_selection()
 
     def _fill_tree(self, tree: ttk.Treeview, df, iids=None) -> None:
         tree.delete(*tree.get_children())
@@ -657,26 +736,82 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     # ------------------------------------------------------------ selection
     def _selected_entry(self) -> FileEntry | None:
+        """The file the tabs show: the focused one among those selected."""
         if self._selected is None or self._selected >= len(self.files):
             return None
         return self.files[self._selected]
 
+    def _selected_entries(self) -> list[FileEntry]:
+        """The files Analyze and Export act on."""
+        return [self.files[i] for i in self._sel if i < len(self.files)]
+
     def _on_select(self, _event=None) -> None:
-        sel = self.summary_tree.selection()
-        index = int(sel[0]) if sel else None
-        if index != self._selected:
-            self._selected = index
+        sel = sorted(int(i) for i in self.file_tree.selection())
+        focus = self.file_tree.focus()
+        shown = int(focus) if focus and int(focus) in sel else (sel[0] if sel else None)
+        self._sel = sel
+        self._update_action_buttons()
+        if shown != self._selected:
+            self._selected = shown
+            self._sync_summary_selection()
             self._show_selected()
+
+    def _on_summary_select(self, _event=None) -> None:
+        """Clicking a Summary row selects that file in the file list."""
+        sel = self.summary_tree.selection()
+        if sel and int(sel[0]) != self._selected:
+            self._set_selection([int(sel[0])])
+
+    def _set_selection(self, indices: list[int], focus: int | None = None) -> None:
+        """Select these files in the list; `focus` (default: the first) is the
+        one the tabs show."""
+        self.file_tree.selection_set([str(i) for i in indices])
+        shown = None
+        if indices:
+            shown = focus if focus in indices else indices[0]
+            self.file_tree.focus(str(shown))
+            self.file_tree.see(str(shown))
+        self._sel = list(indices)
+        self._update_action_buttons()
+        if shown != self._selected:
+            self._selected = shown
+            self._show_selected()
+        self._sync_summary_selection()
+
+    def _sync_summary_selection(self) -> None:
+        # The Summary table highlights the file the tabs show. Its selection
+        # event is ignored because that file is already the shown one.
+        if self._selected is not None and self.summary_tree.exists(str(self._selected)):
+            self.summary_tree.selection_set(str(self._selected))
+            self.summary_tree.see(str(self._selected))
+        else:
+            self.summary_tree.selection_set(())
+
+    def _update_action_buttons(self) -> None:
+        n = len(self._sel)
+        self.analyze_btn.configure(text=f"Analyze ({n})" if n else "Analyze")
+        self.export_btn.configure(text=f"Export ({n})" if n else "Export")
+        everything = bool(self.files) and n == len(self.files)
+        self.select_all_btn.configure(text="Select none" if everything else "Select all")
+
+    def select_all(self) -> None:
+        if self.files:
+            self._set_selection(list(range(len(self.files))), focus=self._selected)
+
+    def toggle_select_all(self) -> None:
+        if self.files and len(self._sel) == len(self.files):
+            self._set_selection([])
+        else:
+            self.select_all()
 
     def _show_selected(self) -> None:
         """Point Time Bins, Path, and Heatmap at the selected file."""
         entry = self._selected_entry()
         if entry is None:
-            note = ("Add files, then select one in the Summary table." if not self.files
-                    else "Select a file in the Summary table.")
+            note = ("Add files, then select one in the file list." if not self.files
+                    else "Select a file in the file list.")
         elif not entry.analyzed:
-            note = (f"{entry.label} isn't analyzed yet. Click Analyze Selected or "
-                    "Analyze All.")
+            note = f"{entry.label} isn't analyzed yet. Select it and click Analyze."
         else:
             note = None
 
@@ -702,8 +837,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         locked = self._locked()
         self.test_box.configure(state="disabled" if locked else "readonly")
         for entry in (self.fps_entry, self.bin_entry, self.entry_entry,
-                      self.gap_entry, self.adj_entry, self.smooth_entry):
+                      self.gap_entry, self.adj_entry, self.smooth_entry,
+                      self.fill_check, self.fill_max_entry):
             entry.configure(state="disabled" if locked else "normal")
+        self._layout_sections()  # shows or hides "Locked. Clear to change."
 
     def _fps_locked(self) -> float:
         return self.config_data["fps"]
@@ -722,6 +859,9 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self.adj_var, "center time for adjoining crossings", 0.5)
         self.config_data["speed_smoothing_frames"] = self._frames_setting(
             self.smooth_var, "speed smoothing", 5)
+        self.config_data["fill_gaps"] = bool(self.fill_var.get())
+        self.config_data["fill_gaps_max_frames"] = self._frames_setting(
+            self.fill_max_var, "gap length to fill", 5)
         self._save_settings(self._fps(), self._bin_seconds())
 
     # -------------------------------------------------------------- regions
@@ -840,11 +980,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._update_status()
 
     def _show_test_settings(self) -> None:
-        """Show the Open Field threshold row only when Open Field is chosen."""
-        if self.test_var.get() == "Open Field":
-            self.of_bar.pack(side=tk.TOP, fill=tk.X, before=self.nb)
-        else:
-            self.of_bar.pack_forget()
+        """Show the Open Field section only when Open Field is chosen."""
+        self._layout_sections()
 
     # --------------------------------------------------------------- status
     def _update_status(self) -> None:
@@ -883,9 +1020,23 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
     def _refresh(self) -> None:
         """Re-sync everything that depends on the file list."""
         self._apply_lock()
+        self._fill_file_list()
         self._show_summary()
         self._show_selected()
         self._update_status()
+
+    def _file_status(self, entry: FileEntry) -> tuple[str, str]:
+        """(status text, color tag) for the file list."""
+        return (ANALYZED, "analyzed") if entry.analyzed else (NOT_ANALYZED, "")
+
+    def _fill_file_list(self) -> None:
+        self.file_tree.delete(*self.file_tree.get_children())
+        for i, e in enumerate(self.files):
+            status, tag = self._file_status(e)
+            self.file_tree.insert("", tk.END, iid=str(i), values=(e.label, e.kind, status),
+                                  tags=(tag,) if tag else ())
+        keep = [i for i in self._sel if i < len(self.files)]
+        self._set_selection(keep, focus=self._selected)
 
     # --------------------------------------------------------------- actions
     def open_file(self):
@@ -968,7 +1119,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             label = data.name if not copies else f"{data.name} ({copies + 1})"
             self.files.append(FileEntry(path=p, data=data, label=label))
 
-        if self._selected is None and len(self.files) > first_new:
+        if not self._sel and len(self.files) > first_new:
+            self._sel = [first_new]  # the first new file, ready for Analyze
             self._selected = first_new
         self._refresh()
         if errors:
@@ -981,22 +1133,34 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
     def clear_files(self) -> None:
         """Empty the list and unlock the per-load settings."""
         self.files = []
+        self._sel = []
         self._selected = None
         self._refresh()
 
-    def analyze(self, selected_only: bool) -> None:
+    def show_about(self) -> None:
+        AboutDialog(self)
+
+    def remove_selected(self) -> None:
+        """Take the selected files out of the list (the files aren't touched)."""
+        if not self._sel:
+            show_info(self, "No file selected", "Select files in the list first.")
+            return
+        gone = set(self._sel)
+        self.files = [e for i, e in enumerate(self.files) if i not in gone]
+        self._sel = [0] if self.files else []
+        self._selected = 0 if self.files else None
+        self._refresh()
+
+    def analyze(self) -> None:
+        """Analyze the selected files."""
         if not self.files:
             show_info(self, "No files", "Add files first.")
             return
-        if selected_only:
-            entry = self._selected_entry()
-            if entry is None:
-                show_info(self, "No file selected",
-                          "Select a file in the Summary table first.")
-                return
-            targets = [entry]
-        else:
-            targets = list(self.files)
+        targets = self._selected_entries()
+        if not targets:
+            show_info(self, "No file selected",
+                      "Select a file in the list first, or click Select all.")
+            return
 
         if not self._locked():
             self._lock_in_settings()  # the first Analyze of a load sets them
@@ -1102,28 +1266,20 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             "Tracking (from file)": dict(entry.data.settings),
         })
 
-    def export(self, selected_only: bool) -> None:
-        """Write each file's _analysis.xlsx, _path.png, and _heatmap.png next
-        to its source CSV, overwriting existing files."""
-        if selected_only:
-            entry = self._selected_entry()
-            if entry is None:
-                show_info(self, "No file selected",
-                          "Select a file in the Summary table first.")
-                return
-            if not entry.analyzed:
-                show_info(self, "Not analyzed yet",
-                          f"{entry.label} hasn't been analyzed. Click Analyze "
-                          "Selected first, then export.")
-                return
-            targets = [entry]
-        else:
-            targets = [e for e in self.files if e.analyzed]
-            if not targets:
-                show_info(self, "Nothing to export",
-                          "No files have been analyzed yet. Click Analyze All "
-                          "first, then export.")
-                return
+    def export(self) -> None:
+        """Write each selected, analyzed file's _analysis.xlsx, _path.png, and
+        _heatmap.png next to its source CSV, overwriting existing files."""
+        selected = self._selected_entries()
+        if not selected:
+            show_info(self, "No file selected",
+                      "Select a file in the list first, or click Select all.")
+            return
+        targets = [e for e in selected if e.analyzed]
+        if not targets:
+            show_info(self, "Not analyzed yet",
+                      "The selected files haven't been analyzed. Click Analyze "
+                      "first, then export.")
+            return
         # A file added twice writes to the same names, so export it once.
         seen, unique = set(), []
         for e in targets:
@@ -1156,7 +1312,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         finally:
             self.config(cursor="")
 
-        skipped = len(self.files) - len([f for f in self.files if f.analyzed])
+        skipped = len(selected) - len(targets)
         if written:
             folders = sorted({os.path.dirname(e.path) for e in written})
             where = folders[0] if len(folders) == 1 else f"{len(folders)} folders"
@@ -1171,8 +1327,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                               for e in written[:10])
             if len(written) > 10:
                 names += f"\n…and {len(written) - 10} more"
-            note = ("" if selected_only or not skipped
-                    else f"\n\n{skipped} file(s) in the list weren't analyzed, so "
+            note = ("" if not skipped
+                    else f"\n\n{skipped} selected file(s) weren't analyzed, so "
                          "they weren't exported.")
             show_info(
                 self, "Export finished",

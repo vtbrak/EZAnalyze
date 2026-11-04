@@ -992,10 +992,15 @@ test) before each commit.
   `Frame_Filled`); its on-screen control comes with the C4 settings panel.
   Summary gains `UnreadableFrames` (and `FilledFrames` when filling), in the
   Details group; Time Bins gain `UnreadableFrames`.
-- [ ] **C4. Main window re-layout (GUI review items 1–5, 10):** settings panel,
+- [x] **C4. Main window re-layout (GUI review items 1–5, 10):** settings panel,
   file list above the tabs with Type and Status, Remove, Select all,
   Track/Analyze/Export on the selection with counts, multi-select, About
   (credits + GPL). CSV workflow unchanged; regression test updated.
+  Built 2026-11-04 (`about.py` for the About window). The "Unreadable video
+  frames" section (gap filling) appears only when a listed file has a
+  `Frame_Unreadable` column. Set up videos… and Track buttons are added in
+  C5/C7. Not yet checked by eye: screen capture isn't available to the
+  assistant, so the user should look over the new layout.
 - [ ] **C5. Video setup window, steps 1–3:** trim (scrub), crop, exclusions,
   reference; video switcher; start from previous video; fps from the video.
 - [ ] **C6. Setup steps 4–6:** tracking check (preview, scrub, settings),

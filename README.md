@@ -90,29 +90,35 @@ left empty (transparent in a saved PNG) unless **Add background** fills them
 with one flat color, which is easy to recolor in an image editor.
 
 ## Working with files
-1. **Add File…**, **Add Folder…**, or drag files/folders onto the window. Files
-   build up a list in the Summary table, each marked **Not analyzed**. Adding a
-   file that's already in the list asks whether to add it again.
+1. **Add files…**, **Add folder…**, or drag files/folders onto the window.
+   Files build up the **file list** (always visible above the tabs), each
+   marked **Not analyzed**. Adding a file that's already in the list asks
+   whether to add it again. **Remove** takes the selected files out of the
+   list (the files themselves aren't touched).
 2. Choose the **Test** (Elevated Plus Maze / Open Field), **frame rate**
-   (default 20 fps), and **bin size** in the toolbar.
-3. **Analyze Selected** (the row selected in the Summary) or **Analyze All**.
-   Nothing is computed until you click one. At the first Analyze, Test, frame
-   rate, and bin size **lock** (greyed out), so every file in the load is
-   analyzed the same way. Path and Heatmap styling never locks.
-4. **Select a row** in the Summary to see that file's Time Bins, Path, and
-   Heatmap.
+   (default 20 fps), and **bin size** in the settings panel on the left.
+3. **Analyze** works on the **selected** files; its button shows how many
+   (e.g. **Analyze (1)**). The first file added is selected for you. Click
+   **Select all** (or Ctrl+A / Cmd+A in the list) to select every file, or
+   Shift/Ctrl/Cmd-click to pick a few. Nothing is computed until you click
+   Analyze. At the first Analyze, the settings panel **locks** ("Locked.
+   Clear to change."), so every file in the load is analyzed the same way.
+   Path and Heatmap styling never locks.
+4. **Click a file** in the list (or a row in the Summary) to see its Time
+   Bins, Path, and Heatmap.
 5. **Clear** empties the list and unlocks the settings, e.g. to try one file,
    adjust the settings, then run a whole folder.
 
 The file list resets when the app closes. Settings, plot style, Summary
 columns, and region roles are remembered. **Regions…** sets what each region
-in the files means (open arm, closed arm, center, periphery).
+in the files means (open arm, closed arm, center, periphery). **About** shows
+credits, the ezTrack citation, and the license.
 
 ## Exporting
 
-**Export Selected** (the row selected in the Summary) or **Export All**
-(every analyzed file) writes three files **next to each source CSV**, named
-after it, overwriting any earlier export:
+**Export** writes, for each selected file that has been analyzed, three
+files **next to its source CSV**, named after it, overwriting any earlier
+export:
 
 - `<name>_analysis.xlsx`: **Summary** (the file's row), **Time Bins**, and
   **Settings** (everything used to produce the results: test, frame rate,

@@ -31,6 +31,10 @@ class FakeDialog:
     def __init__(self, parent, test, overview, roles, preview=None, reason=""):
         dialogs.append([n for n, _ in overview]); self.result = None
 gui.RegionDialog = FakeDialog
+import setup_window
+setup_window.show_info = gui.show_info
+setup_window.show_warning = gui.show_warning
+setup_window.ask_yes_no = gui.ask_yes_no
 gui.BehaviorTrackerApp.wait_window = lambda self, w=None: None
 E = os.path.join(ROOT, "EPM.csv"); O = os.path.join(ROOT, "Open Field.csv")
 if not (os.path.exists(E) and os.path.exists(O)):
@@ -128,27 +132,86 @@ if os.path.exists(CLIP):
     app.open_setup(); app.update()
     win = app._setup_win
     check("setup window opens on the video", win.winfo_exists() and "Clip" in win.video_label.cget("text"))
+    v = app.files[0].video
+    check("new video gets the test's default session length (EPM 5 min)", v.length_s == 300)
     win.scrub.set(100); win._load_scrub_frame(); win._set_start()
+    win.length_var.set("0.5"); win._apply_length()
+    check("typed session length sets the end", v.end_frame == 100 + round(30 * v.info.fps))
+    win.length_var.set("600"); win._apply_length()
+    check("session longer than the video: end clamped, with a note",
+          v.end_frame == v.info.frame_count and "video ends first" in win.end_text.cget("text"))
     win.scrub.set(899); win._load_scrub_frame(); win._set_end()
-    check("trim set", (app.files[0].video.start, app.files[0].video.end_frame) == (100, 900))
-    app.files[0].video.crop = (100, 50, 1100, 650)
+    check("trim set", (v.start, v.end_frame) == (100, 900))
+    v.crop = (100, 50, 1100, 650)
     win._step_by(1); app.update()
     check("Next marks trim done and goes to exclusions",
-          win.step == "exclusions" and "trim" in app.files[0].video.steps_done)
+          win.step == "exclusions" and "trim" in v.steps_done)
     for x, y in ((10, 10), (60, 10), (60, 60)):
         sx, sy = win.canvas.to_screen(x, y)
         win._shape_click(type("E", (), {"x": sx, "y": sy})())
     win._finish_shape()
     check("exclusion shape stored in full-size pixels",
-          np.allclose(app.files[0].video.exclusions[0], [[110, 160, 160], [60, 60, 110]]))
-    win._step_by(1); win.ref_var.set("10"); win._make_reference(); app.update()
-    ref = app.files[0].video.reference
+          np.allclose(v.exclusions[0], [[110, 160, 160], [60, 60, 110]]))
+    win._step_by(1); log.clear(); win._step_by(1); app.update()
+    check("Next without a reference says what's missing",
+          win.step == "reference" and "Make the reference first" in log)
+    win.ref_var.set("10"); win._make_reference(); app.update()
+    ref = v.reference
     check("reference made at the crop's size", ref is not None and ref.shape == (600, 1000)
-          and "reference" in app.files[0].video.steps_done)
+          and "reference" in v.steps_done)
+    win._step_by(1); app.update()
+    check("tracking check previews a position", win.step == "tracking" and win._found
+          and np.isfinite(win._found[0]) and "found at" in win.found_text.cget("text"))
+    win.view_var.set("dif"); win._preview()
+    check("differences view shows a color image", win.canvas._array.ndim == 3)
+    win.thresh_var.set("150"); log.clear(); win._step_by(1)
+    check("invalid tracking setting stops Next", win.step == "tracking"
+          and "Invalid tracking setting" in log)
+    win.thresh_var.set("99"); win._step_by(1); app.update()
+    check("tracking settings saved and step done", app.config_data["loc_thresh"] == 99
+          and "tracking" in v.steps_done and win.step == "regions")
+    check("Tracking section shown in the main window", app.tracking_section.winfo_ismapped()
+          and "threshold 99%" in app.tracking_text.cget("text"))
+    app.test_var.set("Open Field"); win._go("regions"); app.update()
+    check("Open Field lists outline and center",
+          list(win.region_list.get_children()) == ["arena outline", "center"])
+    yesno.append(False); log.clear(); win._step_by(1)
+    check("Next with regions missing asks first", win.step == "regions"
+          and "Some regions aren't drawn" in log)
+    click = lambda x, y: win._region_press(type("E", (), dict(zip("xy", win.canvas.to_screen(x, y))))())
+    for x, y in ((-10, -10), (1010, -10), (1010, 610), (-10, 610), (-10, -10)):
+        click(x, y)  # the last click is on the first point: closes the shape
+    check("outline points in the black border are kept (outside the video)",
+          np.allclose(v.regions["arena outline"], [[90, 1110, 1110, 90], [40, 40, 660, 660]]))
+    check("after closing, the next region is picked", win._current_region == "center")
+    for x, y in ((300, 200), (700, 200), (700, 400), (300, 400)):
+        click(x, y)
+    win._close_region()
+    regs = {r.name: r for r in v.tracking_regions(1.0, "Open Field")}
+    check("Open Field periphery = outline minus center",
+          set(regs) == {"periphery", "center"} and regs["periphery"].subtract == ["center"]
+          and np.allclose(regs["center"].xs, [300, 700, 700, 300]))
+    win._region_press(type("E", (), dict(zip("xy", win.canvas.to_screen(300, 200))))())
+    win._region_drag(type("E", (), dict(zip("xy", win.canvas.to_screen(320, 210))))())
+    win._region_release(None)
+    check("dragging a point moves it", np.allclose(v.regions["center"][0][0], 420))
+    win._step_by(1); app.update()
+    check("regions done, on to scale", win.step == "scale" and "regions" in v.steps_done)
+    check("scale uses the Open Field length (40 cm)", win.cm_var.get() == "40"
+          and "40 cm" in win.instructions.cget("text"))
+    for x, y in ((100, 300), (900, 300)):
+        win._scale_press(type("E", (), dict(zip("xy", win.canvas.to_screen(x, y))))())
+    sc = v.scale(1.0)
+    check("scale from two points", sc and abs(sc.px - 800) < 1e-6 and sc.cm == 40
+          and "cm per pixel" in win.scale_text.cget("text"))
+    check("last step's Next says Finish", win.next_step_btn.cget("text") == "Finish")
+    win._step_by(1); app.update()
+    check("Finish closes the window; video Ready to track",
+          not win.winfo_exists() and app.file_tree.item("0", "values")[2] == "Ready to track")
     log.clear(); app._set_selection([0]); app.analyze(); app.update()
     check("Analyze skips an untracked video", "Videos not tracked yet" in log)
-    win._close(); app.update()
     check("gap-filling section shown when videos are listed", app.gaps_section.winfo_ismapped())
+    app.test_var.set("Elevated Plus Maze")
 else:
     print("skip video checks (ezTrack practice clip not present)")
 

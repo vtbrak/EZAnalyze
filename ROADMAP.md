@@ -1013,7 +1013,7 @@ test) before each commit.
   previous video" copies crop and exclusions as a draft (steps un-ticked).
   **Moved to C7:** filling the fps setting from the video and the fps
   mismatch warning (they belong with Track).
-- [ ] **C5b. Fixes from the user's first try of the setup window
+- [x] **C5b. Fixes from the user's first try of the setup window
   (2026-11-04; do these before C6):**
   1. **Start = time 0:** the start is set by scrubbing and becomes frame 0 of
      the analysis (as now; keep it).
@@ -1033,9 +1033,35 @@ test) before each commit.
      what's missing (e.g. "Make the reference first"). The user thought the
      program had stopped when Next was greyed out on the Reference step
      (steps 4–6 weren't built yet).
-- [ ] **C6. Setup steps 4–6:** tracking check (preview, scrub, settings),
+  Built 2026-11-04. Session length lives in each video's setup (`length_s`);
+  the last length typed is remembered per test (config `session_minutes`, EPM
+  5, Open Field 60); "Set end here" turns the scrubbed frame into a length.
+  New videos start with the test's length. The black border is 40 screen px
+  on every side. Next on the last step reads "Next video" (moves to the next
+  video's step 1) or "Finish" (closes the window); the old Done button is now
+  Close.
+- [x] **C6. Setup steps 4–6:** tracking check (preview, scrub, settings),
   regions (draw/edit; EPM five regions, Open Field outline + center), scale
   (two points, guidance text, remembered length).
+  Built 2026-11-04. **Tracking check:** scrub within the trial; red cross on
+  the found position; Frame / Differences view (color map); window square
+  shown (the 15 frames before are tracked first so the window has a last
+  position, as in a real run); settings boxes (animal dark/light/abs,
+  threshold %, window on/size/weight) saved to config (`track_method`,
+  `loc_thresh`, `use_window`, `window_size`, `window_weight`) and locked at
+  the first Track; the main window gains a read-only **Tracking** section
+  summarizing them. **Regions:** list of the test's regions (EPM: open arm 1/2,
+  closed arm 1/2, center; Open Field: arena outline, center), drawn on the
+  reference; after closing one the next undrawn region is picked; drag points
+  to move them; Redraw / Undo point / Delete / Rename / Add region (role set
+  with Regions… in the main window); warning if the Open Field center goes
+  outside the outline. Tracking writes the outline as "periphery" minus the
+  center. Names auto-classify to roles. **Scale:** two points (drag to adjust;
+  a third click starts again), live px length and cm per pixel, measured on
+  the prepared frame; cm remembered per test (config `scale_cm`, 75 / 40).
+  Regions and scale may be skipped after a yes/no; a video whose six steps
+  are all done shows **Ready to track**. "Start from previous video" now also
+  copies regions, scale and session length.
 - [ ] **C7. Tracking runs:** Track on the selection in a background thread,
   bottom progress bar with Cancel, status steps, existing-tracking prompt,
   settings lock at first Track, fps mismatch warning, results loaded as

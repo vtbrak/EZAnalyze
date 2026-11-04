@@ -18,10 +18,21 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .tracking import make_reference
+from .tracking import Region, Scale, make_reference
 from .video import Prep, VideoInfo, polygon_mask
 
 STEPS = ("trim", "exclusions", "reference", "tracking", "regions", "scale")
+
+# The regions each test draws (ROADMAP §12, Stage 4), as (name, role). Open
+# Field draws the arena outline and the center; periphery = outline minus
+# center, so the two can't overlap.
+OUTLINE = "arena outline"
+REGION_TEMPLATES = {
+    "Elevated Plus Maze": [("open arm 1", "open_arm"), ("open arm 2", "open_arm"),
+                           ("closed arm 1", "closed_arm"), ("closed arm 2", "closed_arm"),
+                           ("center", "center")],
+    "Open Field": [(OUTLINE, "outline"), ("center", "center")],
+}
 
 
 def effective_dsmpl(dsmpl: float) -> float:
@@ -35,16 +46,30 @@ class VideoSetup:
     info: VideoInfo
     start: int = 0
     end: int | None = None                   # exclusive; None = to the end
+    length_s: float | None = None            # session length; sets the end when given
     crop: tuple[float, float, float, float] | None = None   # full-size x0, y0, x1, y1
     exclusions: list[tuple[list, list]] = field(default_factory=list)  # full-size polygons
     reference: np.ndarray | None = None
     reference_key: tuple | None = None       # what the reference was made from
     unreadable: tuple[int, int] = (0, 0)     # (unreadable, checked) at add time
     steps_done: set[str] = field(default_factory=set)
+    regions: dict[str, tuple[list, list]] = field(default_factory=dict)  # name -> full-size polygon
+    scale_points: list[tuple[float, float]] = field(default_factory=list)  # two full-size points
+    scale_cm: float | None = None
 
     @property
     def end_frame(self) -> int:
-        return self.info.frame_count if self.end is None else min(self.end, self.info.frame_count)
+        """First frame after the trial (exclusive). With a session length, the
+        end is start + length x fps, clamped to the video's end."""
+        n = self.info.frame_count
+        if self.length_s is not None and self.info.fps:
+            return min(self.start + int(round(self.length_s * self.info.fps)), n)
+        return n if self.end is None else min(self.end, n)
+
+    def video_shorter_than_length(self) -> bool:
+        """True if the video ends before start + session length."""
+        return (self.length_s is not None and bool(self.info.fps)
+                and self.start + int(round(self.length_s * self.info.fps)) > self.info.frame_count)
 
     # --- coordinates -----------------------------------------------------
     def _crop_origin(self, dsmpl: float) -> tuple[int, int]:
@@ -106,10 +131,53 @@ class VideoSetup:
         self.reference_key = self._reference_inputs(dsmpl, frames)
         return self.reference
 
+    # --- regions and scale -----------------------------------------------
+    def tracking_regions(self, dsmpl: float, test: str) -> list[Region]:
+        """The drawn regions in prepared-frame pixels, as tracking writes
+        them. Open Field's outline becomes "periphery" (outline minus center);
+        other drawn names are written as they are."""
+        out = []
+        for name, (xs, ys) in self.regions.items():
+            px, py = self.to_prepared(xs, ys, dsmpl)
+            if test == "Open Field" and name == OUTLINE:
+                out.append(Region("periphery", px, py,
+                                  subtract=["center"] if "center" in self.regions else []))
+            else:
+                out.append(Region(name, px, py))
+        return out
+
+    def missing_regions(self, test: str) -> list[str]:
+        return [n for n, _ in REGION_TEMPLATES.get(test, []) if n not in self.regions]
+
+    def scale_px(self, dsmpl: float) -> float | None:
+        """Length between the two scale points on the prepared frame."""
+        if len(self.scale_points) != 2:
+            return None
+        d = effective_dsmpl(dsmpl)
+        (x0, y0), (x1, y1) = self.scale_points
+        return float(np.hypot(x1 - x0, y1 - y0) * d)
+
+    def scale(self, dsmpl: float) -> Scale | None:
+        px = self.scale_px(dsmpl)
+        if not px or not self.scale_cm or self.scale_cm <= 0:
+            return None
+        return Scale(px, float(self.scale_cm))
+
+    @property
+    def ready(self) -> bool:
+        """Every setup step looked at (regions and scale may be skipped on
+        purpose; Track warns about those)."""
+        return all(s in self.steps_done for s in STEPS) and self.reference is not None
+
     # --- drafts from another video ---------------------------------------
     def copy_from(self, other: "VideoSetup") -> None:
-        """Start from another video's crop and shapes, as a draft: the steps
-        they belong to are marked not done, so the user looks at each one."""
+        """Start from another video's crop, shapes, regions, scale and session
+        length, as a draft: the steps they belong to are marked not done, so
+        the user looks at each one."""
         self.crop = copy.deepcopy(other.crop)
         self.exclusions = copy.deepcopy(other.exclusions)
-        self.steps_done -= {"trim", "exclusions", "reference"}
+        self.regions = copy.deepcopy(other.regions)
+        self.scale_points = copy.deepcopy(other.scale_points)
+        self.scale_cm = other.scale_cm
+        self.length_s = other.length_s
+        self.steps_done -= {"trim", "exclusions", "reference", "regions", "scale"}

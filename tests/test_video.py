@@ -118,5 +118,28 @@ for d in (1.0, 0.5):
     check(f"coordinates round-trip at downsample {d}", np.allclose(back, [[301], [251]]))
 check("crop corner maps to 0,0 at full size", vs.to_prepared([101], [51], 1.0) == ([0], [0]))
 
+
+# Session length (C5b), regions and scale (C6).
+vs2 = VideoSetup(path=EPM_VIDEO, info=info, start=100, length_s=60)
+check("end = start + length x fps", vs2.end_frame == 100 + round(60 * info.fps))
+vs2.length_s = 10_000
+check("end clamped to the video", vs2.end_frame == info.frame_count
+      and vs2.video_shorter_than_length())
+vs2.regions = {"arena outline": ([0, 800, 800, 0], [0, 0, 600, 600]),
+               "center": ([200, 600, 600, 200], [150, 150, 450, 450])}
+check("no Open Field regions missing", vs2.missing_regions("Open Field") == [])
+check("EPM arms missing (center is shared)", len(vs2.missing_regions("Elevated Plus Maze")) == 4)
+half = {r.name: r for r in vs2.tracking_regions(0.5, "Open Field")}
+check("regions scaled by downsampling", np.allclose(half["center"].xs, [100, 300, 300, 100]))
+vs2.scale_points = [(0, 0), (300, 400)]; vs2.scale_cm = 40
+check("scale measured on the prepared frame", vs2.scale_px(1.0) == 500
+      and vs2.scale_px(0.5) == 250 and abs(vs2.scale(0.5).cm_per_px - 0.16) < 1e-9)
+vs3 = VideoSetup(path=EPM_VIDEO, info=info, steps_done={"regions", "scale", "tracking"})
+vs3.copy_from(vs2)
+check("start from previous copies regions, scale, length as a draft",
+      vs3.regions == vs2.regions and vs3.regions is not vs2.regions
+      and vs3.scale_cm == 40 and vs3.length_s == vs2.length_s
+      and vs3.steps_done == {"tracking"})
+
 print(f"\n{fails} failure(s)")
 sys.exit(1 if fails else 0)

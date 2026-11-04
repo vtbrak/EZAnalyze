@@ -38,6 +38,17 @@ DEFAULTS: dict = {
     # Stage 7): downsampling (1 = full size) and frames in each reference image.
     "video_downsample": 1.0,
     "reference_frames": 50,
+    # Tracking settings (ezTrack's, with the user's notebook values), shared by
+    # every video in a load and locked at the first Track (ROADMAP §12, Stage 3).
+    "loc_thresh": 99.5,
+    "track_method": "dark",
+    "use_window": True,
+    "window_size": 100,
+    "window_weight": 0.9,
+    # Last session length used per test, in minutes (setup step 1).
+    "session_minutes": {"Elevated Plus Maze": 5.0, "Open Field": 60.0},
+    # Last real length typed for the scale, per test, in cm (setup step 6).
+    "scale_cm": {"Elevated Plus Maze": 75.0, "Open Field": 40.0},
     # Plot style.
     "plot": {
         "point_size": 4.0,  # float so sizes like 2.5 survive a reload

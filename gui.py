@@ -95,6 +95,7 @@ ANALYZED = "Analyzed"
 STATUS_COLORS = {"analyzed": "#2e7d32", "waiting": "#b26a00", "failed": "#c62828"}
 
 NEEDS_SETUP = "Needs setup"
+READY_TO_TRACK = "Ready to track"
 
 LOCKED_TRACKING_TIP = (
     "Locked because videos have been tracked, so every video in this load is "
@@ -283,6 +284,16 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.smooth_entry = ttk.Entry(self.of_bar, textvariable=self.smooth_var, width=6)
         self._setting_row(self.of_bar, 2, "Speed smoothing (frames)", self.smooth_entry)
 
+        # Tracking settings, shown when videos are listed. They're changed in
+        # the setup window's Tracking check step, where their effect shows.
+        self.tracking_section = ttk.LabelFrame(panel, text="Tracking", padding=6)
+        self.tracking_text = ttk.Label(self.tracking_section, justify=tk.LEFT,
+                                       wraplength=210)
+        self.tracking_text.grid(row=0, column=0, sticky="w")
+        Tooltip(self.tracking_section, lambda: LOCKED_TRACKING_TIP if self._tracking_locked()
+                else "Shared by every video. Change them in Set up videos…, step 4 "
+                     "(Tracking check). They lock at the first Track.")
+
         # Unreadable video frames, shown only when a listed file has them marked.
         self.gaps_section = ttk.LabelFrame(panel, text="Unreadable video frames", padding=6)
         self.fill_var = tk.BooleanVar(value=self.config_data["fill_gaps"])
@@ -329,10 +340,20 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             (self.session_section, True),
             (self.entries_section, True),
             (self.of_bar, self.test_var.get() == "Open Field"),
+            (self.tracking_section, any(e.video is not None
+                                        for e in getattr(self, "files", []))),
             (self.gaps_section, any(e.video is not None or (
                 e.data is not None and "Frame_Unreadable" in e.data.df.columns)
                 for e in getattr(self, "files", []))),
         ]
+        c = self.config_data
+        self.tracking_text.configure(text=(
+            f"Animal is {c['track_method']}, threshold {c['loc_thresh']:g}%\n"
+            + (f"Window {c['window_size']} px, weight {c['window_weight']:g}\n"
+               if c["use_window"] else "No window\n")
+            + f"Downsample {c['video_downsample']:g}, reference {c['reference_frames']} frames\n"
+            + ("Locked. Clear to change." if hasattr(self, "files") and self._tracking_locked() else
+               "Change in Set up videos…, step 4.")))
         for widget, _ in sections:
             widget.pack_forget()
         for widget, show in sections:
@@ -1065,8 +1086,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         """(status text, color tag) for the file list."""
         if entry.analyzed:
             return ANALYZED, "analyzed"
-        if entry.data is None:
-            return NEEDS_SETUP, "waiting"  # a video, not tracked yet
+        if entry.data is None:  # a video, not tracked yet
+            if entry.video is not None and entry.video.ready:
+                return READY_TO_TRACK, "waiting"
+            return NEEDS_SETUP, "waiting"
         return NOT_ANALYZED, ""
 
     def _tracking_locked(self) -> bool:
@@ -1180,6 +1203,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             try:
                 if is_video(p):
                     setup = VideoSetup(path=p, info=video_info(p))
+                    setup.length_s = 60 * float(self.config_data["session_minutes"].get(
+                        self.test_var.get(), 5.0))
                     setup.unreadable = check_readable(p)
                     bad, checked = setup.unreadable
                     if checked and bad / checked > UNREADABLE_WARN:

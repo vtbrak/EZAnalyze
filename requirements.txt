@@ -3,3 +3,6 @@ numpy
 matplotlib
 openpyxl
 tkinterdnd2
+opencv-python-headless
+scipy
+pillow

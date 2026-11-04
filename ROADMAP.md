@@ -941,7 +941,52 @@ and license ezTrack requires.
 12. **Room for later:** freezing and ASR plug in as their own settings
     sections and tabs, shown by test type, without redoing this layout.
 
-**Planning for the video build is complete.** Build when the user says so.
+**Planning for the video build is complete.** Build started 2026-11-04.
+
+**🔨 Video build progress (Location Tracking only; freezing and ASR excluded).**
+Built in small chunks; **each chunk is committed and pushed when done** so the
+work survives interruption (e.g. the laptop closing). A new session resumes at
+the first unchecked chunk. Run `tests/regress_gui.py` (and the chunk's own
+test) before each commit.
+- [x] **C0. Groundwork:** OpenCV (`opencv-python-headless`), SciPy and Pillow
+  in `requirements.txt` and `environment.yml`; GPL-3.0 `LICENSE`; ezTrack
+  credit and citation in the README; this checklist.
+- [ ] **C1. Video reading (`core/video.py`):** open a video, report frame
+  count / fps / size, read frame N as grayscale with downsampling and crop
+  (ezTrack `LoadAndCrop` / `cropframe`), unreadable-frame check as a warning
+  (`check_p_frames`), exclusion-shape mask from polygons (`Mask_select`).
+- [ ] **C2. Tracking engine (`core/tracking.py`):** reference image
+  (`Reference`, median of N evenly spaced frames, unreadable frames
+  replaced), `locate` (`Locate` minus wire removal; window size scaled by
+  downsampling), `track_video` generator (progress, cancel, unreadable frames
+  kept as blank rows with `Frame_Unreadable`), region columns from polygons
+  (`ROI_Location` etc., blank for unreadable frames; Open Field periphery =
+  outline minus center), scale (`Distance_cm`), write
+  `<name>_LocationOutput.csv` + `<name>_reference.png`. Validate on the
+  practice video against `EPM.csv` (close, not identical: wire removal
+  dropped).
+- [ ] **C3. Analysis for unreadable frames:** loader treats `Frame_Unreadable`
+  as a non-region column; unreadable frames add no time, distance or entries
+  (entry rule carries the previous place through a gap); Summary and Time Bins
+  report unreadable counts; plots skip them; optional gap filling (off by
+  default, max gap saved, recorded in Settings).
+- [ ] **C4. Main window re-layout (GUI review items 1–5, 10):** settings panel,
+  file list above the tabs with Type and Status, Remove, Select all,
+  Track/Analyze/Export on the selection with counts, multi-select, About
+  (credits + GPL). CSV workflow unchanged; regression test updated.
+- [ ] **C5. Video setup window, steps 1–3:** trim (scrub), crop, exclusions,
+  reference; video switcher; start from previous video; fps from the video.
+- [ ] **C6. Setup steps 4–6:** tracking check (preview, scrub, settings),
+  regions (draw/edit; EPM five regions, Open Field outline + center), scale
+  (two points, guidance text, remembered length).
+- [ ] **C7. Tracking runs:** Track on the selection in a background thread,
+  bottom progress bar with Cancel, status steps, existing-tracking prompt,
+  settings lock at first Track, fps mismatch warning, results loaded as
+  "Not analyzed".
+- [ ] **C8. Plots and playback:** reference-image background for Path and
+  Heatmap; playback window; optional `<name>_tracked.avi`.
+- [ ] **C9. Finish:** exported Settings sheet gains tracking/scale/crop
+  settings; README and INSTALL updates; PC test checklist.
 
 ### 13. Acoustic startle response (ASR) from video (requested 2026-11-03 — planned, not built)
 

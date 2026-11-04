@@ -16,6 +16,11 @@ dependencies:
   - numpy
   - matplotlib
   - openpyxl
+  - scipy
+  - pillow
   - pip
   - pip:
       - tkinterdnd2  # drag-and-drop; not on conda-forge
+      # Video reading. The pip "headless" build has no GUI toolkit of its own,
+      # so it can't clash with tkinter (conda-forge's opencv pulls in Qt).
+      - opencv-python-headless

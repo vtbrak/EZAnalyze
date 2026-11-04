@@ -37,7 +37,7 @@ if [ $? -ne 0 ]; then
 fi
 
 conda activate "$ENV_NAME" || { echo "Couldn't activate \"$ENV_NAME\"."; finish 1; }
-if ! python -c "import pandas, numpy, matplotlib, openpyxl, tkinter, tkinterdnd2"; then
+if ! python -c "import pandas, numpy, matplotlib, openpyxl, tkinter, tkinterdnd2, cv2, scipy, PIL"; then
     echo
     echo "The environment was built but a package won't load. See the messages above."
     finish 1

@@ -150,3 +150,21 @@ BehaviorTracker/
 
 The engine in `core/` is deliberately GUI-free so it can be scripted or, later,
 bundled into a standalone app (e.g. with PyInstaller).
+
+## Credits and license
+
+Video tracking is adapted from **ezTrack**
+(https://github.com/denisecailab/ezTrack), by Zachary T. Pennington, Zhe Dong,
+Yu Feng, Lauren M. Vetere, Lucia Page-Harley, Tristan Shuman and Denise J. Cai,
+used under the GNU General Public License v3.0. Files containing adapted code
+say so at the top, along with what was changed. If you use the video tracking
+in published work, please cite ezTrack:
+
+> Pennington ZT, Dong Z, Feng Y, Vetere LM, Page-Harley L, Shuman T, Cai DJ
+> (2019). ezTrack: An open-source video analysis pipeline for the
+> investigation of animal behavior. *Scientific Reports* 9(1): 19979.
+
+Because it includes ezTrack's code, this program is distributed under the
+**GNU General Public License v3.0** (see [LICENSE](LICENSE)). Anyone who
+receives a copy, including a future standalone app, must also be able to get
+its source code under the same license.

@@ -36,7 +36,7 @@ if errorlevel 1 (
     echo Couldn't activate "%ENV_NAME%".
     goto failed
 )
-python -c "import pandas, numpy, matplotlib, openpyxl, tkinter, tkinterdnd2"
+python -c "import pandas, numpy, matplotlib, openpyxl, tkinter, tkinterdnd2, cv2, scipy, PIL"
 if errorlevel 1 (
     echo.
     echo The environment was built but a package won't load. See the messages above.

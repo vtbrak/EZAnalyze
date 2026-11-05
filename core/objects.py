@@ -222,9 +222,16 @@ def scoring_path(data: TrackingData) -> str:
 
 
 def save_scoring(data: TrackingData, scoring: Scoring, fps: float) -> str:
-    """Write the scoring beside the tracking file (replacing it). Frames are
-    written 1-based as shown, with the video's own frame and times, so the
-    file can be checked against the video by hand."""
+    """Write the scoring beside the tracking file (replacing it)."""
+    path = scoring_path(data)
+    scoring_table(data, scoring, fps).to_csv(path, index=False)
+    return path
+
+
+def scoring_table(data: TrackingData, scoring: Scoring, fps: float) -> pd.DataFrame:
+    """The scoring as a table (the scoring file, and the exported
+    Interactions sheet). Frames are 1-based as shown, with the video's own
+    frame and times, so it can be checked against the video by hand."""
     try:
         start = int(float(data.settings.get("Start_Frame", 0)))
     except (TypeError, ValueError):
@@ -241,9 +248,7 @@ def save_scoring(data: TrackingData, scoring: Scoring, fps: float) -> str:
                      "Start_s": secs(row, fps), "End_s": "", "Length_s": ""})
     cols = ["Type", "Object", "Start_Frame", "End_Frame", "Start_VideoFrame",
             "End_VideoFrame", "Start_s", "End_s", "Length_s"]
-    path = scoring_path(data)
-    pd.DataFrame(rows, columns=cols).to_csv(path, index=False)
-    return path
+    return pd.DataFrame(rows, columns=cols)
 
 
 def load_scoring(data: TrackingData) -> Scoring:

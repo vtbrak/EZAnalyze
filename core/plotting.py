@@ -59,6 +59,35 @@ def _draw_rois(ax, data: TrackingData, labels: bool = True, color: str = "0.6") 
                 bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="0.5", alpha=0.75))
 
 
+def _draw_objects(ax, data: TrackingData, zone_cm: float | None, labels: bool = True,
+                  color: str = "0.4") -> None:
+    """Object Recognition: each object's circle (solid) and its zone (dashed),
+    labeled above the zone with its name and type (ROADMAP §15)."""
+    from matplotlib.patches import Circle
+    from .objects import distance_px, file_objects
+    objects = file_objects(data)
+    if not objects:
+        return
+    zone = distance_px(data, zone_cm)[0] if zone_cm is not None else 0.0
+    for o in objects:
+        ax.add_patch(Circle((o.x, o.y), o.r, fill=False, edgecolor=color, linewidth=1.5,
+                            zorder=3))
+        if zone:
+            ax.add_patch(Circle((o.x, o.y), o.r + zone, fill=False, edgecolor=color,
+                                linewidth=1.0, linestyle="--", zorder=3))
+        if labels:
+            ax.text(o.x, o.y - o.r - zone - 4, f"{o.name} ({o.kind.lower()})", ha="center",
+                    va="bottom", fontsize=9, zorder=4,
+                    bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="0.5", alpha=0.75))
+
+
+def _object_extent(data: TrackingData) -> list[np.ndarray]:
+    """Points around each object's circle (so the heatmap grid covers them)."""
+    from .objects import file_objects
+    return [np.array([[o.x - o.r, o.y - o.r], [o.x + o.r, o.y + o.r]])
+            for o in file_objects(data)]
+
+
 def _label_points(polys: dict[str, tuple[list, list]]) -> dict[str, tuple[float, float]]:
     """Where to put each region's label: its middle, unless that middle falls
     inside another region's polygon (e.g. an open field's whole-arena
@@ -160,6 +189,7 @@ def path_figure(
     alpha: float = 0.8,
     reference: np.ndarray | None = None,
     labels: bool = True,
+    zone_cm: float | None = None,
 ) -> Figure:
     """Trajectory plot of X/Y points, colored by speed or a single solid color.
     With `reference` (the arena's reference image), the plot sits on it and
@@ -171,6 +201,8 @@ def path_figure(
 
     extent = _draw_reference(ax, reference) if reference is not None else None
     _draw_rois(ax, data, labels=labels, color=REFERENCE_ROI_COLOR if extent else "0.6")
+    _draw_objects(ax, data, zone_cm, labels=labels,
+                  color=REFERENCE_ROI_COLOR if extent else "0.3")
 
     x = df["X"].to_numpy()
     y = df["Y"].to_numpy()
@@ -228,6 +260,7 @@ def heatmap_figure(
     background: str | None = None,
     reference: np.ndarray | None = None,
     labels: bool = True,
+    zone_cm: float | None = None,
 ) -> Figure:
     """Occupancy heatmap: where the animal spent the most time.
 
@@ -260,7 +293,8 @@ def heatmap_figure(
     # the gaps inside the area it happened to cover. Cells are square: `bins`
     # cells along the longer side.
     polys = match_polygons(data)
-    pts = [np.column_stack([x, y])] + [np.column_stack(p) for p in polys.values()]
+    pts = ([np.column_stack([x, y])] + [np.column_stack(p) for p in polys.values()]
+           + _object_extent(data))
     pts = np.vstack([p for p in pts if len(p)]).astype(float)
     lo, hi = pts.min(axis=0), pts.max(axis=0)
     cell = max(float((hi - lo).max()), 1.0) / bins
@@ -294,6 +328,8 @@ def heatmap_figure(
 
     _draw_rois(ax, data, labels=False,
                color=REFERENCE_ROI_COLOR if extent_ref else "0.6")
+    _draw_objects(ax, data, zone_cm, labels=labels,
+                  color=REFERENCE_ROI_COLOR if extent_ref else "0.6")
     if labels:
         _outside_labels(ax, polys, boxed=extent_ref is not None)
     if extent_ref:

@@ -121,6 +121,13 @@ settings panel, always-visible file list, Track / Analyze / Export acting on
 the selected files with a Select all button, one video setup window.
 **Video build (ROADMAP §12, "Video build progress" checklist):**
 C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. Next steps come from the user (PC test with ROADMAP §10's video checklist, merge into `main`, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
+**Object recognition (ROADMAP §15) is built** (2026-11-05, on
+`video-tracking`, O1–O4): test type "Object Recognition"; setup step 5
+"Objects" (circles, Familiar/Novel/Moved, day, phase); Zone distance box
+(never locks); Review tab lists zone visits; scoring in the playback window
+(`<name>_ObjectScoring.csv`); results `OR_*` (`core/objects.py`). Tested on
+the user's object trial `examples/1_2026-06-26_14-03-15.mp4`
+(`tests/test_objects_video.py`).
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion

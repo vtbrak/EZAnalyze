@@ -75,6 +75,9 @@ from core.gaps import fill_gaps
 from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_video,
                         video_info)
 from core.video_setup import OBJECT_TEST, VideoSetup
+from core.objects import (distance_px, load_scoring, object_metrics, scoring_table,
+                          trial_summary)
+from core.metrics import _bin_ranges as bin_ranges
 from core.tracking import TrackingParams
 from core.track_run import TrackRunner, existing_output, make_job
 from core.playback import load_reference
@@ -872,6 +875,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             alpha=p["alpha"],
             reference=self._reference(entry) if p["path_background"] == "reference" else None,
             labels=p["path_labels"],
+            zone_cm=self._zone_cm() if self.test_var.get() == OBJECT_TEST else None,
         )
 
     def _heat_fig(self, entry, p):
@@ -881,6 +885,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             reference=(self._reference(entry) if p["heatmap_bg_mode"] == "reference"
                        else None),
             labels=p["heatmap_labels"],
+            zone_cm=self._zone_cm() if self.test_var.get() == OBJECT_TEST else None,
         )
 
     def _on_color_mode(self, redraw: bool = True) -> None:
@@ -1126,7 +1131,9 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 self._refresh()
 
     def _object_results(self, entry) -> None:
-        """Placeholder until the results are built (O4)."""
+        """Work out an analyzed file's results again (its scoring or the
+        zone distance changed)."""
+        self._analyze_entry(entry)
 
     def _warn_lost(self, entries) -> None:
         """After Analyze: flag files where the point stayed outside the regions
@@ -1395,6 +1402,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._update_status()
         if hasattr(self, "review"):
             self.review.zone_changed(v)
+        if self.test_var.get() == OBJECT_TEST and any(e.analyzed for e in self.files):
+            for e in self.files:
+                if e.analyzed:
+                    self._analyze_entry(e)
+            self._refresh()
 
     def _of_status(self, locked: bool) -> str:
         if self.test_var.get() != "Open Field":
@@ -1973,60 +1985,76 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.config(cursor="watch")
         self.update_idletasks()
         try:
-            test = self.test_var.get()
-            min_entry = self.config_data["min_entry_frames"]
-            fill = bool(self.config_data["fill_gaps"])
-            fill_max = int(self.config_data["fill_gaps_max_frames"])
             for e in targets:
-                # Gap filling works on a copy; the file's own data is untouched.
-                data = fill_gaps(e.data, fill_max) if fill else e.data
-                roles = self._current_roles([e])
-                # Per-region numbers use the test's entry rule, so they match
-                # the test measures (Open Field: also its "same visit" gap).
-                summary = summary_metrics(
-                    data, fps=fps, roles=roles, min_entry_frames=min_entry,
-                    min_gap_s=(self.config_data["min_seconds_between_entries"]
-                               if test == "Open Field" else 0.0))
-                # Record the settings behind these numbers in the row itself, so
-                # an exported table shows how it was produced.
-                settings = {"Test": test, "MinEntryFrames": min_entry,
-                            "FillGaps": fill, "FillGapsMaxFrames": fill_max}
-                bins = binned_metrics(data, fps=fps, bin_seconds=bin_s, roles=roles)
-                test_bins = None
-                if test == "Elevated Plus Maze":
-                    summary.update(epm_metrics(
-                        data, roles, fps=fps, min_entry_frames=min_entry,
-                    ))
-                    test_bins = epm_binned(data, roles, fps=fps, bin_seconds=bin_s,
-                                           min_entry_frames=min_entry)
-                elif test == "Open Field":
-                    gap = self.config_data["min_seconds_between_entries"]
-                    adj = self.config_data["min_center_seconds_adjoining"]
-                    smooth = self.config_data["speed_smoothing_frames"]
-                    summary.update(of_metrics(
-                        data, roles, fps=fps, min_entry_frames=min_entry,
-                        min_between_entries_s=gap, min_center_adjoining_s=adj,
-                        speed_smoothing_frames=smooth,
-                    ))
-                    test_bins = of_binned(
-                        data, roles, fps=fps, bin_seconds=bin_s,
-                        min_entry_frames=min_entry, min_between_entries_s=gap,
-                        min_center_adjoining_s=adj, speed_smoothing_frames=smooth,
-                    )
-                    settings.update({"MinBetweenCenterEntries_s": gap,
-                                     "MinCenterAdjoiningCrossing_s": adj,
-                                     "SpeedSmoothing_frames": smooth})
-                summary.update(settings)
-                e.summary = order_summary(drop_duplicates(summary, roles, test), test)
-                # The test's measures per bin go after the general bin columns.
-                if test_bins is not None and not bins.empty:
-                    bins = bins.merge(test_bins, on="Bin", how="left")
-                e.bins = order_bins(drop_duplicates(bins, roles, test), test)
+                self._analyze_entry(e)
         finally:
             self.config(cursor="")
         self._refresh()
         self._warn_shared(targets)
         self._warn_lost(targets)
+
+    def _analyze_entry(self, e) -> None:
+        """Work out one file's Summary row and Time Bins with this load's
+        (locked) settings."""
+        fps, bin_s = self._fps_locked(), self._bin_seconds_locked()
+        test = self.test_var.get()
+        min_entry = self.config_data["min_entry_frames"]
+        fill = bool(self.config_data["fill_gaps"])
+        fill_max = int(self.config_data["fill_gaps_max_frames"])
+        # Gap filling works on a copy; the file's own data is untouched.
+        data = fill_gaps(e.data, fill_max) if fill else e.data
+        roles = self._current_roles([e])
+        # Per-region numbers use the test's entry rule, so they match
+        # the test measures (Open Field: also its "same visit" gap).
+        summary = summary_metrics(
+            data, fps=fps, roles=roles, min_entry_frames=min_entry,
+            min_gap_s=(self.config_data["min_seconds_between_entries"]
+                       if test == "Open Field" else 0.0))
+        # Record the settings behind these numbers in the row itself, so
+        # an exported table shows how it was produced.
+        settings = {"Test": test, "MinEntryFrames": min_entry,
+                    "FillGaps": fill, "FillGapsMaxFrames": fill_max}
+        bins = binned_metrics(data, fps=fps, bin_seconds=bin_s, roles=roles)
+        test_bins = None
+        if test == "Elevated Plus Maze":
+            summary.update(epm_metrics(
+                data, roles, fps=fps, min_entry_frames=min_entry,
+            ))
+            test_bins = epm_binned(data, roles, fps=fps, bin_seconds=bin_s,
+                                   min_entry_frames=min_entry)
+        elif test == "Open Field":
+            gap = self.config_data["min_seconds_between_entries"]
+            adj = self.config_data["min_center_seconds_adjoining"]
+            smooth = self.config_data["speed_smoothing_frames"]
+            summary.update(of_metrics(
+                data, roles, fps=fps, min_entry_frames=min_entry,
+                min_between_entries_s=gap, min_center_adjoining_s=adj,
+                speed_smoothing_frames=smooth,
+            ))
+            test_bins = of_binned(
+                data, roles, fps=fps, bin_seconds=bin_s,
+                min_entry_frames=min_entry, min_between_entries_s=gap,
+                min_center_adjoining_s=adj, speed_smoothing_frames=smooth,
+            )
+            settings.update({"MinBetweenCenterEntries_s": gap,
+                             "MinCenterAdjoiningCrossing_s": adj,
+                             "SpeedSmoothing_frames": smooth})
+        if test == OBJECT_TEST:
+            # From the saved manual scoring (ROADMAP §15); updated as it's scored.
+            zone = self._zone_cm()
+            scoring = load_scoring(e.data)
+            summary.update(trial_summary(data, scoring, fps, zone, min_entry))
+            zone_px = distance_px(data, zone)[0]
+            test_bins = pd.DataFrame([{"Bin": b, **object_metrics(
+                data, scoring, fps, zone_px, min_entry, lo, hi)}
+                for b, lo, hi in bin_ranges(data.n_frames, fps, bin_s)])
+            settings["ZoneDistance_cm"] = zone
+        summary.update(settings)
+        e.summary = order_summary(drop_duplicates(summary, roles, test), test)
+        # The test's measures per bin go after the general bin columns.
+        if test_bins is not None and not bins.empty:
+            bins = bins.merge(test_bins, on="Bin", how="left")
+        e.bins = order_bins(drop_duplicates(bins, roles, test), test)
 
     def _warn_shared(self, entries) -> None:
         """Only the center may share frames with other regions (those frames
@@ -2185,6 +2213,9 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                     write_analysis_workbook(
                         out["analysis"], {k: v for k, v in e.summary.items()},
                         e.bins, self._settings_sheet(e, plot),
+                        interactions=(scoring_table(e.data, load_scoring(e.data),
+                                                    self._fps_locked())
+                                      if self.test_var.get() == OBJECT_TEST else None),
                     )
                     save_figure(self._path_fig(e, plot), out["path"])
                     save_figure(self._heat_fig(e, plot), out["heatmap"])

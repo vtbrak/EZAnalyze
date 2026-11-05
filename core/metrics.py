@@ -98,6 +98,8 @@ def _distance_to_polygon(xs, ys, px: np.ndarray, py: np.ndarray) -> np.ndarray:
 def _outside_mask(data: TrackingData) -> np.ndarray:
     """Frames with a tracked position that's in none of the file's regions."""
     inside = np.zeros(data.n_frames, dtype=bool)
+    if not data.regions:      # no regions drawn (e.g. Object Recognition)
+        return inside
     for r in data.regions:
         inside |= data.df[r].to_numpy(dtype=bool)
     return ~inside & data.df["X"].notna().to_numpy() & data.df["Y"].notna().to_numpy()
@@ -680,8 +682,26 @@ KEY_MEASURES = {
 _BIN_KEY_RENAMES = {"EPM_PctSession_Center": "EPM_PctBin_Center"}
 
 
-def key_measures(test: str, bins: bool = False) -> list[str]:
-    """The test's key measures, in order (empty if it has none set)."""
+def _object_keys(columns, bins: bool = False) -> list[str]:
+    """Object Recognition's key measures (ROADMAP §15): the trial, the
+    discrimination index, % preference and total, then each object's
+    interaction time, bouts and latency (object names vary, so these are
+    found by prefix)."""
+    columns = list(columns)
+    per = lambda prefix, suffix="": [c for c in columns if c.startswith(prefix)
+                                     and c.endswith(suffix)
+                                     and c not in ("OR_Bouts_Total", "OR_Latency_First_s")]
+    head = ([] if bins else ["OR_Day", "OR_Phase", "OR_NovelObjects"]) + [
+        "OR_DiscriminationIndex", "OR_PctPreference", "OR_Total_s"]
+    return [c for c in head if c in columns] + per("OR_Time_", "_s") + per("OR_Bouts_") + (
+        [] if bins else per("OR_Latency_", "_s"))
+
+
+def key_measures(test: str, bins: bool = False, columns=()) -> list[str]:
+    """The test's key measures, in order (empty if it has none set).
+    Object Recognition's depend on the object names in `columns`."""
+    if test == "Object Recognition":
+        return _object_keys(columns, bins)
     keys = KEY_MEASURES.get(test, [])
     return [_BIN_KEY_RENAMES.get(k, k) for k in keys] if bins else list(keys)
 
@@ -689,7 +709,7 @@ def key_measures(test: str, bins: bool = False) -> list[str]:
 def order_summary(row: dict, test: str) -> dict:
     """The row with File first, then the test's key measures, then the rest
     in their usual order. Tests without key measures are unchanged."""
-    keys = [k for k in key_measures(test) if k in row]
+    keys = [k for k in key_measures(test, columns=row) if k in row]
     if not keys:
         return row
     first = [k for k in ("File",) if k in row] + keys
@@ -720,7 +740,8 @@ def drop_duplicates(table, roles: dict[str, str], test: str):
 
 def order_bins(bins: pd.DataFrame, test: str) -> pd.DataFrame:
     """Time Bins with Bin / Start_s / End_s first, then the key measures."""
-    keys = [k for k in key_measures(test, bins=True) if k in bins.columns]
+    keys = [k for k in key_measures(test, bins=True, columns=bins.columns)
+            if k in bins.columns]
     if not keys or bins.empty:
         return bins
     first = [c for c in ("Bin", "Start_s", "End_s") if c in bins.columns] + keys
@@ -743,17 +764,17 @@ def summary_column_groups(columns, test: str = "") -> dict[str, list[str]]:
         "key": [], "basics": [], "test": [], "zones": [], "entries": [], "details": []
     }
     columns = list(columns)
-    keys = [k for k in key_measures(test) if k in columns]
+    keys = [k for k in key_measures(test, columns=columns) if k in columns]
     if not keys:  # e.g. Open Field: key = what it showed by default before
         keys = [c for c in columns if c in _BASICS] + [
-            c for c in columns if c.startswith(("EPM_", "OF_"))]
+            c for c in columns if c.startswith(("EPM_", "OF_", "OR_"))]
     groups["key"] = keys
     for c in columns:
         if c == "File" or c in keys:
             continue
         if c in _BASICS:
             groups["basics"].append(c)
-        elif c.startswith(("EPM_", "OF_")):
+        elif c.startswith(("EPM_", "OF_", "OR_")):
             groups["test"].append(c)  # the chosen test's own measures
         elif c.startswith("Entries_") or c in ("Region_transitions", "ROI_transitions"):
             groups["entries"].append(c)

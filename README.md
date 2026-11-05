@@ -98,6 +98,25 @@ other boxes to add columns. Open Field shows its basics and test measures.
   for how long (`OutsideTime_s`), and the average and longest stretch.
 - The tracking settings recorded in the file
 
+**Object Recognition** (novel object / object location; videos tracked in
+this program): in **Set up videos…**, step 5 (**Objects**), draw each object
+as a circle: press at its center and drag out to its edge. Two objects are
+listed; **Add object** adds more. Mark each **Familiar**, **Novel** or
+**Moved**, and set the trial **day** and **phase**. A dashed **zone** rings
+each object out to the **Zone distance (cm)** (main window; never locks, and
+needs the scale). After tracking, the **Review** tab lists every stretch the
+tracked point spends in a zone. Click one to open the playback window at the
+frame the point enters the zone, then step through and log each interaction
+with **Start interaction (S)** / **End interaction (E)**, or mark the visit
+**No interaction (N)**. Interactions can be logged at any frame, with the
+object picked by hand. Scoring is saved as you go to
+`<name>_ObjectScoring.csv` beside the tracking file. Results: interaction
+time, bouts and latency per object; total; **discrimination index** =
+(novel − familiar) / (novel + familiar) time and **% preference** = novel /
+(novel + familiar) × 100 (novel = objects marked Novel or Moved); zone time
+and visits per object; day, phase and the novel object(s). They update as you
+score. The export adds an **Interactions** sheet.
+
 **Time bins** (per file): the session split into fixed-length bins (default
 60 s) with distance, mean speed, and time-in-zone per bin, plus the chosen
 test's measures for each bin (EPM: arm/center time, entries, % open, Anxiety
@@ -270,10 +289,11 @@ BehaviorTracker/
 │   ├── video_setup.py  one video's setup (trim, crop, shapes, regions, scale)
 │   ├── track_run.py    Track: videos one at a time in the background
 │   ├── playback.py     playback and the saved _tracked.mp4 (from ezTrack)
+│   ├── objects.py      object recognition: objects, zones, scoring, results
 │   └── config.py    saved settings (config.json)
 ├── gui.py           tkinter front end
 ├── setup_window.py  Set up videos… window
-├── review_panel.py  Review tab (video playback and points to review)
+├── review_panel.py  Review tab, playback window and object scoring
 ├── about.py         About window (credits, citation, license)
 ├── region_dialog.py Match regions dialog
 ├── tooltip.py       hover tooltips

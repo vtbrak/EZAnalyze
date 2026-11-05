@@ -1409,6 +1409,28 @@ Semi-automated novel object / object location scoring from video.
 - O4: Analyze / Summary / Time Bins / export, objects and zones on the
   plots; docs.
 
+**Built 2026-11-05 (O1–O4).** `core/objects.py` (objects, zones, visits,
+`Scoring`, `object_metrics`, `trial_summary`); setup step 5 becomes
+"Objects" for this test; tracking files gain `Objects` (JSON circles in the
+file's pixels, with type), `Trial_Day`, `Trial_Phase`; zone visits use the
+entry rule (Min entry frames) so boundary jitter doesn't split them; bouts
+with the same object that overlap or touch are joined; the playback window
+gets a **Score interactions** panel (object follows the zone the point is
+in; S / E / N keys; logged list with Delete; per-object totals); results
+update as scoring is saved, and when the zone distance changes. Summary
+key measures: day, phase, novel object(s), DI, % preference, total, then
+per-object time, bouts, latency. Time Bins: interaction time, bouts and
+zone time per bin. Export: Interactions sheet. Path / Heatmap draw the
+objects and zones. No outside-region review for this test (no regions).
+Tested on the user's object trial (`examples/1_2026-06-26_14-03-15.mp4`,
+640x480, 9.84 fps, mouse placed about frame 320): with a 2 cm zone, 18 zone
+visits (8 at object 1, 10 at object 2). The tracked point is the body
+center, so while sniffing it sits a few cm from the object; a larger zone
+may suit (to settle by experimenting).
+**Possible follow-ups (not built):** edit object types / day / phase after
+tracking; draw the objects on the Scale step; objects on the saved
+`_tracked.mp4`.
+
 ## Open questions — RESOLVED (2026-10-09)
 1. **EPM anxiety index** — ✅ report all three: %open time & %open entries, the
    composite Anxiety Index, and the closed/open time ratio. (See §4.)
@@ -1610,7 +1632,7 @@ Done:
   another file closes the window. A separate window will also serve a future
   **object recognition** analysis that needs manual scoring (not planned
   yet; the user mentioned it 2026-11-05).
-- **Object recognition (§15)**: decided 2026-11-05; building O1–O4.
+- ✅ **Object recognition (§15)**: decided and built 2026-11-05 (O1–O4).
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

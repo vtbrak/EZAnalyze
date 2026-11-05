@@ -187,9 +187,16 @@ class Scoring:
     no_interaction: set[tuple[str, int]] = field(default_factory=set)
 
     def add_bout(self, obj: str, start: int, end: int) -> Bout:
+        """Log an interaction. One that overlaps or touches another with the
+        same object joins it, so no frame is counted twice."""
         if end < start:
             start, end = end, start
-        b = Bout(obj, int(start), int(end))
+        start, end = int(start), int(end)
+        for other in [b for b in self.bouts if b.object == obj
+                      and b.start <= end + 1 and start <= b.end + 1]:
+            start, end = min(start, other.start), max(end, other.end)
+            self.bouts.remove(other)
+        b = Bout(obj, start, end)
         self.bouts.append(b)
         self.bouts.sort(key=lambda b: (b.start, b.object))
         return b

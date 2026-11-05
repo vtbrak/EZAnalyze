@@ -700,7 +700,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
         # Review tab: the selected file's video with its tracking drawn on, and
         # the moments to check (outside the regions; long ones flagged).
-        self.review = ReviewPanel(self.nb, on_cutoff=self._save_review_cutoff)
+        self.review = ReviewPanel(self.nb, on_cutoff=self._save_review_cutoff,
+                                  on_scored=self._on_scored)
         self.nb.add(self.review, text="Review")
         self.nb.bind("<<NotebookTabChanged>>", lambda _e: self._on_tab_change())
 
@@ -755,6 +756,16 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                          "1 or more. Using 5 frames instead.")
             self.entry_var.set("5")
             return 5
+
+    def _min_entry_frames_quiet(self) -> int:
+        """The entry rule in use (the locked one once analyzed), without a
+        warning if the box isn't a number (for the Review list)."""
+        if self._locked():
+            return int(self.config_data["min_entry_frames"])
+        try:
+            return max(1, int(float(self.entry_var.get())))
+        except ValueError:
+            return int(self.config_data["min_entry_frames"])
 
     def _frames_setting(self, var, name: str, default: int) -> int:
         """A whole number of frames (1 or more), resetting to `default` if invalid."""
@@ -1099,9 +1110,23 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self.review.show_message(f"{entry.label} hasn't been tracked yet. Set it up "
                                      "and click Track, then review it here.")
         else:
+            objects = self.test_var.get() == OBJECT_TEST
             self.review.load(entry.data, entry.video.path if entry.video else None,
                              self._current_roles([entry]), self._review_cutoff(),
-                             title=entry.label)
+                             title=entry.label,
+                             zone_cm=self._zone_cm() if objects else None,
+                             min_frames=self._min_entry_frames_quiet())
+
+    def _on_scored(self, data) -> None:
+        """Scoring changed in the playback window: refresh that file's
+        results if it's analyzed (ROADMAP §15)."""
+        for e in self.files:
+            if e.data is data and e.analyzed:
+                self._object_results(e)
+                self._refresh()
+
+    def _object_results(self, entry) -> None:
+        """Placeholder until the results are built (O4)."""
 
     def _warn_lost(self, entries) -> None:
         """After Analyze: flag files where the point stayed outside the regions
@@ -1331,7 +1356,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if not roles and any(e.video is not None for e in self.files):
             regions = "draw them in Set up videos…"  # nothing drawn or tracked yet
         if self.test_var.get() == OBJECT_TEST:
-            regions = f"objects, zone {self.zone_var.get()} cm from each edge"
+            regions = f"zone {self.zone_var.get()} cm from each edge"
         if self._locked():
             settings = (f"{self.test_var.get()}, {self._fps_locked():g} fps, "
                         f"{self._bin_seconds_locked():g} s bins, "
@@ -1341,9 +1366,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             settings = (f"{self.test_var.get()}, {self.fps_var.get()} fps, "
                         f"{self.bin_var.get()} s bins, entry ≥ {self.entry_var.get()} "
                         f"frames{self._of_status(locked=False)} (locks at Analyze)")
+        what = "Objects" if self.test_var.get() == OBJECT_TEST else "Regions"
         self.status.set(
             f"{len(self.files)} file(s), {done} analyzed — {settings} — "
-            f"Regions: {regions}"
+            f"{what}: {regions}"
         )
 
     def _zone_cm(self) -> float:

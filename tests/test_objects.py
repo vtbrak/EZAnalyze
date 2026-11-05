@@ -82,6 +82,11 @@ try:
     check("a bout counts for the part of it inside a time bin",
           b["OR_Time_object 2_s"] == 6 and b["OR_Bouts_object 2"] == 1)
 
+    j = Scoring(); j.add_bout("object 1", 10, 20); j.add_bout("object 1", 18, 30)
+    j.add_bout("object 1", 31, 33); j.add_bout("object 2", 15, 16)
+    check("overlapping or touching bouts with the same object join (no frame twice)",
+          [(x.object, x.start, x.end) for x in j.bouts]
+          == [("object 1", 10, 33), ("object 2", 15, 16)])
     save_scoring(d, s, 1.0)
     check("scoring saved beside the tracking file",
           os.path.basename(scoring_path(d)) == "m1_ObjectScoring.csv"

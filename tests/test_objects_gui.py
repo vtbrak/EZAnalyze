@@ -100,6 +100,72 @@ check("Track writes the objects, day and phase (no regions)",
 win._close()
 app.update()
 
+# --- Track a short stretch, then score it in the Review tab -----------------
+import pandas as pd
+from core.track_run import run_job
+from core.loader import load_csv
+from core.objects import TrialObject, objects_to_text, load_scoring, scoring_path
+v.start, v.length_s = 0, 10.0
+job = make_job(v, __import__("core.tracking", fromlist=["x"]).TrackingParams(), 1.0, 10,
+               "Object Recognition")
+data, csv = run_job(job)
+df = pd.read_csv(csv)
+check("the tracking file has the objects, day and phase", file_ok := (
+    "Objects" in df.columns and str(df["Trial_Day"].iloc[0]) == "3"
+    and df["Trial_Phase"].iloc[0] == "Test"))
+# Put object 1 where the animal is at frame 100, so there's a zone visit.
+x0, y0 = df["X"].iloc[100], df["Y"].iloc[100]
+df["Objects"] = objects_to_text([TrialObject("object 1", x0 + 30, y0, 20, "Familiar"),
+                                 TrialObject("object 2", 5, 5, 3, "Novel")])
+df.to_csv(csv, index=False)
+app.files[0].data = load_csv(csv)
+app._refresh(); app.update()
+app._set_selection([0], focus=0); app.update()
+app.nb.select(app.review); app.update(); app._show_review(); app.update()
+rv = app.review
+check("Review tab lists zone visits to score", rv.scorer is not None and rv.scorer.visits
+      and rv.heading.cget("text") == "Zone visits to score"
+      and rv.tree.item("0", "values")[1] == "object 1"
+      and rv.tree.item("0", "values")[-1] == "to review"
+      and not rv.cutoff_entry.winfo_manager())
+visit = rv.scorer.visits[0]
+rv.tree.selection_set("0"); app.update()
+pw = rv.window
+check("clicking a visit opens the playback window at the frame the point enters the zone",
+      pw is not None and pw.winfo_exists() and pw.row == visit["row"]
+      and pw.object_var.get() == "object 1" and "object 1 zone" in pw.info.cget("text"))
+pw.mark_end()
+check("End before Start says what to do", "Start interaction" in pw.score_text.cget("text"))
+pw.step(2); pw.mark_start(); pw.step(5); pw.mark_end(); app.update()
+sc = load_scoring(app.files[0].data)
+check("Start / End logs an interaction and saves it",
+      [(b.object, b.start, b.end) for b in sc.bouts] == [("object 1", visit["row"] + 2, visit["row"] + 7)]
+      and os.path.exists(scoring_path(app.files[0].data)))
+check("the visit shows as scored in the list",
+      rv.tree.item("0", "values")[-1] == "interaction"
+      and "object 1 0.2 s (1 interaction)" in rv.summary.cget("text"))
+pw.mark_none()
+check("No interaction on a visit with an interaction is refused",
+      "already has an interaction" in pw.score_text.cget("text"))
+pw.bout_tree.selection_set("0"); app.update(); pw.delete_logged(); app.update()
+check("Delete removes it", not load_scoring(app.files[0].data).bouts
+      and rv.tree.item("0", "values")[-1] == "to review")
+pw.show(visit["row"]); pw.mark_none(); app.update()
+check("No interaction marks the visit", rv.tree.item("0", "values")[-1] == "no interaction"
+      and load_scoring(app.files[0].data).no_interaction == {("object 1", visit["row"])})
+pw.object_var.set("object 2"); pw._picked_object(); pw.show(0)
+pw.mark_start(); pw.step(3)
+check("an interaction can be logged anywhere, with the object picked by hand",
+      pw.object_var.get() == "object 2")
+pw.mark_end(); app.update()
+check("…and is saved", ("object 2", 0, 3) in [(b.object, b.start, b.end)
+                                               for b in load_scoring(app.files[0].data).bouts])
+n_before = len(rv.scorer.visits)
+app.zone_var.set("0"); app.update()
+check("changing the zone distance updates the visit list (no re-tracking)",
+      len(rv.scorer.visits) != n_before or rv.scorer.zone_cm == 0)
+app.zone_var.set("3"); app.update()
+
 print(f"\n{fails} failure(s)")
 app.destroy()
 shutil.rmtree(tmp, ignore_errors=True)

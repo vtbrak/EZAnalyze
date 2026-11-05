@@ -29,7 +29,9 @@ import tkinter as tk
 import traceback
 from tkinter import ttk
 
-from core.metrics import _outside_mask, outside_events, region_labels
+from core.metrics import _outside_mask, outside_events, region_labels, secs
+from core.objects import (Bout, distance_px, file_objects, load_scoring, object_at,
+                          save_scoring, scoring_path, zone_visits)
 from core.playback import FrameSource, open_playback, tracked_video_path, write_tracked_video
 from dialogs import show_info, show_warning
 from setup_window import FrameCanvas
@@ -41,6 +43,12 @@ SKIP_SECONDS = 10
 MARKER_COLOR = "#ff2828"
 TRAIL_COLOR = "#ffc828"
 ROI_COLOR = "#5adc5a"
+OBJECT_COLOR = "#ff9f1a"
+ZONE_COLOR = "#ffffff"
+ACTIVE_COLOR = "#39d353"
+VISIT_COLUMNS = (("#", 34), ("Object", 90), ("Frame", 64), ("Session time", 84),
+                 ("Video time", 78), ("Length (s)", 66), ("Scored", 110))
+STATUS_TEXT = {"scored": "interaction", "none": "no interaction", "": "to review"}
 EVENT_COLUMNS = (("#", 34), ("Frame", 64), ("Session time", 84), ("Video frame", 78),
                  ("Video time", 78), ("Length (s)", 66), ("Counted as", 96),
                  ("Px outside", 70), ("Check", 70))
@@ -51,16 +59,93 @@ def clock(seconds: float) -> str:
     return f"{int(seconds // 60)}:{seconds % 60:05.2f}"
 
 
+class ObjectScorer:
+    """A file's object recognition scoring while it's reviewed (ROADMAP §15):
+    its objects, zones and zone visits, and the logged interactions, saved
+    to `<name>_ObjectScoring.csv` after every change. `on_change` runs after
+    each change (the Review list and results update)."""
+
+    def __init__(self, data, fps: float, zone_cm: float, min_frames: int = 1,
+                 on_change=None):
+        self.data, self.fps, self.min_frames = data, fps, max(1, int(min_frames))
+        self.objects = file_objects(data)
+        self.scoring = load_scoring(data)
+        self.on_change = on_change or (lambda: None)
+        self.pending: tuple[str, int] | None = None   # (object, start row) of an open bout
+        self.set_zone(zone_cm)
+
+    def set_zone(self, zone_cm: float) -> None:
+        self.zone_cm = zone_cm
+        self.zone_px, self.scaled = distance_px(self.data, zone_cm)
+        self.visits = zone_visits(self.data, self.objects, self.zone_px, self.fps,
+                                  self.min_frames)
+
+    def object_at(self, row: int) -> str:
+        return object_at(self.data, self.objects, self.zone_px, row)
+
+    def visit_at(self, row: int, obj: str | None = None) -> dict | None:
+        """The zone visit (of `obj`, if given) that `row` falls in."""
+        for v in self.visits:
+            if v["row"] <= row <= v["end"] and (obj is None or v["object"] == obj):
+                return v
+        return None
+
+    def _changed(self) -> str | None:
+        """Save, then tell the listeners. Returns an error message if the
+        file couldn't be written (the scoring stays in memory)."""
+        error = None
+        try:
+            save_scoring(self.data, self.scoring, self.fps)
+        except OSError as exc:
+            error = str(exc)
+        self.on_change()
+        return error
+
+    def start(self, obj: str, row: int) -> None:
+        self.pending = (obj, row)
+
+    def end(self, row: int):
+        """Close the open interaction at `row`. Returns (bout, save error)."""
+        obj, start = self.pending
+        self.pending = None
+        bout = self.scoring.add_bout(obj, start, row)
+        return bout, self._changed()
+
+    def toggle_none(self, visit: dict) -> str | None:
+        key = (visit["object"], visit["row"])
+        if key in self.scoring.no_interaction:
+            self.scoring.no_interaction.discard(key)
+        else:
+            self.scoring.no_interaction.add(key)
+        return self._changed()
+
+    def delete(self, item) -> str | None:
+        if isinstance(item, Bout):
+            self.scoring.bouts.remove(item)
+        else:
+            self.scoring.no_interaction.discard(item)
+        return self._changed()
+
+    def totals(self) -> dict[str, tuple[float, int]]:
+        """{object: (interaction seconds, bouts)}."""
+        out = {}
+        for o in self.objects:
+            mine = [b for b in self.scoring.bouts if b.object == o.name]
+            out[o.name] = (secs(sum(b.frames() for b in mine), self.fps), len(mine))
+        return out
+
+
 class PlaybackWindow(tk.Toplevel):
     """A tracked file's video with its tracking drawn on, in its own window."""
 
-    def __init__(self, parent, pb, labels, outside, title: str):
+    def __init__(self, parent, pb, labels, outside, title: str, scorer=None):
         super().__init__(parent)
         self.pb = pb
+        self.scorer = scorer
         self.source = FrameSource(pb)
         self._labels, self._outside = labels, outside
         self.title(f"Playback: {title}")
-        self.geometry("960x760")
+        self.geometry("960x900" if scorer else "960x760")
         self.minsize(600, 480)
         self.row = 0
         self.playing = False
@@ -78,6 +163,8 @@ class PlaybackWindow(tk.Toplevel):
         # shrinks the video instead of hiding them; two short rows fit narrow.
         bar2 = ttk.Frame(self, padding=(8, 0, 8, 8))
         bar2.pack(side=tk.BOTTOM, fill=tk.X)
+        if self.scorer is not None:
+            self._build_scoring()
         bar = ttk.Frame(self, padding=(8, 6, 8, 4))
         bar.pack(side=tk.BOTTOM, fill=tk.X)
         self.slider = ttk.Scale(self, from_=0, to=max(self.pb.n_frames - 1, 0),
@@ -116,7 +203,8 @@ class PlaybackWindow(tk.Toplevel):
         ttk.Checkbutton(bar2, text="Trail", variable=self.trail_var,
                         command=self._redraw).pack(side=tk.LEFT)
         self.roi_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar2, text="Regions", variable=self.roi_var,
+        ttk.Checkbutton(bar2, text="Objects" if self.scorer else "Regions",
+                        variable=self.roi_var,
                         command=self._redraw).pack(side=tk.LEFT, padx=(8, 0))
         self.save_btn = ttk.Button(bar2, text="Save as video…", command=self.save_video)
         self.save_btn.pack(side=tk.RIGHT)
@@ -148,6 +236,8 @@ class PlaybackWindow(tk.Toplevel):
             self._redraw()  # keep the last image; the info line says why
         self._set_slider(self.row)
         self._update_info(frame is None)
+        if self.scorer is not None:
+            self._follow_object()
 
     def _redraw(self) -> None:
         self.canvas._render()
@@ -161,6 +251,19 @@ class PlaybackWindow(tk.Toplevel):
                 pts = [v for x, y in zip(xs, ys) for v in c.to_screen(x, y)]
                 if len(pts) >= 6:
                     c.create_polygon(*pts, outline=ROI_COLOR, fill="", width=1)
+        if self.scorer is not None and self.roi_var.get():
+            sc = self.scorer
+            here = sc.object_at(row)
+            pending = sc.pending[0] if sc.pending else None
+            for o in sc.objects:
+                sx, sy = c.to_screen(o.x, o.y)
+                r, z = o.r * c.scale, (o.r + sc.zone_px) * c.scale
+                color = ACTIVE_COLOR if o.name == pending else OBJECT_COLOR
+                c.create_oval(sx - r, sy - r, sx + r, sy + r, outline=color, width=2)
+                c.create_oval(sx - z, sy - z, sx + z, sy + z, outline=ZONE_COLOR,
+                              dash=(6, 4), width=2 if o.name == here else 1)
+                c.create_text(sx, sy - z - 10, text=f"{o.name} ({o.kind.lower()})",
+                              fill="white", font=("TkDefaultFont", 11, "bold"))
         trail = self._trail_frames()
         if trail:
             pts = pb.trail(row, trail)
@@ -183,12 +286,18 @@ class PlaybackWindow(tk.Toplevel):
             parts.append("unreadable frame (no position)")
         elif pb.position(row) is None:
             parts.append("no position found")
+        elif self.scorer is not None:
+            here = self.scorer.object_at(row)
+            parts.append(f"in the {here} zone" if here else "in no object zone")
         else:
             region = self._labels[row] if row < len(self._labels) else ""
             text = f"region: {region}" if region else "in no region"
             if row < len(self._outside) and self._outside[row]:
                 text += " (outside the drawn regions)"
             parts.append(text)
+        if self.scorer is not None and self.scorer.pending:
+            obj, start = self.scorer.pending
+            parts.append(f"interaction with {obj} open since frame {start + 1:,}")
         if unread_video:
             parts.append("the video frame couldn't be read")
         self.info.configure(text="   ·   ".join(parts))
@@ -310,6 +419,190 @@ class PlaybackWindow(tk.Toplevel):
             show_info(self, "Video saved",
                       f"Saved {os.path.basename(state['result'])} next to the video.")
 
+    # ------------------------------------------------------------- scoring
+    def _build_scoring(self) -> None:
+        """Object recognition scoring (ROADMAP §15): log the start and end of
+        each interaction, or mark a zone visit as no interaction."""
+        sc = self.scorer
+        box = ttk.LabelFrame(self, text="Score interactions", padding=(8, 4))
+        box.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=(0, 4))
+        row = ttk.Frame(box)
+        row.pack(fill=tk.X)
+        ttk.Label(row, text="Object:").pack(side=tk.LEFT)
+        self.object_var = tk.StringVar()
+        self.object_box = ttk.Combobox(row, textvariable=self.object_var, state="readonly",
+                                       width=12, values=[o.name for o in sc.objects])
+        self.object_box.pack(side=tk.LEFT, padx=(4, 8))
+        self.object_box.bind("<<ComboboxSelected>>", lambda _e: self._picked_object())
+        Tooltip(self.object_box, "The object being scored. It follows the zone the "
+                                 "tracked point is in; pick one by hand if the point is "
+                                 "elsewhere (e.g. the tracker missed it).")
+        self.start_btn = ttk.Button(row, text="Start interaction (S)",
+                                    command=self.mark_start)
+        self.start_btn.pack(side=tk.LEFT)
+        self.end_btn = ttk.Button(row, text="End interaction (E)", command=self.mark_end)
+        self.end_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self.none_btn = ttk.Button(row, text="No interaction (N)", command=self.mark_none)
+        self.none_btn.pack(side=tk.LEFT, padx=(6, 0))
+        Tooltip(self.start_btn, "The interaction starts on the frame shown. Step to the "
+                                "frame it ends on, then click End interaction.")
+        Tooltip(self.none_btn, "Mark the zone visit shown (or the last one opened) as "
+                               "reviewed with no interaction. Click again to undo.")
+        self.score_text = ttk.Label(box, foreground="#b26a00", anchor=tk.W, justify=tk.LEFT)
+        self.score_text.pack(fill=tk.X, pady=(4, 0))
+        self.score_text.bind("<Configure>", lambda e: self.score_text.configure(
+            wraplength=max(200, e.width - 8)))
+        lst = ttk.Frame(box)
+        lst.pack(fill=tk.X, pady=(4, 0))
+        self.bout_tree = ttk.Treeview(lst, columns=("type", "object", "start", "end", "length"),
+                                      show="headings", height=4, selectmode="browse")
+        for col, text, width in (("type", "Logged", 110), ("object", "Object", 90),
+                                 ("start", "Start frame", 80), ("end", "End frame", 80),
+                                 ("length", "Length (s)", 72)):
+            self.bout_tree.heading(col, text=text)
+            self.bout_tree.column(col, width=width, anchor=tk.CENTER)
+        vsb = ttk.Scrollbar(lst, orient="vertical", command=self.bout_tree.yview)
+        self.bout_tree.configure(yscrollcommand=vsb.set)
+        self.bout_tree.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        vsb.pack(side=tk.LEFT, fill=tk.Y)
+        self.bout_tree.bind("<<TreeviewSelect>>", lambda _e: self._bout_selected())
+        side = ttk.Frame(lst)
+        side.pack(side=tk.LEFT, fill=tk.Y, padx=(8, 0))
+        ttk.Button(side, text="Delete", command=self.delete_logged).pack(anchor="n")
+        self.totals_text = ttk.Label(side, justify=tk.LEFT)
+        self.totals_text.pack(anchor="n", pady=(8, 0))
+        for key, fn in (("s", self.mark_start), ("e", self.mark_end), ("n", self.mark_none)):
+            for k in (key, key.upper()):
+                self.bind(f"<KeyPress-{k}>", lambda e, fn=fn: self._key(e, fn))
+        self._manual_object = False
+        self.visit: dict | None = None     # the zone visit opened from the list
+        self._logged: list = []
+        self._fill_logged()
+
+    def _key(self, e, fn) -> None:
+        if isinstance(e.widget, (tk.Entry, ttk.Entry)):
+            return
+        fn()
+
+    def _picked_object(self) -> None:
+        self._manual_object = True
+
+    def _follow_object(self) -> None:
+        """Pick the object whose zone the point is in, unless one was picked
+        by hand or an interaction is open."""
+        sc = self.scorer
+        if sc.pending:
+            self.object_var.set(sc.pending[0])
+            return
+        here = sc.object_at(self.row)
+        if here and (not self._manual_object or here == self.object_var.get()):
+            self.object_var.set(here)
+            self._manual_object = False
+        elif not self.object_var.get() and sc.objects:
+            self.object_var.set(sc.objects[0].name)
+
+    def _say(self, text: str, error: str | None = None) -> None:
+        if error:
+            show_warning(self, "Scoring not saved",
+                         f"The scoring couldn't be saved to a file.\n\n{error}\n\nIt's "
+                         "kept while the app is open.")
+        self.score_text.configure(text=text)
+
+    def mark_start(self) -> None:
+        sc, obj = self.scorer, self.object_var.get()
+        if not obj:
+            self._say("Pick the object first.")
+            return
+        self.pause()
+        sc.start(obj, self.row)
+        self._say(f"Interaction with {obj} started at frame {self.row + 1:,}. Step to the "
+                  "frame it ends on and click End interaction (E).")
+        self._redraw()
+
+    def mark_end(self) -> None:
+        sc = self.scorer
+        if not sc.pending:
+            self._say("Click Start interaction (S) at the frame the interaction starts "
+                      "first.")
+            return
+        self.pause()
+        bout, error = sc.end(self.row)
+        self._say(f"Logged: {bout.object}, frames {bout.start + 1:,}–{bout.end + 1:,} "
+                  f"({secs(bout.frames(), sc.fps):g} s).", error)
+        self._fill_logged()
+        self._redraw()
+
+    def mark_none(self) -> None:
+        sc = self.scorer
+        visit = sc.visit_at(self.row, self.object_var.get() or None) or sc.visit_at(self.row)
+        if visit is None:
+            visit = self.visit
+        if visit is None:
+            self._say("This frame isn't in a zone visit. Open one from the Review list "
+                      "to mark it as no interaction.")
+            return
+        if sc.scoring.visit_status(visit) == "scored":
+            self._say(f"That {visit['object']} visit (from frame {visit['row'] + 1:,}) "
+                      "already has an interaction logged. Delete it first to mark the "
+                      "visit as no interaction.")
+            return
+        was = (visit["object"], visit["row"]) in sc.scoring.no_interaction
+        error = sc.toggle_none(visit)
+        self._say((f"Unmarked: {visit['object']} visit from frame {visit['row'] + 1:,}."
+                   if was else
+                   f"Marked: no interaction in the {visit['object']} visit from frame "
+                   f"{visit['row'] + 1:,}."), error)
+        self._fill_logged()
+
+    def delete_logged(self) -> None:
+        sel = self.bout_tree.selection()
+        if not sel:
+            self._say("Select a logged line to delete it.")
+            return
+        item = self._logged[int(sel[0])]
+        error = self.scorer.delete(item)
+        self._say("Deleted.", error)
+        self._fill_logged()
+        self._redraw()
+
+    def _bout_selected(self) -> None:
+        sel = self.bout_tree.selection()
+        if sel:
+            item = self._logged[int(sel[0])]
+            self.pause()
+            self.show(item.start if isinstance(item, Bout) else item[1])
+
+    def _fill_logged(self) -> None:
+        sc = self.scorer
+        tree = self.bout_tree
+        tree.delete(*tree.get_children())
+        items = [(b.start, b) for b in sc.scoring.bouts]
+        items += [(row, (obj, row)) for obj, row in sc.scoring.no_interaction]
+        items.sort(key=lambda t: t[0])
+        self._logged = [it for _r, it in items]
+        for k, it in enumerate(self._logged):
+            if isinstance(it, Bout):
+                values = ("Interaction", it.object, f"{it.start + 1:,}", f"{it.end + 1:,}",
+                          f"{secs(it.frames(), sc.fps):g}")
+            else:
+                values = ("No interaction", it[0], f"{it[1] + 1:,}", "", "")
+            tree.insert("", tk.END, iid=str(k), values=values)
+        if self._logged:
+            tree.see(str(len(self._logged) - 1))
+        self.totals_text.configure(text="\n".join(
+            f"{name}: {t:g} s ({n})" for name, (t, n) in sc.totals().items()))
+
+    def open_visit(self, visit: dict) -> None:
+        """Show a zone visit from its first frame, ready to score."""
+        self.visit = visit
+        self._manual_object = False
+        self.object_var.set(visit["object"])
+        self.pause()
+        self.show(visit["row"])
+        self._say(f"{visit['object']} zone visit: frames {visit['row'] + 1:,}–"
+                  f"{visit['end'] + 1:,} ({visit['seconds']:g} s). Step through it and log "
+                  "each interaction with Start and End, or click No interaction.")
+
     # --------------------------------------------------------------- close
     def close(self) -> None:
         self.pause()
@@ -325,9 +618,11 @@ class ReviewPanel(ttk.Frame):
     """The Review tab: the points to review and the button that opens the
     playback window."""
 
-    def __init__(self, parent, on_cutoff=None):
+    def __init__(self, parent, on_cutoff=None, on_scored=None):
         super().__init__(parent)
         self.on_cutoff = on_cutoff or (lambda value: None)
+        self.on_scored = on_scored or (lambda data: None)
+        self.scorer: ObjectScorer | None = None
         self.pb = None
         self._data = None
         self._title = ""
@@ -352,13 +647,16 @@ class ReviewPanel(ttk.Frame):
         cutoff.pack(side=tk.RIGHT)
         cutoff.bind("<Return>", lambda _e: self._apply_cutoff())
         cutoff.bind("<FocusOut>", lambda _e: self._apply_cutoff())
-        ttk.Label(head, text="Flag stretches at least (s):").pack(side=tk.RIGHT, padx=(0, 4))
+        self.cutoff_label = ttk.Label(head, text="Flag stretches at least (s):")
+        self.cutoff_label.pack(side=tk.RIGHT, padx=(0, 4))
+        self.cutoff_entry = cutoff
         Tooltip(cutoff, "A stretch outside the regions this long or longer may mean the "
                         "tracker lost the animal (stuck on a dark spot or a reflection), "
                         "so it's flagged for review. Brief ones are usually jumps or head "
                         "dips. Saved per test.")
-        ttk.Label(self.body, text="Points to review", font=("TkDefaultFont", 0, "bold")).pack(
-            side=tk.TOP, anchor="w", pady=(10, 0))
+        self.heading = ttk.Label(self.body, text="Points to review",
+                                 font=("TkDefaultFont", 0, "bold"))
+        self.heading.pack(side=tk.TOP, anchor="w", pady=(10, 0))
         self.summary = ttk.Label(self.body, foreground="gray", anchor=tk.W, justify=tk.LEFT)
         self.summary.pack(side=tk.TOP, fill=tk.X, pady=(2, 6))
         self.summary.bind("<Configure>",
@@ -389,12 +687,24 @@ class ReviewPanel(ttk.Frame):
         self.message.configure(text=text)
         self.message.pack(side=tk.TOP, anchor="nw")
 
-    def load(self, data, video_hint, roles: dict, cutoff: float, title: str = "") -> None:
+    def load(self, data, video_hint, roles: dict, cutoff: float, title: str = "",
+             zone_cm: float | None = None, min_frames: int = 1) -> None:
         """List this tracking file's points to review (the video opens on
-        request). Says why instead if the video can't be matched to it."""
+        request). Says why instead if the video can't be matched to it.
+        With `zone_cm` (Object Recognition), the list is the zone visits to
+        score instead."""
         self.cutoff_var.set(f"{cutoff:g}")
-        if data is self._data and self.pb is not None:
-            self._fill_events()   # same file: just re-flag with the cutoff
+        objects_mode = zone_cm is not None
+        if objects_mode and not file_objects(data):
+            self.show_message("This tracking file has no objects drawn, so there's "
+                              "nothing to score. Draw the objects in Set up videos… "
+                              "(step 5) and track the video again.")
+            return
+        if data is self._data and self.pb is not None and objects_mode == bool(self.scorer):
+            if self.scorer is not None:
+                self.zone_changed(zone_cm)
+            else:
+                self._fill_events()   # same file: just re-flag with the cutoff
             return
         self.unload()
         try:
@@ -403,7 +713,10 @@ class ReviewPanel(ttk.Frame):
             self.show_message(f"This file's video can't be shown.\n\n{exc}")
             return
         self.pb, self._data, self._title = pb, data, title or os.path.basename(pb.video)
-        self.events = outside_events(data, roles, pb.fps)
+        self.scorer = (ObjectScorer(data, pb.fps, zone_cm, min_frames,
+                                    on_change=self._scored) if objects_mode else None)
+        self._set_mode()
+        self.events = [] if objects_mode else outside_events(data, roles, pb.fps)
         # The region each frame counted for (outside frames included) and
         # which frames were outside the drawn regions, for the info line.
         self._labels = region_labels(data, roles)[0]
@@ -419,7 +732,7 @@ class ReviewPanel(ttk.Frame):
         if self.window is None or not self.window.winfo_exists():
             try:
                 self.window = PlaybackWindow(self.winfo_toplevel(), self.pb, self._labels,
-                                             self._outside, self._title)
+                                             self._outside, self._title, scorer=self.scorer)
             except Exception as exc:
                 traceback.print_exc()
                 show_warning(self, "The video couldn't be opened",
@@ -437,13 +750,45 @@ class ReviewPanel(ttk.Frame):
             self.window.pause()
 
     def zone_changed(self, cm: float) -> None:
-        """The zone distance changed (object recognition)."""
+        """The zone distance changed (object recognition): work out the zone
+        visits again (the logged interactions don't change)."""
+        if self.scorer is None:
+            return
+        self.scorer.set_zone(cm)
+        self._fill_events()
+        if self.window is not None and self.window.winfo_exists():
+            self.window._redraw()
+            self.window._update_info()
+
+    def _scored(self) -> None:
+        """The scoring changed: update the list, then the results."""
+        self._fill_events()
+        self.on_scored(self._data)
+
+    def _set_mode(self) -> None:
+        """Outside-region points (EPM, Open Field) or zone visits to score
+        (Object Recognition): the columns, heading and cutoff box."""
+        objects = self.scorer is not None
+        cols = VISIT_COLUMNS if objects else EVENT_COLUMNS
+        self.tree.configure(columns=[c for c, _ in cols])
+        for col, width in cols:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=width, minwidth=width, anchor=tk.CENTER,
+                             stretch=col in ("Check", "Scored"))
+        self.heading.configure(text="Zone visits to score" if objects else "Points to review")
+        for w in (self.cutoff_entry, self.cutoff_label):
+            if objects:
+                w.pack_forget()
+        if not objects and not self.cutoff_entry.winfo_manager():
+            self.cutoff_entry.pack(side=tk.RIGHT)
+            self.cutoff_label.pack(side=tk.RIGHT, padx=(0, 4))
 
     def unload(self) -> None:
         if self.window is not None and self.window.winfo_exists():
             self.window.close()
         self.window = None
         self.pb = self._data = None
+        self.scorer = None
         self.events = []
 
     def _cutoff(self) -> float:
@@ -459,9 +804,36 @@ class ReviewPanel(ttk.Frame):
         self.on_cutoff(value)
         self._fill_events()
 
+    def _fill_visits(self) -> None:
+        pb, sc = self.pb, self.scorer
+        counts = {"scored": 0, "none": 0, "": 0}
+        for n, v in enumerate(sc.visits):
+            status = sc.scoring.visit_status(v)
+            counts[status] += 1
+            vf = pb.video_frame(v["row"])
+            self.tree.insert("", tk.END, iid=str(n), tags=("flag",) if not status else (),
+                             values=(n + 1, v["object"], f"{v['row'] + 1:,}",
+                                     clock(v["row"] / pb.fps), clock(vf / pb.fps),
+                                     f"{v['seconds']:g}", STATUS_TEXT[status]))
+        zone = f"{sc.zone_cm:g} {'cm' if sc.scaled else 'px (this file has no scale)'}"
+        totals = "; ".join(f"{name} {t:g} s ({k} interaction{'s' if k != 1 else ''})"
+                           for name, (t, k) in sc.totals().items())
+        if not sc.visits:
+            text = f"The tracked point never came within {zone} of an object."
+        else:
+            text = (f"{len(sc.visits)} zone visits within {zone} of an object: "
+                    f"{counts['scored']} with an interaction, {counts['none']} with none, "
+                    f"{counts['']} to review (red). Click a row to open the video at the "
+                    "frame the point enters the zone.")
+        self.summary.configure(text=f"{text}\nLogged so far: {totals}. Saved to "
+                                    f"{os.path.basename(scoring_path(self._data))}.")
+
     def _fill_events(self) -> None:
         self.tree.delete(*self.tree.get_children())
         if self.pb is None:
+            return
+        if self.scorer is not None:
+            self._fill_visits()
             return
         pb, cutoff = self.pb, self._cutoff()
         flagged = 0
@@ -486,6 +858,10 @@ class ReviewPanel(ttk.Frame):
 
     def _on_event(self, _e=None) -> None:
         sel = self.tree.selection()
-        if sel and self.pb is not None:
+        if sel and self.pb is not None and self.scorer is not None:
+            win = self.open_window()
+            if win is not None:
+                win.open_visit(self.scorer.visits[int(sel[0])])
+        elif sel and self.pb is not None:
             self.open_window(self.events[int(sel[0])]["row"])
 

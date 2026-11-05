@@ -1827,8 +1827,65 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                    or self._reference(entry) is not None else " (none for this file)"),
                 "Background color": plot["heatmap_bg_color"],
             },
-            "Tracking (from file)": dict(entry.data.settings),
+            **self._tracking_sections(entry),
         })
+
+    # Readable names for the tracking settings a file records (ezTrack's
+    # columns, then this app's additions), in this order.
+    TRACKING_LABELS = {
+        "Method": "Animal is (dark / light / abs = either)",
+        "Location_Thresh": "Threshold (percentile of differences kept)",
+        "Use_Window": "Window on",
+        "Window_Size": "Window size (full-size video px)",
+        "Window_Weight": "Window weight",
+        "Downsample": "Downsampling (1 = full size)",
+        "Crop": "Crop (x0, y0, x1, y1 in downsampled px)",
+        "Reference_Frames": "Frames in the reference image",
+        "Exclusion_Shapes": "Exclusion shapes",
+        "Start_Frame": "Start frame (video frame of the first row)",
+        "Video_FPS": "Video frame rate (fps)",
+        "Scale_px": "Scale length (px)",
+        "Scale_cm": "Scale length (cm)",
+        "Scale_cm_per_px": "cm per pixel",
+    }
+
+    def _tracking_sections(self, entry) -> dict:
+        """The Settings sheet's tracking part: how the file was tracked (from
+        its own recorded settings) and, for a video tracked in this load,
+        its session and setup."""
+        def plain(v):
+            v = v.item() if hasattr(v, "item") else v
+            if isinstance(v, float) and pd.isna(v):
+                return "none"
+            return v
+
+        recorded = dict(entry.data.settings)
+        tracking = {label: plain(recorded.pop(key)) for key, label in self.TRACKING_LABELS.items()
+                    if key in recorded}
+        tracking.update({k: plain(v) for k, v in recorded.items()})  # anything else
+        if "Scale_cm_per_px" not in entry.data.settings:
+            tracking["Scale"] = ("none (distances in px only)"
+                                 if "Distance_cm" not in entry.data.df.columns
+                                 else "from the tracking software")
+        unreadable = int(entry.data.unreadable.sum())
+        tracking["Frames in the file"] = entry.data.n_frames
+        tracking["Unreadable video frames"] = unreadable
+        sections = {"Tracking (recorded in the file)": tracking}
+
+        v = entry.video
+        if v is not None:
+            fps = v.info.fps or 0
+            sections["Video"] = {
+                "Video file": v.path,
+                "Frame size (px)": f"{v.info.width} x {v.info.height}",
+                "Video length (frames)": v.info.frame_count,
+                "Session start (s)": round(v.start / fps, 3) if fps else "",
+                "Session length (min)": (round((v.end_frame - v.start) / fps / 60, 3)
+                                         if fps else ""),
+                "Regions drawn": ", ".join(v.regions) or "none",
+                "Tracking file": entry.data.path,
+            }
+        return sections
 
     def export(self) -> None:
         """Write each selected, analyzed file's _analysis.xlsx, _path.png, and

@@ -364,6 +364,17 @@ if os.path.exists(CLIP):
     pw.close(); app.update()
     check("a tracked video analyzes", app.files[0].analyzed
           and app.file_tree.item("0", "values")[2] == "Analyzed")
+    # C9: the exported Settings sheet describes the tracking and the video.
+    log.clear(); app.export(); app.update()
+    vout = output_paths(CLIP); outs.extend(vout.values())
+    st = pd.read_excel(vout["analysis"], sheet_name="Settings")
+    got = dict(zip(st["Setting"], st["Value"]))
+    check("Settings sheet: tracking settings, scale, crop, session",
+          got.get("Animal is (dark / light / abs = either)") == "dark"
+          and abs(float(got.get("cm per pixel")) - 0.05) < 1e-6
+          and str(got.get("Crop (x0, y0, x1, y1 in downsampled px)")).startswith("100")
+          and abs(float(got.get("Session length (min)")) - round(want / v.info.fps / 60, 3)) < 1e-6
+          and set(st["Section"]) >= {"Tracking (recorded in the file)", "Video"})
     app.files[0].video.steps_done.discard("scale"); app.files[0].summary = None
     app.clear_files(); app.add_files([CLIP]); app.update(); log.clear(); yesno[:] = [False]
     app.track(); app.update()

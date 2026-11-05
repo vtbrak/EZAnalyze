@@ -447,6 +447,36 @@ Ignore); drag a CSV or folder onto the window; analyze the Open Field file
 and open the workbook and images; check every toolbar row fits; close and
 reopen (settings remembered).
 
+**PC test checklist, video tracking (C9, 2026-11-04):** on the
+`video-tracking` branch, run the installer again (new packages: OpenCV,
+SciPy, Pillow), then:
+1. **Add a video** (an .mp4; also try an .avi or .wmv if you have one). It
+   shows as Video / Needs setup. Drag a video onto the window too.
+2. **Set up videos…:** the window fits the screen; scrub the slider; drag a
+   crop rectangle; choose a session length.
+3. **Zoom and pan:** mouse wheel zooms at the pointer; right-drag and
+   Control-drag move around; − / + / Fit buttons.
+4. **Exclusions and regions:** click points, close a shape on its first
+   point, drag points; a white ring shows before a point locks onto another
+   region; the lock checkbox turns it off.
+5. **Reference and Tracking check:** the reference makes in a few seconds;
+   the red cross follows the animal while scrubbing; Frame / Differences
+   view; changing a setting re-previews.
+6. **Scale**, then **Finish**: the video shows Ready to track.
+7. **Track:** the window stays usable; the bottom bar and the file list show
+   the percentage; **Cancel** stops within a moment; the frame-rate question
+   appears if the setting differs; `_LocationOutput.csv` and
+   `_reference.png` appear next to the video.
+8. **Analyze**, then the **Background** choices on Path and Heatmap
+   (Reference image lines up with the path).
+9. **Play video…:** plays smoothly at 1x; speed, slider, frame steps, space
+   bar; **Save as video…** writes `_tracked.mp4`, which plays in the Windows
+   Media Player / Movies & TV app.
+10. **Export:** open the workbook's Settings sheet (tracking, scale, crop,
+    session rows).
+11. **Close the app while tracking:** it asks first.
+12. Paths with spaces or non-English letters in folder names.
+
 **Known Mac-only or at-risk pieces**
 - ✅ **Launcher:** `Open Behavior Tracker.bat` added alongside the Mac
   `.command`. It builds `.venv` from `requirements.txt` (via `py -3`, falling
@@ -1132,8 +1162,20 @@ test) before each commit.
   Windows and plays in QuickTime and Windows' player) at the video's real
   frame rate, with the marker, trail and regions as shown and time/region
   text, in the background with Cancel; a cancelled save is deleted.
-- [ ] **C9. Finish:** exported Settings sheet gains tracking/scale/crop
+- [x] **C9. Finish:** exported Settings sheet gains tracking/scale/crop
   settings; README and INSTALL updates; PC test checklist.
+  Built 2026-11-04. The Settings sheet's "Tracking (from file)" raw columns
+  became **"Tracking (recorded in the file)"** with readable names (animal
+  dark/light/abs, threshold, window on/size/weight, downsampling, crop,
+  reference frames, exclusion shapes, start frame, video fps, scale px / cm /
+  cm per pixel, frames, unreadable frames; unknown columns kept as-is), plus
+  a **"Video"** section for videos tracked in the load (video file, frame
+  size, length, session start and length, regions drawn, tracking file).
+  README: a "Tracking videos" section, Background choices, export contents,
+  layout. INSTALL: troubleshooting for unreadable videos and unsaveable
+  folders. PC checklist: §10, "PC test checklist, video tracking".
+  **Location Tracking is complete**; next steps come from the user (PC test,
+  merging `video-tracking` into `main`, Freeze Analysis, ASR).
 
 ### 13. Acoustic startle response (ASR) from video (requested 2026-11-03 — planned, not built)
 

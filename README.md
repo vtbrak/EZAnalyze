@@ -1,8 +1,10 @@
 # Behavior Tracker
 
-Analyzes video-based locomotion tracking CSVs (`*_LocationOutput.csv`) — one row
-per video frame with position, zone, ROI, and distance data — and turns them into
-summary metrics, time-binned tables, path plots, and occupancy heatmaps.
+Tracks a rodent's position in **videos** of an Elevated Plus Maze or Open
+Field, and analyzes location tracking CSVs (`*_LocationOutput.csv`: one row per
+video frame with position, region, and distance data, from this program or
+from ezTrack), turning them into summary metrics, time-binned tables, path
+plots, and occupancy heatmaps.
 
 ## Installing and running
 
@@ -85,9 +87,77 @@ start, so the bins add up to the session totals. Latency is session-only.
 
 **Plots** (per file): path/trajectory (colored by speed or one solid color) and
 occupancy heatmap, both with ROI outlines. The heatmap labels each region
-outside the ROIs so the data stays visible. Cells the animal never entered are
-left empty (transparent in a saved PNG) unless **Add background** fills them
-with one flat color, which is easy to recolor in an image editor.
+outside the ROIs so the data stays visible. Each tab has a **Background**
+choice:
+- **None:** no background. Heatmap cells the animal never entered stay
+  empty, which makes them transparent in a saved PNG.
+- **Flat color** (Heatmap only): fills those cells with one color, which is
+  easy to recolor in an image editor.
+- **Reference image:** draws the plot on the arena's empty-arena image in
+  gray. It is only available for files tracked in this program, which keep a
+  `_reference.png` next to the tracking file.
+
+## Tracking videos
+
+Videos (`.mp4`, `.avi`, `.mov`, `.wmv`, `.mpg`, `.mkv`, `.m4v`) go in the same
+file list as CSVs, marked **Video**. Tracking is adapted from ezTrack (see
+Credits).
+
+1. **Add the videos** as you would CSVs, and choose the **Test** first (the
+   regions to draw depend on it). Each video starts as **Needs setup**. If a
+   video has frames that can't be read, you're asked whether to add it
+   anyway. Converting it (e.g. to .mp4 with H.264) usually fixes this.
+2. **Set up videos…** opens one window for all of them, with six steps per
+   video. **Next** moves on, or says what's missing. The arrows at the top
+   switch videos, and **Start from previous video** copies the last video's
+   choices as a draft to check. Scroll to zoom on any image, and right-drag
+   or Control-drag to move around.
+   1. **Trim and crop:** scrub to the trial's start, choose the session
+      length (EPM 5 min; Open Field 1 or 1.5 h, or type one), and drag a
+      rectangle around the arena.
+   2. **Exclusions:** optionally outline areas to ignore, such as a cable
+      or a reflection.
+   3. **Reference:** make the empty-arena image from frames across the
+      trial. The animal drops out because it's in a different place in
+      most of them.
+   4. **Tracking check:** scrub to any frame to see where the animal is
+      found (red cross), and adjust the tracking settings. The settings are
+      shared by every video and lock at the first Track.
+   5. **Regions:** draw the test's regions on the reference.
+      - Elevated Plus Maze: open arm 1 and 2, closed arm 1 and 2, center.
+      - Open Field: the arena outline and the center. The periphery is the
+        outline minus the center.
+      - Points lock onto neighboring regions' points and edges, so regions
+        share borders instead of overlapping.
+   6. **Scale:** click two points a known distance apart and type that
+      distance. EPM: 75 cm, from the end of one arm to the end of the
+      opposite arm. Open Field: 40 cm along one wall.
+
+   A video with every step done shows **Ready to track**.
+3. **Track** works on the selected videos, one at a time in the background.
+   - A bar at the bottom shows progress, and **Cancel** keeps the videos
+     already finished.
+   - If a video already has a tracking file beside it, you're asked whether
+     to use it or track again.
+   - If the videos' frame rate differs from the **Frame rate** setting, you
+     can switch the setting to the videos' rate.
+   - Each video gets `<name>_LocationOutput.csv` (ezTrack's format, plus
+     every setting used and a `Frame_Unreadable` column) and
+     `<name>_reference.png` next to it, and becomes **Not analyzed**.
+4. **Analyze** and **Export** as for CSVs (below).
+5. **Play video…** (Path and Heatmap tabs) plays a tracked file's video with
+   its tracked position drawn on, to check the tracking.
+   - It shows a red marker, a short trail, region outlines, the time, and
+     the current region.
+   - **Save as video…** writes `<name>_tracked.mp4` next to the video, at
+     its real frame rate. It plays on Mac and Windows.
+   - It works for any file tracked in this program whose video is in the
+     same folder.
+
+**Unreadable frames** stay in the tracking file as rows with no position. By
+default they add no time, distance or entries. Turning on **Fill short gaps**
+in the settings panel instead joins gaps of up to the chosen length with a
+straight line for the analysis. The saved file is never changed.
 
 ## Working with files
 1. **Add files…**, **Add folder…**, or drag files/folders onto the window.
@@ -122,12 +192,19 @@ export:
 
 - `<name>_analysis.xlsx`: **Summary** (the file's row), **Time Bins**, and
   **Settings** (everything used to produce the results: test, frame rate,
-  entry rule, Open Field thresholds, region roles, bin size, and the Path and
-  Heatmap plot settings).
+  entry rule, Open Field thresholds, gap filling, region roles, bin size, the
+  Path and Heatmap plot settings, how the file was tracked (method,
+  threshold, window, downsampling, crop, reference frames, exclusion shapes,
+  start frame, frame rate, scale), and for videos the session's start and
+  length and the regions drawn).
 - `<name>_path.png` and `<name>_heatmap.png`: drawn with the current on-screen
   plot settings at a fixed size (5 × 4.5 in, 200 dpi), whatever the window
   size, with a transparent background (heatmap cells the animal never
-  entered stay transparent unless **Add background** is on).
+  entered stay transparent unless the background is a flat color; over the
+  reference image the PNG isn't transparent).
+
+For a video, these go next to the video. Tracking already saved
+`<name>_LocationOutput.csv` and `<name>_reference.png` there.
 
 Only analyzed files are exported. If a workbook is open in Excel, close it
 before exporting again.
@@ -135,14 +212,23 @@ before exporting again.
 ## Layout
 ```
 BehaviorTracker/
-├── core/            analysis engine (no GUI dependencies)
+├── core/            analysis and tracking engine (no GUI dependencies)
 │   ├── export.py    write _analysis.xlsx and plot images
 │   ├── loader.py    read & validate CSVs, detect region columns
 │   ├── metrics.py   summary + time-binned metrics
+│   ├── gaps.py      optional filling of short unreadable-frame gaps
 │   ├── plotting.py  path, heatmap & region-map figures
 │   ├── regions.py   region-role mapping and checks
+│   ├── video.py     read and prepare video frames (from ezTrack)
+│   ├── tracking.py  reference image, tracking, region columns (from ezTrack)
+│   ├── video_setup.py  one video's setup (trim, crop, shapes, regions, scale)
+│   ├── track_run.py    Track: videos one at a time in the background
+│   ├── playback.py     playback and the saved _tracked.mp4 (from ezTrack)
 │   └── config.py    saved settings (config.json)
 ├── gui.py           tkinter front end
+├── setup_window.py  Set up videos… window
+├── playback_window.py  Play video… window
+├── about.py         About window (credits, citation, license)
 ├── region_dialog.py Match regions dialog
 ├── tooltip.py       hover tooltips
 ├── dialogs.py       pop-up messages (same look on Mac and Windows)

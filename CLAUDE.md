@@ -104,19 +104,21 @@ change for each. **Location Tracking Stages 1–7 are decided (ROADMAP
 §12). Freeze Analysis decisions are logged but EXCLUDED from the current
 build (Location Tracking first). The GUI review is decided (ROADMAP §12, end):
 settings panel, always-visible file list, Track / Analyze / Export acting on
-the selected files with a Select all button, one video setup window. **Planning is complete;
-build when the user says so.**
-**Video build in progress (ROADMAP §12, "Video build progress" checklist):**
-C0–C8 (with C5b) done; next is **C9** (Settings sheet gains tracking/scale/crop, README/INSTALL, PC test checklist). Each chunk is committed and pushed when done.
+the selected files with a Select all button, one video setup window.
+**Video build (ROADMAP §12, "Video build progress" checklist):**
+C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. Next steps come from the user (PC test with ROADMAP §10's video checklist, merge into `main`, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion
 index with an adjustable 0–255 intensity threshold, default 15; PPI and
 habituation); not built. **When ASR work starts, first remind the user to put
 a sample ASR video and its stimulus logs in the project folder.** The user
-cites papers outside the app (no in-app citation for ASR).** Decisions are recorded only; **don't build until the
-user says so.** Nothing from ezTrack is adapted yet. When code is adapted,
-keep the GPL-3.0 license and credit/cite ezTrack, as §12 requires.
+cites papers outside the app (no in-app citation for ASR). Freeze Analysis
+and ASR decisions are recorded only; **don't build them until the user says
+so.** Adapted ezTrack code (core/video.py, tracking.py, playback.py) keeps the
+GPL-3.0 license and credits ezTrack at the top of each file; keep doing so.
+Video-side modules: `core/video_setup.py`, `core/track_run.py`,
+`setup_window.py`, `playback_window.py` (see README Layout).
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample
 data".

@@ -142,6 +142,14 @@ is blocked:
   - Check your internet connection and run the installer again.
 - **"The Behavior Tracker isn't installed yet"**
   - Run the installer first, then open the program.
+- **"Some videos are hard to read," or a video won't open**
+  - Convert the video to .mp4 (H.264), for example with HandBrake (free), and
+    add the converted copy.
+- **Tracking or Export says a file couldn't be saved**
+  - Results are saved next to each video or CSV, so that folder must be one
+    you can save into (not a read-only drive or a zip you haven't unzipped).
+    If an `_analysis.xlsx` or `_LocationOutput.csv` is open in Excel, close
+    it and try again.
 - **The program closes with an error**
   - Take a screenshot of the text window and send it to whoever shared the
     program with you.

@@ -55,6 +55,13 @@ try:
     check("zone visits: first frame, last frame and length per object",
           [(x["object"], x["row"], x["end"], x["seconds"]) for x in v]
           == [("object 1", 11, 29, 19.0), ("object 2", 71, 89, 19.0)])
+    # A 2-frame stay is kept; a 2-frame exit joins two stays (entry rule 3).
+    df2 = df.copy()
+    df2["X"] = [20.0 if i in (5, 6, 20, 21, 22, 25, 26) else 50.0 for i in range(n)]
+    p2 = os.path.join(tmp, "m2_LocationOutput.csv"); df2.to_csv(p2, index=False)
+    v2 = zone_visits(load_csv(p2), objs[:1], zpx, 1.0, min_frames=3)
+    check("brief zone stays are never dropped; brief exits join visits",
+          [(x["row"], x["end"]) for x in v2] == [(5, 6), (20, 26)])
     check("the object whose zone the point is in",
           object_at(d, objs, zpx, 15) == "object 1" and object_at(d, objs, zpx, 50) == ""
           and object_at(d, objs, zpx, 75) == "object 2")

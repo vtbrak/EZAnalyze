@@ -132,19 +132,24 @@ def zone_masks(data: TrackingData, objects: list[TrialObject],
 def zone_visits(data: TrackingData, objects: list[TrialObject], zone_px: float,
                 fps: float, min_frames: int = 1) -> list[dict]:
     """Every stretch spent in an object's zone, in time order:
-    {"object", "row" (first frame), "end" (last frame), "seconds"}. The entry
-    rule applies: stays shorter than `min_frames` (in or out) don't start or
-    split a visit."""
+    {"object", "row" (first frame), "end" (last frame), "seconds"}.
+
+    Nothing is dropped, however brief: the list is meant to catch every
+    possible interaction for the experimenter to check (user, 2026-11-05).
+    Stretches separated by an exit shorter than `min_frames` (boundary
+    jitter) are joined into one visit."""
     visits = []
     for name, inside in zone_masks(data, objects, zone_px).items():
-        states = held_states(np.where(inside, "in", "out"), min_frames)
-        n = len(inside)
-        for k, (label, start) in enumerate(states):
-            if label != "in":
-                continue
-            end = (states[k + 1][1] if k + 1 < len(states) else n) - 1
-            visits.append({"object": name, "row": start, "end": end,
-                           "seconds": secs(end - start + 1, fps)})
+        runs = []
+        k = np.flatnonzero(np.diff(np.concatenate([[0], inside.astype(np.int8), [0]])))
+        for start, stop in zip(k[0::2], k[1::2]):          # stop is exclusive
+            if runs and start - runs[-1][1] < max(1, min_frames):
+                runs[-1][1] = stop                          # brief exit: same visit
+            else:
+                runs.append([start, stop])
+        for start, stop in runs:
+            visits.append({"object": name, "row": int(start), "end": int(stop) - 1,
+                           "seconds": secs(int(stop - start), fps)})
     visits.sort(key=lambda v: (v["row"], v["object"]))
     return visits
 

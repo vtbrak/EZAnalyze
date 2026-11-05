@@ -56,8 +56,10 @@ DEFAULTS: dict = {
     # about 1.9 s (longest 2.3 s). Provisional; the user may change them.
     "review_cutoff_s": {"Elevated Plus Maze": 5.0, "Open Field": 1.0},
     # Object recognition (ROADMAP §15): zone around each object, out to this
-    # far from its edge (cm). To be settled by experimenting; never locks.
-    "object_zone_cm": 2.0,
+    # far from its edge (cm). 4 cm from the user's first object trial
+    # (2026-11-05): wide enough to catch every possible interaction, which
+    # the experimenter then confirms or rejects. Never locks.
+    "object_zone_cm": 4.0,
     # Plot style.
     "plot": {
         "point_size": 4.0,  # float so sizes like 2.5 survive a reload

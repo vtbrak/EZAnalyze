@@ -103,12 +103,15 @@ this program): in **Set up videos…**, step 5 (**Objects**), draw each object
 as a circle: press at its center and drag out to its edge. Two objects are
 listed; **Add object** adds more. Mark each **Familiar**, **Novel** or
 **Moved**, and set the trial **day** and **phase**. A dashed **zone** rings
-each object out to the **Zone distance (cm)** (main window; never locks, and
-needs the scale). After tracking, the **Review** tab lists every stretch the
+each object out to the **Zone distance (cm)** (main window, default 4 cm;
+never locks, and needs the scale). After tracking, the **Review** tab lists every stretch the
 tracked point spends in a zone. Click one to open the playback window at the
 frame the point enters the zone, then step through and log each interaction
 with **Start interaction (S)** / **End interaction (E)**, or mark the visit
-**No interaction (N)**. Interactions can be logged at any frame, with the
+**No interaction (N)**. **Next visit ▶** / **◀ Previous visit** (the ] and [
+keys) move through the list without leaving the window. Every moment in a
+zone is listed, however brief, so no possible interaction is missed; the
+default zone is 4 cm. Interactions can be logged at any frame, with the
 object picked by hand. Scoring is saved as you go to
 `<name>_ObjectScoring.csv` beside the tracking file. Results: interaction
 time, bouts and latency per object; total; **discrimination index** =

@@ -138,10 +138,12 @@ class ObjectScorer:
 class PlaybackWindow(tk.Toplevel):
     """A tracked file's video with its tracking drawn on, in its own window."""
 
-    def __init__(self, parent, pb, labels, outside, title: str, scorer=None):
+    def __init__(self, parent, pb, labels, outside, title: str, scorer=None,
+                 on_visit=None):
         super().__init__(parent)
         self.pb = pb
         self.scorer = scorer
+        self.on_visit = on_visit or (lambda index: None)   # Review list follows
         self.source = FrameSource(pb)
         self._labels, self._outside = labels, outside
         self.title(f"Playback: {title}")
@@ -444,6 +446,19 @@ class PlaybackWindow(tk.Toplevel):
         self.end_btn.pack(side=tk.LEFT, padx=(6, 0))
         self.none_btn = ttk.Button(row, text="No interaction (N)", command=self.mark_none)
         self.none_btn.pack(side=tk.LEFT, padx=(6, 0))
+        nav = ttk.Frame(box)
+        nav.pack(fill=tk.X, pady=(4, 0))
+        self.prev_visit_btn = ttk.Button(nav, text="◀ Previous visit  [",
+                                         command=lambda: self.go_visit(-1))
+        self.prev_visit_btn.pack(side=tk.LEFT)
+        self.next_visit_btn = ttk.Button(nav, text="Next visit ▶  ]",
+                                         command=lambda: self.go_visit(1))
+        self.next_visit_btn.pack(side=tk.LEFT, padx=(6, 0))
+        self.visit_text = ttk.Label(nav, foreground="gray")
+        self.visit_text.pack(side=tk.LEFT, padx=(10, 0))
+        Tooltip(self.next_visit_btn, "Go to the next zone visit in the list, at the frame "
+                                     "the point enters the zone (the ] key).")
+        Tooltip(self.prev_visit_btn, "Go back to the previous zone visit (the [ key).")
         Tooltip(self.start_btn, "The interaction starts on the frame shown. Step to the "
                                 "frame it ends on, then click End interaction.")
         Tooltip(self.none_btn, "Mark the zone visit shown (or the last one opened) as "
@@ -471,6 +486,8 @@ class PlaybackWindow(tk.Toplevel):
         ttk.Button(side, text="Delete", command=self.delete_logged).pack(anchor="n")
         self.totals_text = ttk.Label(side, justify=tk.LEFT)
         self.totals_text.pack(anchor="n", pady=(8, 0))
+        self.bind("<KeyPress-bracketright>", lambda e: self._key(e, lambda: self.go_visit(1)))
+        self.bind("<KeyPress-bracketleft>", lambda e: self._key(e, lambda: self.go_visit(-1)))
         for key, fn in (("s", self.mark_start), ("e", self.mark_end), ("n", self.mark_none)):
             for k in (key, key.upper()):
                 self.bind(f"<KeyPress-{k}>", lambda e, fn=fn: self._key(e, fn))
@@ -592,9 +609,38 @@ class PlaybackWindow(tk.Toplevel):
         self.totals_text.configure(text="\n".join(
             f"{name}: {t:g} s ({n})" for name, (t, n) in sc.totals().items()))
 
+    def go_visit(self, step: int) -> None:
+        """Move to the next (+1) or previous (-1) zone visit, counted from the
+        visit being scored (or from the frame shown, if it's past that visit
+        or none was opened)."""
+        sc = self.scorer
+        if sc.pending:
+            self._say(f"An interaction with {sc.pending[0]} is still open (from frame "
+                      f"{sc.pending[1] + 1:,}). End it (E) before moving to another visit.")
+            return
+        v = self.visit
+        inside = v is not None and v["row"] <= self.row <= v["end"]
+        anchor = v["row"] if inside else self.row
+        if step > 0:
+            later = [x for x in sc.visits if x["row"] > anchor]
+            target = later[0] if later else None
+        else:
+            earlier = [x for x in sc.visits if x["row"] < anchor]
+            target = earlier[-1] if earlier else None
+        if target is None:
+            self._say("That was the last zone visit." if step > 0 else
+                      "That was the first zone visit.")
+            return
+        self.open_visit(target)
+        self.on_visit(sc.visits.index(target))
+
     def open_visit(self, visit: dict) -> None:
         """Show a zone visit from its first frame, ready to score."""
         self.visit = visit
+        sc = self.scorer
+        k = next((i for i, x in enumerate(sc.visits) if x is visit), None)
+        if k is not None:
+            self.visit_text.configure(text=f"Visit {k + 1} of {len(sc.visits)}")
         self._manual_object = False
         self.object_var.set(visit["object"])
         self.pause()
@@ -732,7 +778,8 @@ class ReviewPanel(ttk.Frame):
         if self.window is None or not self.window.winfo_exists():
             try:
                 self.window = PlaybackWindow(self.winfo_toplevel(), self.pb, self._labels,
-                                             self._outside, self._title, scorer=self.scorer)
+                                             self._outside, self._title, scorer=self.scorer,
+                                             on_visit=self._select_visit)
             except Exception as exc:
                 traceback.print_exc()
                 show_warning(self, "The video couldn't be opened",
@@ -815,6 +862,11 @@ class ReviewPanel(ttk.Frame):
                              values=(n + 1, v["object"], f"{v['row'] + 1:,}",
                                      clock(v["row"] / pb.fps), clock(vf / pb.fps),
                                      f"{v['seconds']:g}", STATUS_TEXT[status]))
+        win = self.window if self.window is not None and self.window.winfo_exists() else None
+        if win is not None and win.visit is not None:
+            k = next((i for i, x in enumerate(sc.visits) if x is win.visit), None)
+            if k is not None:
+                self._select_visit(k)
         zone = f"{sc.zone_cm:g} {'cm' if sc.scaled else 'px (this file has no scale)'}"
         totals = "; ".join(f"{name} {t:g} s ({k} interaction{'s' if k != 1 else ''})"
                            for name, (t, k) in sc.totals().items())
@@ -856,8 +908,19 @@ class ReviewPanel(ttk.Frame):
                 f"{flagged} at or over {cutoff:g} s. Each counts for the region shown; "
                 "click a row to see it."))
 
+    def _select_visit(self, index: int) -> None:
+        """The playback window moved to another visit: select it in the list
+        (without reopening it)."""
+        if self.tree.exists(str(index)):
+            self.tree.selection_set(str(index))
+            self.tree.see(str(index))
+
     def _on_event(self, _e=None) -> None:
         sel = self.tree.selection()
+        win = self.window if self.window is not None and self.window.winfo_exists() else None
+        if (sel and win is not None and self.scorer is not None
+                and win.visit is self.scorer.visits[int(sel[0])]):
+            return   # already showing it (the window moved there itself)
         if sel and self.pb is not None and self.scorer is not None:
             win = self.open_window()
             if win is not None:

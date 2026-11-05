@@ -1427,6 +1427,16 @@ Tested on the user's object trial (`examples/1_2026-06-26_14-03-15.mp4`,
 visits (8 at object 1, 10 at object 2). The tracked point is the body
 center, so while sniffing it sits a few cm from the object; a larger zone
 may suit (to settle by experimenting).
+**Changes (user, 2026-11-05, after reviewing the trial):** the playback
+window gets **◀ Previous visit / Next visit ▶** (keys [ and ]), so the
+experimenter works through the zone visits without going back to the list
+(the list's selection follows; moving is refused while an interaction is
+open). **Default zone distance 4 cm** (from the interactions the user
+saw). The aim is to **catch every possible interaction**, with the
+experimenter deciding which are real, so zone visits **no longer drop
+brief stays** (the entry rule had dropped stays under 5 frames); only exits
+shorter than Min entry frames join two stretches into one visit. On the
+trial: 67 visits at 4 cm (37 at object 1, 30 at object 2).
 **Possible follow-ups (not built):** edit object types / day / phase after
 tracking; draw the objects on the Scale step; objects on the saved
 `_tracked.mp4`.

@@ -47,7 +47,7 @@ app = gui.TrackTamerApp(); app.update()
 app.test_var.set("Object Recognition"); app._on_test_type(); app.update()
 check("Object Recognition settings section with the zone distance box",
       bool(app.or_bar.winfo_manager()) and not app.of_bar.winfo_manager()
-      and app.zone_var.get() == "2")
+      and app.zone_var.get() == "4")
 app.add_files([CLIP]); app.update()
 app.open_setup(); app.update()
 win = app._setup_win
@@ -160,6 +160,23 @@ check("an interaction can be logged anywhere, with the object picked by hand",
 pw.mark_end(); app.update()
 check("…and is saved", ("object 2", 0, 3) in [(b.object, b.start, b.end)
                                                for b in load_scoring(app.files[0].data).bouts])
+# Previous / Next visit in the playback window (user, 2026-11-05).
+vis = rv.scorer.visits
+pw.open_visit(vis[0]); app.update()
+if len(vis) > 1:
+    pw.go_visit(1); app.update()
+    check("Next visit jumps to where the point enters the next zone visit, and the list follows",
+          pw.row == vis[1]["row"] and pw.visit is vis[1] and rv.tree.selection() == ("1",)
+          and "Visit 2 of" in pw.visit_text.cget("text"))
+    pw.go_visit(-1); app.update()
+    check("Previous visit goes back", pw.row == vis[0]["row"] and rv.tree.selection() == ("0",))
+    pw.mark_start(); pw.go_visit(1)
+    check("can't move to another visit with an interaction open",
+          pw.row == vis[0]["row"] and "still open" in pw.score_text.cget("text"))
+    pw.mark_end(); app.update()
+pw.show(vis[-1]["end"] + 1 if vis[-1]["end"] + 1 < pw.pb.n_frames else vis[-1]["end"])
+pw.visit = None; pw.go_visit(1)
+check("Next after the last visit says so", "last zone visit" in pw.score_text.cget("text"))
 n_before = len(rv.scorer.visits)
 app.zone_var.set("0"); app.update()
 check("changing the zone distance updates the visit list (no re-tracking)",

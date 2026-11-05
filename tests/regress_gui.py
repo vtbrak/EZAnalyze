@@ -192,6 +192,12 @@ if os.path.exists(CLIP):
     check("setup window opens on the video", win.winfo_exists() and "Clip" in win.video_label.cget("text"))
     v = app.files[0].video
     check("new video gets the test's default session length (EPM 5 min)", v.length_s == 300)
+    win.scrub.set(98); win._load_scrub_frame()
+    win._step_frames(1); win._step_frames(1); win._step_frames(10); win._step_frames(-10)
+    check("frame-by-frame steps move the slider exactly (98 +1 +1 +10 -10 = 100)",
+          win._current_frame() == 100 and "Frame 100" in win.frame_text.cget("text"))
+    win.scrub.set(1); win._step_frames(-10)
+    check("stepping stops at the first frame", win._current_frame() == 0)
     win.scrub.set(100); win._load_scrub_frame(); win._set_start()
     # The user's slip: Set end here with the slider still at the start, then
     # leaving the length box. Must ask, and never save a tiny default.
@@ -265,6 +271,14 @@ if os.path.exists(CLIP):
     for x, y in ((300, 200), (700, 200), (700, 400), (300, 400)):
         click(x, y)
     win._close_region()
+    app.update()
+    fills = win.canvas.find_withtag("fills")
+    outlines = [i for i in win.canvas.find_withtag("overlay")
+                if win.canvas.type(i) == "polygon"]
+    check("regions: see-through fill image (60% transparent) under solid outlines",
+          len(fills) == 1 and outlines and all(win.canvas.itemcget(i, "fill") == "" for i in outlines)
+          and win.canvas._fill_photo is not None
+          and win.canvas.find_all().index(fills[0]) < win.canvas.find_all().index(outlines[0]))
     regs = {r.name: r for r in v.tracking_regions(1.0, "Open Field")}
     check("Open Field periphery = outline minus center",
           set(regs) == {"periphery", "center"} and regs["periphery"].subtract == ["center"]

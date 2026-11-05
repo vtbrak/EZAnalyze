@@ -1478,6 +1478,37 @@ Done:
   **Open question for the user:** Open Field side times count every tracked
   non-center frame, so they add to 1.9 s more than periphery time in the
   sample; limit sides to periphery frames?
+- ✅ **Setup window tweaks (user, 2026-11-05):** filled shapes (regions,
+  exclusions) are **60% transparent**: tkinter can't draw partly transparent
+  shapes, so `FrameCanvas` blends all fills into one RGBA image layer at 40%
+  opacity just above the video image, with outlines, points and labels solid
+  on top. A region whose middle is covered by another (the arena outline
+  around the center) has its label near its top edge. Every scrub slider
+  (trial start/end, Tracking check) gained **frame steps**: ◀◀ −10, ◀ −1,
+  ▶ +1, ▶▶ +10, and the , and . keys step one frame (not while typing in a
+  box).
+- **OPEN DECISION: frames outside every drawn region (logged 2026-11-05;
+  must be decided whatever the testing shows, as it will happen again).**
+  In the Open Field sample 38 frames (1.9 s) have a position outside both
+  regions, so the four side times add to 1.9 s more than periphery time
+  (sides count every tracked non-center frame). Likely causes in a
+  clear-walled box filmed at an angle: rearing/climbing (body over the
+  wall), the mouse's reflection in the wall pulling the tracked point
+  outward, and where the outline is drawn (floor edge vs top of walls).
+  Options:
+  - **A.** Outside frames count toward nothing (as now); center + periphery
+    may total under 100%; limit sides to periphery frames so they add to
+    periphery time.
+  - **B.** Open Field: anything tracked that isn't center is periphery
+    (outside frames count as periphery; center + periphery = 100%; sides
+    add to periphery automatically). EPM unchanged (outside = no arm, e.g.
+    head dips). **Assistant's lean.**
+  - **C.** Outside frames go to the nearest region (B, extended to EPM).
+  Test video for deciding together: `examples/1_2026-08-17_13-27-03.mp4`
+  (Open Field, 65 min, 640x480, 9.84 fps, clear walls with reflections; the
+  arena is empty at 1 min, so the start must be set when the mouse is
+  placed). Plan: the user sets it up and tracks it; the assistant lists the
+  outside-region stretches with times to review in Play video….
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

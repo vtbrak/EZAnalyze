@@ -20,8 +20,9 @@ from tkinter import ttk
 import cv2
 import numpy as np
 from matplotlib.path import Path
-from PIL import Image, ImageTk
+from PIL import Image, ImageDraw, ImageTk
 
+from core.plotting import _label_points
 from core.tracking import METHODS, TrackingParams, locate
 from core.video import VideoReader
 from core.video_setup import OUTLINE, REGION_TEMPLATES, STEPS
@@ -59,6 +60,9 @@ ROLE_COLORS = {"open_arm": "#ff9f1a", "closed_arm": "#2f9bff", "center": "#39d35
                "outline": "#d36bff"}
 OTHER_COLOR = "#cccccc"
 SCALE_COLOR = "#ffd23f"
+# Filled shapes (regions, exclusions) are 60% transparent, so the arena and
+# the other regions show through them (user, 2026-11-05).
+FILL_OPACITY = 0.4
 
 
 def default_session_minutes(config: dict, test: str) -> float:
@@ -97,6 +101,10 @@ class FrameCanvas(tk.Canvas):
         self._pan_from = None
         self.redraw_overlay = lambda: None  # set by the current step
         self.on_view_change = lambda: None  # e.g. to update a zoom label
+        self._base_item = None              # the canvas item showing the image
+        self._fills = []                    # (screen points, color, tag) to blend in
+        self._fill_photo = None
+        self._fill_job = None
         self.bind("<Configure>", lambda _e: self._render())
         self.bind("<MouseWheel>", self._wheel)          # Windows and Mac
         self.bind("<Button-4>", lambda e: self.zoom_by(1.25, e.x, e.y))  # Linux
@@ -199,8 +207,8 @@ class FrameCanvas(tk.Canvas):
                     max(1, int(round((y1 - y0) * self.scale))))
             resample = Image.NEAREST if self.zoom >= 4 else Image.BILINEAR
             self._photo = ImageTk.PhotoImage(part.resize(size, resample))
-            self.create_image(ox + x0 * self.scale, oy + y0 * self.scale,
-                              image=self._photo, anchor="nw")
+            self._base_item = self.create_image(ox + x0 * self.scale, oy + y0 * self.scale,
+                                                image=self._photo, anchor="nw")
         # A thin line marks the video's edge inside the black border.
         self.create_rectangle(ox - 1, oy - 1, ox + iw * self.scale, oy + ih * self.scale,
                               outline="#555555")
@@ -215,19 +223,54 @@ class FrameCanvas(tk.Canvas):
     def image_size(self) -> tuple[int, int]:
         return (0, 0) if self._array is None else self._array.shape[1::-1]
 
+    def delete(self, *items) -> None:
+        """Canvas delete; clearing the overlay (or everything) also drops the
+        see-through fills, which the next shapes drawn rebuild."""
+        if any(i in ("all", "overlay") for i in items):
+            self._fills = []
+        super().delete(*items)
+
+    def _schedule_fills(self) -> None:
+        if self._fill_job is None:
+            self._fill_job = self.after_idle(self._draw_fills)
+
+    def _draw_fills(self) -> None:
+        """Blend every filled shape into one see-through image (tkinter can't
+        draw partly transparent shapes itself), just above the video image
+        and below the outlines, points and labels."""
+        self._fill_job = None
+        super().delete("fills")
+        if not self._fills or not self.winfo_exists():
+            return
+        w, h = max(self.winfo_width(), 1), max(self.winfo_height(), 1)
+        layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(layer)
+        alpha = int(round(255 * FILL_OPACITY))
+        for pts, color, _tag in self._fills:
+            r, g, b = (v // 257 for v in self.winfo_rgb(color))
+            draw.polygon(list(zip(pts[0::2], pts[1::2])), fill=(r, g, b, alpha))
+        self._fill_photo = ImageTk.PhotoImage(layer)
+        tags = ("fills",) + tuple({t for _p, _c, t in self._fills})
+        item = self.create_image(0, 0, image=self._fill_photo, anchor="nw", tags=tags)
+        self.tag_lower(item)
+        if self._base_item is not None and self.find_withtag(self._base_item):
+            self.tag_raise(item, self._base_item)
+
     def polygon(self, xs, ys, color: str, closed: bool = True, tag: str = "overlay",
-                label: str | None = None) -> None:
+                label: str | None = None, label_at: tuple | None = None) -> None:
         pts = [c for x, y in zip(xs, ys) for c in self.to_screen(x, y)]
         if closed and len(xs) >= 3:
-            self.create_polygon(*pts, outline=color, fill=color, stipple="gray25",
-                                width=2, tags=tag)
+            # Outline drawn solid; the fill is blended in 60% transparent.
+            self.create_polygon(*pts, outline=color, fill="", width=2, tags=tag)
+            self._fills.append((pts, color, tag))
+            self._schedule_fills()
         elif len(xs) >= 2:
             self.create_line(*pts, fill=color, width=2, tags=tag)
         for x, y in zip(xs, ys):
             sx, sy = self.to_screen(x, y)
             self.create_oval(sx - 3, sy - 3, sx + 3, sy + 3, outline=color, fill=color, tags=tag)
         if label and xs:
-            cx, cy = self.to_screen(sum(xs) / len(xs), sum(ys) / len(ys))
+            cx, cy = self.to_screen(*(label_at or (sum(xs) / len(xs), sum(ys) / len(ys))))
             self.create_text(cx, cy, text=label, fill="white", tags=tag,
                              font=("TkDefaultFont", 11, "bold"))
 
@@ -544,10 +587,33 @@ class SetupWindow(tk.Toplevel):
         self._on_load = on_load
         self.frame_text = ttk.Label(row, width=22, anchor="e")
         self.frame_text.pack(side=tk.RIGHT, padx=(8, 0))
+        # Frame-by-frame steps (the slider alone moves many frames per pixel).
+        steps = ttk.Frame(row)
+        steps.pack(side=tk.RIGHT, padx=(8, 0))
+        for text, delta, tip in (("◀◀", -10, "Back 10 frames"), ("◀", -1, "Back 1 frame"),
+                                 ("▶", 1, "Forward 1 frame"), ("▶▶", 10, "Forward 10 frames")):
+            btn = ttk.Button(steps, text=text, width=3,
+                             command=lambda d=delta: self._step_frames(d))
+            btn.pack(side=tk.LEFT)
+            Tooltip(btn, tip + ". The , and . keys step one frame too.")
+        self._scrub_range = (lo, max(lo, hi))
         self.scrub = ttk.Scale(row, from_=lo, to=max(lo, hi), orient=tk.HORIZONTAL)
         self.scrub.set(value)
         self.scrub.configure(command=lambda _v: self._on_scrub())
         self.scrub.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.bind("<comma>", lambda _e: self._step_frames(-1))
+        self.bind("<period>", lambda _e: self._step_frames(1))
+
+    def _step_frames(self, delta: int) -> None:
+        """Move the scrub slider by `delta` frames and show that frame now."""
+        if not getattr(self, "scrub", None) or not self.scrub.winfo_exists():
+            return
+        focus = self.focus_get()
+        if delta in (-1, 1) and isinstance(focus, (tk.Entry, ttk.Entry)):
+            return  # typing in a box (e.g. "1.5"): the key is text, not a step
+        lo, hi = self._scrub_range
+        self.scrub.set(min(max(self._current_frame() + delta, lo), hi))
+        self._load_scrub_frame()
 
     def _on_scrub(self) -> None:
         if self._scrub_job is not None:
@@ -1186,10 +1252,15 @@ class SetupWindow(tk.Toplevel):
             self.region_name_var.set(sel[0])
 
     def _draw_regions(self) -> None:
+        shapes = {name: self._to_image(xs, ys) for name, (xs, ys) in self.setup.regions.items()
+                  if len(xs) >= 3}
+        # A region whose middle is covered by another (the arena outline around
+        # the center) gets its label near its top edge, as on the plots.
+        spots = _label_points(shapes) if shapes else {}
         for name, (xs, ys) in self.setup.regions.items():
             ix, iy = self._to_image(xs, ys)
             color = ROLE_COLORS.get(self._region_role(name), OTHER_COLOR)
-            self.canvas.polygon(ix, iy, color, label=name)
+            self.canvas.polygon(ix, iy, color, label=name, label_at=spots.get(name))
         if self._points:  # the region being drawn, in full-size pixels
             color = ROLE_COLORS.get(self._region_role(self._current_region or ""), OTHER_COLOR)
             ix, iy = self._to_image([p[0] for p in self._points], [p[1] for p in self._points])

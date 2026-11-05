@@ -79,7 +79,6 @@ DEFAULTS: dict = {
         "test": False,  # the test's other measures
         "zones": False,
         "entries": False,
-        "roi": False,
         "details": False,
     },
     # ROI_location label -> role (open_arm, closed_arm, center, periphery).

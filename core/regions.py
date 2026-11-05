@@ -113,6 +113,43 @@ def frame_roles(data: TrackingData, roles: dict[str, str]) -> np.ndarray:
     )
 
 
+def frame_regions(data: TrackingData, roles: dict[str, str]):
+    """The one region the animal is in on each frame, by name ("" = none).
+
+    A frame in several regions counts for the **center** when one of them is
+    the center (a point on a border the center shares, or a drawn overlap;
+    user's rule, 2026-11-05). The center is the only region that may share
+    with others: a frame in two non-center regions goes to the first of them
+    (file order) and is reported, as (labels, shared frame count,
+    {"a + b": frames}).
+
+    Every per-region and per-role measure is built from these labels, so the
+    same quantity never comes out as two different numbers.
+    """
+    n = data.n_frames
+    labels = np.full(n, "", dtype=object)
+    centers = [r for r in data.regions if roles.get(r) == "center"]
+    others = [r for r in data.regions if r not in centers]
+    inside = {r: data.df[r].to_numpy(dtype=bool) for r in data.regions}
+    in_center = np.zeros(n, dtype=bool)
+    for r in centers:
+        labels[inside[r] & ~in_center] = r
+        in_center |= inside[r]
+    taken = in_center.copy()
+    shared: dict[str, int] = {}
+    for i, r in enumerate(others):
+        mine = inside[r] & ~in_center
+        for later in others[i + 1:]:
+            both = int((mine & inside[later]).sum())
+            if both:
+                shared[f"{r} + {later}"] = both
+        labels[mine & ~taken] = r
+        taken |= mine
+    hits = sum((inside[r].astype(int) for r in others), np.zeros(n, dtype=int))
+    count = int(((hits > 1) & ~in_center).sum())
+    return labels.astype(str), count, shared
+
+
 def center_periphery_overlap(data: TrackingData, roles: dict[str, str]) -> int:
     """Frames marked as both center and periphery. Center and periphery should
     never overlap, so any count above zero means the file's ROIs are wrong

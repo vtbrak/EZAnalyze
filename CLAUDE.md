@@ -69,7 +69,13 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   mapping**: auto-classified by keyword or code (EPM `ol/or`→open, `ct/cb`→
   closed, `mid`→center), user-overridable, **saved**. Unrecognized names
   prompt the user with a dropdown.
-- **Overlaps count as center** (EPM arm+mid). **Center/periphery must never
+- **Overlaps count as center** (EPM arm+mid), and **a shared border point
+  counts for the center only** (user, 2026-11-05): one region per frame
+  (`core/regions.py` `frame_regions`) drives every per-region, per-role and
+  per-bin number, so the same quantity is never two different numbers;
+  tracking writes non-center regions minus the center; no ROI-label
+  (`Time_ROI_*`) columns. Only the center may share; other shared frames are
+  reported (`SharedRegionFrames`, Analyze warning). **Center/periphery must never
   overlap**: that's a file error, so warn the user.
 - **Test type** chosen via a **dropdown** (EPM / Open Field); no auto-detect.
 - **All thresholds** are **input boxes in the UI, persisted to `config.json`**.

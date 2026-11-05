@@ -97,7 +97,6 @@ SUMMARY_GROUP_LABELS = {
     "test": "More test measures",
     "zones": "Zone time & %",
     "entries": "Entries & transitions",
-    "roi": "ROI label time & %",
     "details": "Details",
 }
 
@@ -1840,13 +1839,18 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             for e in targets:
                 # Gap filling works on a copy; the file's own data is untouched.
                 data = fill_gaps(e.data, fill_max) if fill else e.data
-                summary = summary_metrics(data, fps=fps)
                 roles = self._current_roles([e])
+                # Per-region numbers use the test's entry rule, so they match
+                # the test measures (Open Field: also its "same visit" gap).
+                summary = summary_metrics(
+                    data, fps=fps, roles=roles, min_entry_frames=min_entry,
+                    min_gap_s=(self.config_data["min_seconds_between_entries"]
+                               if test == "Open Field" else 0.0))
                 # Record the settings behind these numbers in the row itself, so
                 # an exported table shows how it was produced.
                 settings = {"Test": test, "MinEntryFrames": min_entry,
                             "FillGaps": fill, "FillGapsMaxFrames": fill_max}
-                bins = binned_metrics(data, fps=fps, bin_seconds=bin_s)
+                bins = binned_metrics(data, fps=fps, bin_seconds=bin_s, roles=roles)
                 test_bins = None
                 if test == "Elevated Plus Maze":
                     summary.update(epm_metrics(
@@ -1880,6 +1884,23 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         finally:
             self.config(cursor="")
         self._refresh()
+        self._warn_shared(targets)
+
+    def _warn_shared(self, entries) -> None:
+        """Only the center may share frames with other regions (those frames
+        count for the center). Warn about frames in two other regions."""
+        found = [(e.label, e.summary.get("SharedRegions", ""))
+                 for e in entries if e.summary and e.summary.get("SharedRegionFrames")]
+        if not found:
+            return
+        lines = "\n".join(f"• {name}: {what}" for name, what in found)
+        show_warning(
+            self, "Some regions share frames",
+            "Some frames are in two regions at once, and neither is the center.\n\n"
+            f"{lines}\n\nOnly the center should share a border with other regions (a "
+            "shared point counts for the center). These frames were counted for the "
+            "first region listed. Redraw the regions so they meet only at the center "
+            "(for a video: Set up videos…, step 5, then Track again).")
 
     def _settings_sheet(self, entry, plot: dict):
         """Everything that produced this file's numbers and images."""

@@ -81,8 +81,15 @@ other boxes to add columns. Open Field shows its basics and test measures.
 
 **Summary metrics** (one row per file):
 - Total distance (cm / px), duration, mean speed
-- Time and percent spent in each region (e.g. center / peripheral, or EPM arms) and each ROI label
-- Number of entries into each zone, ROI transitions
+- Time and percent spent in each region (e.g. center / periphery, or each EPM
+  arm), and entries into each region under the same entry rule as the test
+  measures, plus region-to-region transitions
+- **One region per frame:** a point on a border the center shares (or in a
+  drawn overlap) counts for the **center only**, so each arm's time is exactly
+  its own time and the per-region numbers always add up to the test totals
+  (e.g. closed-arm time = closed arm 1 + closed arm 2). Only the center may
+  share; frames in two other regions are counted for the first and reported
+  in a warning. Tracking writes border pixels to the center only, too.
 - The tracking settings recorded in the file
 
 **Time bins** (per file): the session split into fixed-length bins (default

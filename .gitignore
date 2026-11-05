@@ -15,3 +15,6 @@ config.json
 # Reference copy of ezTrack (upstream: github.com/denisecailab/ezTrack). Code we adapt
 # lives in our own files with attribution; the original and its videos stay out of git.
 ezTrack/
+
+# Example videos and their outputs (research data, kept off GitHub)
+examples/

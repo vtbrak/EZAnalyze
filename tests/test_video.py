@@ -134,6 +134,18 @@ check("regions scaled by downsampling", np.allclose(half["center"].xs, [100, 300
 vs2.scale_points = [(0, 0), (300, 400)]; vs2.scale_cm = 40
 check("scale measured on the prepared frame", vs2.scale_px(1.0) == 500
       and vs2.scale_px(0.5) == 250 and abs(vs2.scale(0.5).cm_per_px - 0.16) < 1e-9)
+# A border the center shares belongs to the center only (2026-11-05).
+vs2.regions = {"center": ([300, 400, 400, 300], [300, 300, 400, 400]),
+               "closed arm 2": ([300, 400, 400, 300], [400, 400, 600, 600])}
+regs = vs2.tracking_regions(1.0, "Elevated Plus Maze")
+arm = next(r for r in regs if r.name == "closed arm 2")
+check("arms are written minus the center", arm.subtract == ["center"]
+      and next(r for r in regs if r.name == "center").subtract == [])
+on_border = pd.DataFrame({"X": [350.0, 350.0], "Y": [400.0, 500.0]})
+cols = tracking.region_columns(on_border, regs, (600, 800))
+check("a point on the shared border is center only; inside the arm is the arm",
+      list(cols["center"]) == [True, False] and list(cols["closed arm 2"]) == [False, True]
+      and list(cols["ROI_location"]) == ["center", "closed arm 2"])
 vs3 = VideoSetup(path=EPM_VIDEO, info=info, steps_done={"regions", "scale", "tracking"})
 vs3.copy_from(vs2)
 check("start from previous copies regions, scale, length as a draft",

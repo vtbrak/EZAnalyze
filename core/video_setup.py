@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .regions import auto_role
 from .tracking import Region, Scale, make_reference
 from .video import Prep, VideoInfo, polygon_mask
 
@@ -134,16 +135,20 @@ class VideoSetup:
     # --- regions and scale -----------------------------------------------
     def tracking_regions(self, dsmpl: float, test: str) -> list[Region]:
         """The drawn regions in prepared-frame pixels, as tracking writes
-        them. Open Field's outline becomes "periphery" (outline minus center);
-        other drawn names are written as they are."""
+        them. Every region other than the center has the center's area removed,
+        so a pixel on a border the center shares (or a drawn overlap) belongs
+        to the center only (user's rule, 2026-11-05). Open Field's outline
+        becomes "periphery" (outline minus center); other drawn names are
+        written as they are."""
+        centers = [n for n in self.regions if auto_role(n) == "center"]
         out = []
         for name, (xs, ys) in self.regions.items():
             px, py = self.to_prepared(xs, ys, dsmpl)
+            minus = [] if name in centers else list(centers)
             if test == "Open Field" and name == OUTLINE:
-                out.append(Region("periphery", px, py,
-                                  subtract=["center"] if "center" in self.regions else []))
+                out.append(Region("periphery", px, py, subtract=minus))
             else:
-                out.append(Region(name, px, py))
+                out.append(Region(name, px, py, subtract=minus))
         return out
 
     def missing_regions(self, test: str) -> list[str]:

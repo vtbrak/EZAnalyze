@@ -1443,6 +1443,23 @@ Done:
   (its default view is still basics + its measures; export order unchanged).
   Config key `summary_groups` became `summary_columns` so the new default
   reaches existing configs. Order lives in `KEY_MEASURES` (core/metrics.py).
+- ✅ **One number per quantity (user, 2026-11-05).** In the example EPM file,
+  `Time_closed arm 2_s` (108.77 s) differed from `Time_ROI_closed arm 2_s`
+  (108.29 s): 8 frames sat exactly on the border closed arm 2 shares with the
+  center, and polygon masks put border pixels in both regions. Also
+  `Entries_center` (20) differed from `EPM_CenterEntries` (14): per-region
+  entries counted every step in, without the entry rule. Fixed:
+  `frame_regions` gives one region per frame (center wins; only the center
+  may share, other shared frames are counted for the first region and
+  reported in `SharedRegionFrames` / `SharedRegions` plus an Analyze
+  warning); per-region time, %, entries (same entry rule, and Open Field's
+  same-visit gap) and bins come from it; EPM role times / % / entries are the
+  per-region values added up (rounded the same way), Open Field's center /
+  periphery equal the per-region columns; `ROI_transitions` became
+  `Region_transitions` (from the same labels); the ROI-label columns and the
+  "ROI label time & %" checkbox are gone. Tracking writes every non-center
+  region minus the center, so new files never mark a border frame twice.
+  Checked by `tests/test_consistency.py`. `examples/` is gitignored.
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

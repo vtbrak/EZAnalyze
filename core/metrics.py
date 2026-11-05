@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from .loader import TrackingData
-from .regions import frame_roles, match_polygons
+from .regions import frame_regions, match_polygons, resolve_roles
 
 
 def held_states(labels: np.ndarray, min_frames: int) -> list[tuple[str, int]]:
@@ -69,26 +69,89 @@ def carry_over_gaps(labels: np.ndarray, unreadable: np.ndarray) -> np.ndarray:
     return labels[idx]
 
 
-def _roles_and_gaps(data: TrackingData, roles: dict[str, str]):
-    """Per-frame roles with unreadable frames marked "unreadable" (so they
-    count toward no region's time), the unreadable mask, and the roles with
-    the place before each gap carried through it (for the entry rule)."""
+def region_labels(data: TrackingData, roles: dict[str, str] | None = None):
+    """The one region per frame (`frame_regions`: shared frames count for the
+    center), with unreadable frames marked "unreadable" so they count toward
+    no region's time. Returns (labels, unreadable mask, shared frames,
+    {"a + b": frames})."""
+    roles = roles if roles is not None else resolve_roles(data.regions, {})
+    labels, shared_n, shared = frame_regions(data, roles)
     bad = data.unreadable
-    per_frame = frame_roles(data, roles)
     if bad.any():
-        per_frame = np.where(bad, "unreadable", per_frame)
+        labels = np.where(bad, "unreadable", labels)
+    return labels, bad, shared_n, shared
+
+
+def region_entry_starts(inside: np.ndarray, bad: np.ndarray, min_frames: int,
+                        min_gap_frames: float = 0) -> list[int]:
+    """Frames where entries into an area start, under the entry rule (stay
+    at least `min_frames`; unreadable gaps carry the place before them).
+    Starting inside isn't an entry. A return within `min_gap_frames` of
+    leaving continues the same visit (Open Field center rule). Every entry
+    count in the app (per region, per role, per bin) comes from here."""
+    states = held_states(carry_over_gaps(np.where(inside, "in", "out"), bad), min_frames)
+    starts, last_exit = [], None
+    for k, (label, start) in enumerate(states):
+        if label == "out":
+            if k > 0:
+                last_exit = start
+            continue
+        if k == 0:
+            continue  # started inside: time counts, not an entry
+        if last_exit is not None and start - last_exit < min_gap_frames:
+            continue  # came back too soon: same visit
+        starts.append(start)
+    return starts
+
+
+def _roles_and_gaps(data: TrackingData, roles: dict[str, str]):
+    """Per-frame roles (each frame's region's role; shared frames count for
+    the center), with unreadable frames marked "unreadable", the unreadable
+    mask, and the roles with the place before each gap carried through it."""
+    labels, bad, _n, _shared = region_labels(data, roles)
+    lookup = {r: roles.get(r, "") for r in data.regions}
+    lookup["unreadable"] = "unreadable"
+    per_frame = np.array([lookup.get(x, "") for x in labels], dtype=object).astype(str) \
+        if len(labels) else np.array([], dtype=str)
     return per_frame, bad, carry_over_gaps(per_frame, bad)
 
 
 def _epm_events(data: TrackingData, roles: dict[str, str], min_entry_frames: int):
-    """Per-frame roles and the session's entries [(role, start frame), ...]."""
-    per_frame, _bad, carried = _roles_and_gaps(data, roles)
-    return per_frame, held_entries(carried, min_entry_frames)
+    """Per-frame roles and the session's entries [(role, start frame), ...].
+    Entries are counted per region (`region_entry_starts`) and given their
+    region's role, so role totals are exactly the sums of the region counts
+    (e.g. closed entries = closed arm 1 + closed arm 2)."""
+    per_frame, bad, _carried = _roles_and_gaps(data, roles)
+    labels, _bad, _n, _shared = region_labels(data, roles)
+    entries = []
+    for r in data.regions:
+        role = roles.get(r, "")
+        if role in ("open_arm", "closed_arm", "center"):
+            entries += [(role, f) for f in region_entry_starts(labels == r, bad, min_entry_frames)]
+    groups = {k: [r for r in data.regions if roles.get(r) == k]
+              for k in ("open_arm", "closed_arm", "center")}
+    return per_frame, sorted(entries, key=lambda e: e[1]), labels, groups
 
 
-def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float) -> dict:
+def _role_sums(labels, groups, lo: int, hi: int, fps: float) -> tuple[dict, dict]:
+    """Seconds and % of frames [lo, hi) per role, as the sums of the
+    per-region values as displayed (rounded the same way), so a role total
+    always equals its regions added up (e.g. closed = closed arm 1 + 2)."""
+    seg = labels[lo:hi]
+    n = hi - lo
+    secs, pct = {}, {}
+    for k, regions in groups.items():
+        counts = [int(np.sum(seg == r)) for r in regions]
+        secs[k] = round(sum(round(c / fps, 2) for c in counts), 2) if fps else float("nan")
+        pct[k] = round(sum(round(100.0 * c / n, 1) for c in counts), 1) if n else float("nan")
+    return secs, pct
+
+
+def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float,
+               labels=None, groups=None) -> dict:
     """EPM measures for frames [lo, hi): times from those frames, entries that
-    start in them. Used for the whole session and for each time bin."""
+    start in them. Used for the whole session and for each time bin. Times
+    are the sums of the per-region times (`_role_sums`)."""
     nan = float("nan")
     seg = per_frame[lo:hi]
     frames = {k: int(np.sum(seg == k)) for k in ("open_arm", "closed_arm", "center")}
@@ -98,13 +161,12 @@ def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float) -> 
     open_time_frac = frames["open_arm"] / arm_frames if arm_frames else nan
     open_entry_frac = counts["open_arm"] / arm_entries if arm_entries else nan
 
-    def secs(f):
-        return round(f / fps, 2) if fps else nan
+    role_secs, _pct = _role_sums(labels, groups, lo, hi, fps)
 
     return {
-        "EPM_OpenArm_s": secs(frames["open_arm"]),
-        "EPM_ClosedArm_s": secs(frames["closed_arm"]),
-        "EPM_Center_s": secs(frames["center"]),
+        "EPM_OpenArm_s": role_secs["open_arm"],
+        "EPM_ClosedArm_s": role_secs["closed_arm"],
+        "EPM_Center_s": role_secs["center"],
         # % of time on the arms that was spent on the open (closed) arms.
         "EPM_PctOpenTime": round(100 * open_time_frac, 1),
         "EPM_PctClosedTime": round(100 * (1 - open_time_frac), 1),
@@ -131,20 +193,23 @@ def epm_metrics(
 ) -> dict:
     """Elevated Plus Maze measures for one file, as EPM_* summary columns.
 
-    Times come straight from the per-frame roles (arm + center overlap counts
-    as center). Entries and latencies use the entry rule (`held_entries`).
+    Times, % and entries are the sums of the per-region values (one region
+    per frame; a frame the center shares counts for the center), so they
+    always equal the per-region columns added up. Entries and latencies use
+    the entry rule (`region_entry_starts`).
     Values that can't be computed (e.g. a ratio with no open-arm time, or a
     latency to an arm never entered) are left blank.
     """
-    per_frame, entries = _epm_events(data, roles, min_entry_frames)
+    per_frame, entries, labels, groups = _epm_events(data, roles, min_entry_frames)
     n = len(per_frame)
     nan = float("nan")
-    out = _epm_block(per_frame, entries, 0, n, fps)
+    out = _epm_block(per_frame, entries, 0, n, fps, labels, groups)
     for key, role in (("Open", "open_arm"), ("Closed", "closed_arm"), ("Center", "center")):
         first = next((f for r, f in entries if r == role), None)
         out[f"EPM_Latency_{key}_s"] = round(first / fps, 2) if first is not None and fps else nan
+    _secs, pct = _role_sums(labels, groups, 0, n, fps)
     for key, role in (("Open", "open_arm"), ("Closed", "closed_arm"), ("Center", "center")):
-        out[f"EPM_PctSession_{key}"] = round(100 * np.sum(per_frame == role) / n, 1) if n else nan
+        out[f"EPM_PctSession_{key}"] = pct[role]
     return out
 
 
@@ -158,12 +223,13 @@ def epm_binned(
     bin where it starts, so bins add up to the session totals and a visit
     that spans a bin edge isn't split into two entries.
     """
-    per_frame, entries = _epm_events(data, roles, min_entry_frames)
+    per_frame, entries, labels, groups = _epm_events(data, roles, min_entry_frames)
     rows = []
     for b, lo, hi in _bin_ranges(len(per_frame), fps, bin_seconds):
-        row = {"Bin": b, **_epm_block(per_frame, entries, lo, hi, fps)}
+        row = {"Bin": b, **_epm_block(per_frame, entries, lo, hi, fps, labels, groups)}
+        _secs, pct = _role_sums(labels, groups, lo, hi, fps)
         for key, role in (("Open", "open_arm"), ("Closed", "closed_arm"), ("Center", "center")):
-            row[f"EPM_PctBin_{key}"] = round(100 * np.sum(per_frame[lo:hi] == role) / (hi - lo), 1)
+            row[f"EPM_PctBin_{key}"] = pct[role]
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -177,10 +243,16 @@ def _bin_ranges(n: int, fps: float, bin_seconds: float):
     return [(k + 1, lo, min(lo + per_bin, n)) for k, lo in enumerate(range(0, n, per_bin))]
 
 
-def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
+def summary_metrics(data: TrackingData, fps: float = 20.0,
+                    roles: dict[str, str] | None = None, min_entry_frames: int = 1,
+                    min_gap_s: float = 0.0) -> dict:
     """Compute whole-session summary metrics for one file.
 
-    Returns a flat dict suitable for a one-row-per-file results table.
+    Per-region time, % and entries use one region per frame (a frame on a
+    border the center shares counts for the center only) and the same entry
+    rule as the test measures (`min_entry_frames`; `min_gap_s` is the Open
+    Field "same visit" gap), so they always agree with them. Returns a flat
+    dict suitable for a one-row-per-file results table.
     """
     df = data.df
     n = len(df)
@@ -209,29 +281,27 @@ def summary_metrics(data: TrackingData, fps: float = 20.0) -> dict:
     if duration_s and not np.isnan(dist_cm):
         out["MeanSpeed_cm_s"] = round(dist_cm / duration_s, 3)
 
-    # Time spent in each boolean zone (seconds and percent of session).
+    # Time and % of the session in each region, one region per frame.
+    labels, bad, shared_n, shared = region_labels(data, roles)
     for zone in data.regions:
-        frames_in = int(df[zone].sum())
+        frames_in = int(np.sum(labels == zone))
         out[f"Time_{zone}_s"] = round(frames_in / fps, 2) if fps else float("nan")
         out[f"Percent_{zone}"] = round(100.0 * frames_in / n, 1) if n else 0.0
 
-    # Time spent in each ROI_location category.
-    if "ROI_location" in df.columns:
-        counts = df["ROI_location"].value_counts()
-        for label, frames_in in counts.items():
-            safe = str(label)
-            out[f"Time_ROI_{safe}_s"] = round(frames_in / fps, 2) if fps else float("nan")
-            out[f"Percent_ROI_{safe}"] = round(100.0 * frames_in / n, 1) if n else 0.0
-
-    # Zone entries: count rising edges (False -> True) per zone, with the
-    # zone carried through unreadable gaps so a gap isn't a new entry.
+    # Entries into each region, under the entry rule.
+    gap = min_gap_s * fps if fps else 0
     for zone in data.regions:
-        z = carry_over_gaps(df[zone].to_numpy(dtype=bool), bad)
-        out[f"Entries_{zone}"] = int(z[0]) + int((z[1:] & ~z[:-1]).sum()) if n else 0
+        out[f"Entries_{zone}"] = len(region_entry_starts(labels == zone, bad,
+                                                         min_entry_frames, gap))
 
-    # ROI transitions flagged in the data.
-    if "ROI_transition" in df.columns:
-        out["ROI_transitions"] = int(df["ROI_transition"].sum())
+    # Moves from one region (or none) to another between readable frames.
+    if n:
+        carried = carry_over_gaps(labels, bad)
+        out["Region_transitions"] = int(np.sum(carried[1:] != carried[:-1]))
+    # Frames in two regions neither of which is the center (shouldn't happen:
+    # only the center may share; reported so the regions can be fixed).
+    out["SharedRegionFrames"] = shared_n
+    out["SharedRegions"] = "; ".join(f"{k} ({v} frames)" for k, v in shared.items())
 
     # Carry the tracking settings through so they appear in the results table.
     for key, val in data.settings.items():
@@ -316,20 +386,8 @@ def _of_events(
 
     # Center entries, with the debounce: re-entering within the minimum gap
     # after leaving continues the same visit.
-    states = held_states(carry_over_gaps(np.where(in_center, "center", "out"), bad),
-                         min_entry_frames)
-    min_gap = min_between_entries_s * fps
-    last_exit = None
-    for k, (label, start) in enumerate(states):
-        if label == "out":
-            if k > 0:
-                last_exit = start
-            continue
-        if k == 0:
-            continue  # started in the center: time counts, not an entry
-        if last_exit is not None and start - last_exit < min_gap:
-            continue  # came back too soon: same visit
-        ev["center_entries"].append(start)
+    ev["center_entries"] = region_entry_starts(in_center, bad, min_entry_frames,
+                                               min_between_entries_s * fps)
 
     # Sides from X/Y against this file's own drawn center ROI.
     centers = [r for r, k in roles.items() if k == "center"]
@@ -484,11 +542,13 @@ def of_binned(
 
 
 def binned_metrics(
-    data: TrackingData, fps: float = 20.0, bin_seconds: float = 60.0
+    data: TrackingData, fps: float = 20.0, bin_seconds: float = 60.0,
+    roles: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Break the session into fixed time bins and summarize each bin.
 
-    One row per bin: distance, mean speed, and time/percent in each zone.
+    One row per bin: distance, mean speed, and time/percent in each zone
+    (one region per frame, as in the summary).
     """
     df = data.df.copy()
     n = len(df)
@@ -500,6 +560,7 @@ def binned_metrics(
 
     zones = data.regions
     df["_unreadable"] = data.unreadable
+    df["_region"] = region_labels(data, roles)[0]
     rows = []
     for bin_idx, g in df.groupby("_bin"):
         gframes = len(g)
@@ -515,7 +576,7 @@ def binned_metrics(
             "UnreadableFrames": int(g["_unreadable"].sum()),
         }
         for zone in zones:
-            frames_in = int(g[zone].sum())
+            frames_in = int((g["_region"] == zone).sum())
             row[f"Time_{zone}_s"] = round(frames_in / fps, 2)
             row[f"Percent_{zone}"] = round(100.0 * frames_in / gframes, 1) if gframes else 0.0
         rows.append(row)
@@ -569,13 +630,12 @@ def summary_column_groups(columns, test: str = "") -> dict[str, list[str]]:
     Groups: key (the test's key measures, in their set order; for a test
     without a set, its usual default view: basics and the test's measures),
     basics, test (the test's other EPM_/OF_ measures), zones (per-region
-    time/%), entries, roi, details.
+    time/%), entries, details.
     Anything unrecognized lands in details so a new column is never silently
     lost from the on-screen table.
     """
     groups: dict[str, list[str]] = {
-        "key": [], "basics": [], "test": [], "zones": [], "entries": [], "roi": [],
-        "details": []
+        "key": [], "basics": [], "test": [], "zones": [], "entries": [], "details": []
     }
     columns = list(columns)
     keys = [k for k in key_measures(test) if k in columns]
@@ -590,9 +650,7 @@ def summary_column_groups(columns, test: str = "") -> dict[str, list[str]]:
             groups["basics"].append(c)
         elif c.startswith(("EPM_", "OF_")):
             groups["test"].append(c)  # the chosen test's own measures
-        elif c.startswith(("Time_ROI_", "Percent_ROI_")):
-            groups["roi"].append(c)
-        elif c.startswith("Entries_") or c == "ROI_transitions":
+        elif c.startswith("Entries_") or c in ("Region_transitions", "ROI_transitions"):
             groups["entries"].append(c)
         elif (c.startswith("Time_") and c.endswith("_s")) or c.startswith("Percent_"):
             groups["zones"].append(c)  # per-region columns: center, ol, mid, ...

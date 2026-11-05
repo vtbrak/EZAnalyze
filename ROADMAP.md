@@ -1429,6 +1429,11 @@ Done:
 - **Acoustic startle (ASR) from video** (§13): planned, including PPI and
   habituation; not built. **When starting it, remind the user to add a sample
   video and stimulus logs to the folder.**
+- **Order of results (requested 2026-11-04, remind the user at the next chat):**
+  revisit the order results appear in after analysis: what comes first,
+  second, third, both in the exported files (Summary / Time Bins) and on
+  screen (Summary table columns). Decide the priority order with the user
+  before changing anything.
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

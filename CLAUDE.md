@@ -106,7 +106,7 @@ build (Location Tracking first). The GUI review is decided (ROADMAP §12, end):
 settings panel, always-visible file list, Track / Analyze / Export acting on
 the selected files with a Select all button, one video setup window.
 **Video build (ROADMAP §12, "Video build progress" checklist):**
-C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. Next steps come from the user (PC test with ROADMAP §10's video checklist, merge into `main`, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
+C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. **At the next chat, first remind the user to revisit the order results are shown in (exports and on screen; ROADMAP Next steps).** Next steps come from the user (PC test with ROADMAP §10's video checklist, merge into `main`, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion

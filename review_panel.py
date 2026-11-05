@@ -436,6 +436,9 @@ class ReviewPanel(ttk.Frame):
         if self.window is not None and self.window.winfo_exists():
             self.window.pause()
 
+    def zone_changed(self, cm: float) -> None:
+        """The zone distance changed (object recognition)."""
+
     def unload(self) -> None:
         if self.window is not None and self.window.winfo_exists():
             self.window.close()

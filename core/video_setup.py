@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from .objects import DEFAULT_OBJECTS, KINDS, TrialObject
 from .regions import auto_role
 from .tracking import Region, Scale, make_reference
 from .video import Prep, VideoInfo, polygon_mask
@@ -34,6 +35,8 @@ REGION_TEMPLATES = {
                            ("center", "center")],
     "Open Field": [(OUTLINE, "outline"), ("center", "center")],
 }
+# Object Recognition draws objects (circles) instead of regions (ROADMAP §15).
+OBJECT_TEST = "Object Recognition"
 
 
 def effective_dsmpl(dsmpl: float) -> float:
@@ -57,6 +60,13 @@ class VideoSetup:
     regions: dict[str, tuple[list, list]] = field(default_factory=dict)  # name -> full-size polygon
     scale_points: list[tuple[float, float]] = field(default_factory=list)  # two full-size points
     scale_cm: float | None = None
+    # Object recognition (ROADMAP §15): circles as full-size (x, y, radius),
+    # each marked Familiar / Novel / Moved; two objects unless more are added.
+    object_names: list[str] = field(default_factory=lambda: list(DEFAULT_OBJECTS))
+    objects: dict[str, tuple[float, float, float]] = field(default_factory=dict)
+    object_kinds: dict[str, str] = field(default_factory=dict)
+    trial_day: str = ""
+    trial_phase: str = ""
 
     @property
     def end_frame(self) -> int:
@@ -140,6 +150,8 @@ class VideoSetup:
         to the center only (user's rule, 2026-11-05). Open Field's outline
         becomes "periphery" (outline minus center); other drawn names are
         written as they are."""
+        if test == OBJECT_TEST:
+            return []           # objects are written as circles, not regions
         centers = [n for n in self.regions if auto_role(n) == "center"]
         out = []
         for name, (xs, ys) in self.regions.items():
@@ -152,7 +164,21 @@ class VideoSetup:
         return out
 
     def missing_regions(self, test: str) -> list[str]:
+        if test == OBJECT_TEST:
+            return [n for n in self.object_names if n not in self.objects]
         return [n for n, _ in REGION_TEMPLATES.get(test, []) if n not in self.regions]
+
+    def tracking_objects(self, dsmpl: float) -> list[TrialObject]:
+        """The drawn objects in prepared-frame pixels, as tracking writes them."""
+        d = effective_dsmpl(dsmpl)
+        out = []
+        for name in self.object_names:
+            if name in self.objects:
+                x, y, r = self.objects[name]
+                (px,), (py,) = self.to_prepared([x], [y], dsmpl)
+                kind = self.object_kinds.get(name, "Familiar")
+                out.append(TrialObject(name, px, py, r * d, kind if kind in KINDS else "Familiar"))
+        return out
 
     def scale_px(self, dsmpl: float) -> float | None:
         """Length between the two scale points on the prepared frame."""
@@ -185,4 +211,8 @@ class VideoSetup:
         self.scale_points = copy.deepcopy(other.scale_points)
         self.scale_cm = other.scale_cm
         self.length_s = other.length_s
+        self.object_names = list(other.object_names)
+        self.objects = copy.deepcopy(other.objects)
+        self.object_kinds = dict(other.object_kinds)
+        self.trial_day, self.trial_phase = other.trial_day, other.trial_phase
         self.steps_done -= {"trim", "exclusions", "reference", "regions", "scale"}

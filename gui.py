@@ -74,7 +74,7 @@ from core.export import output_paths, save_figure, settings_table, write_analysi
 from core.gaps import fill_gaps
 from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_video,
                         video_info)
-from core.video_setup import VideoSetup
+from core.video_setup import OBJECT_TEST, VideoSetup
 from core.tracking import TrackingParams
 from core.track_run import TrackRunner, existing_output, make_job
 from core.playback import load_reference
@@ -400,6 +400,19 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.smooth_entry = ttk.Entry(self.of_bar, textvariable=self.smooth_var, width=6)
         self._setting_row(self.of_bar, 2, "Speed smoothing (frames)", self.smooth_entry)
 
+        # Object Recognition (ROADMAP §15), shown only for that test. The zone
+        # distance is being settled by experimenting, so it never locks: zones
+        # are worked out from X/Y whenever results or the Review list update.
+        self.or_bar = ttk.LabelFrame(panel, text="Object Recognition", padding=6)
+        self.zone_var = tk.StringVar(value=f"{self.config_data['object_zone_cm']:g}")
+        self.zone_entry = ttk.Entry(self.or_bar, textvariable=self.zone_var, width=6)
+        self._setting_row(self.or_bar, 0, "Zone distance (cm)", self.zone_entry)
+        Tooltip(self.zone_entry, "How far from each object's edge its zone reaches. Time "
+                                 "with the tracked point in a zone is listed in the "
+                                 "Review tab to score. Never locks: change it any time "
+                                 "and the Review list and results follow.")
+        self.zone_var.trace_add("write", lambda *_: self._on_zone_change())
+
         # Tracking settings, shown when videos are listed. They're changed in
         # the setup window's Tracking check step, where their effect shows.
         self.tracking_section = ttk.LabelFrame(panel, text="Tracking", padding=6)
@@ -456,6 +469,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             (self.session_section, True),
             (self.entries_section, True),
             (self.of_bar, self.test_var.get() == "Open Field"),
+            (self.or_bar, self.test_var.get() == OBJECT_TEST),
             (self.tracking_section, any(e.video is not None
                                         for e in getattr(self, "files", []))),
             (self.gaps_section, any(e.video is not None or (
@@ -1316,6 +1330,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         regions = f"⚠ {'; '.join(problems)}" if problems else describe_roles(roles)
         if not roles and any(e.video is not None for e in self.files):
             regions = "draw them in Set up videos…"  # nothing drawn or tracked yet
+        if self.test_var.get() == OBJECT_TEST:
+            regions = f"objects, zone {self.zone_var.get()} cm from each edge"
         if self._locked():
             settings = (f"{self.test_var.get()}, {self._fps_locked():g} fps, "
                         f"{self._bin_seconds_locked():g} s bins, "
@@ -1329,6 +1345,30 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             f"{len(self.files)} file(s), {done} analyzed — {settings} — "
             f"Regions: {regions}"
         )
+
+    def _zone_cm(self) -> float:
+        """The zone distance typed (the saved one if the box isn't a number)."""
+        try:
+            v = float(self.zone_var.get())
+            if v >= 0:
+                return v
+        except ValueError:
+            pass
+        return float(self.config_data["object_zone_cm"])
+
+    def _on_zone_change(self) -> None:
+        """Save a valid zone distance and update what depends on it."""
+        try:
+            v = float(self.zone_var.get())
+        except ValueError:
+            return
+        if v < 0 or v == self.config_data["object_zone_cm"]:
+            return
+        self.config_data["object_zone_cm"] = v
+        save_config(self.config_data)
+        self._update_status()
+        if hasattr(self, "review"):
+            self.review.zone_changed(v)
 
     def _of_status(self, locked: bool) -> str:
         if self.test_var.get() != "Open Field":
@@ -1642,7 +1682,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             parts = []
             missing = v.missing_regions(test)
             if missing:
-                parts.append("regions not drawn: " + ", ".join(missing))
+                parts.append(("objects" if test == OBJECT_TEST else "regions")
+                             + " not drawn: " + ", ".join(missing))
             if v.scale(dsmpl) is None:
                 parts.append("no scale")
             if parts:

@@ -221,7 +221,7 @@ def assemble_output(video_path: str, tracked: pd.DataFrame, params: TrackingPara
                     prep: Prep, start: int, regions: list[Region] | None,
                     shape: tuple[int, int], scale: Scale | None,
                     reference_frames: int, exclusion_count: int,
-                    fps: float) -> pd.DataFrame:
+                    fps: float, extra: dict | None = None) -> pd.DataFrame:
     """The full `_LocationOutput.csv` table: ezTrack's columns in ezTrack's
     order, then this app's additions (Frame_Unreadable and every setting
     used)."""
@@ -252,6 +252,8 @@ def assemble_output(video_path: str, tracked: pd.DataFrame, params: TrackingPara
     df["Scale_cm"] = scale.cm if scale else np.nan
     df["Scale_cm_per_px"] = scale.cm_per_px if scale else np.nan
     df["Video_FPS"] = float(fps)
+    for key, value in (extra or {}).items():   # e.g. the objects drawn
+        df[key] = value
     return df
 
 

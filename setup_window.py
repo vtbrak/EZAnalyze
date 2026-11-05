@@ -25,7 +25,8 @@ from PIL import Image, ImageDraw, ImageTk
 from core.plotting import _label_points
 from core.tracking import METHODS, TrackingParams, locate
 from core.video import VideoReader
-from core.video_setup import OUTLINE, REGION_TEMPLATES, STEPS
+from core.objects import KINDS, PHASES
+from core.video_setup import OBJECT_TEST, OUTLINE, REGION_TEMPLATES, STEPS, effective_dsmpl
 from dialogs import ask_yes_no, show_info, show_warning
 from tooltip import Tooltip
 
@@ -42,13 +43,16 @@ DOWNSAMPLE_CHOICES = ("1", "0.75", "0.5", "0.25")
 LENGTH_CHOICES = {
     "Elevated Plus Maze": ("5",),
     "Open Field": ("60  (1 hour)", "90  (1.5 hours)"),
+    OBJECT_TEST: ("5", "10"),
 }
-DEFAULT_MINUTES = {"Elevated Plus Maze": 5.0, "Open Field": 60.0}
+DEFAULT_MINUTES = {"Elevated Plus Maze": 5.0, "Open Field": 60.0, OBJECT_TEST: 10.0}
 MIN_LENGTH_S = 10    # a shorter trial is almost surely a slip: ask before using it
 SCALE_GUIDE = {
     "Elevated Plus Maze": "Elevated Plus Maze: 75 cm across, from the end of one arm "
                           "to the end of the opposite arm.",
     "Open Field": "Open Field: 40 cm, from inside corner to inside corner along one wall.",
+    OBJECT_TEST: "Object Recognition: a length you know, e.g. along one inside wall. "
+                 "The zone distance around the objects is in cm, so it needs the scale.",
 }
 CLOSE_DISTANCE = 10  # screen pixels: clicking this near the first point closes a shape
 GRAB_DISTANCE = 8    # screen pixels: clicking this near a point grabs it to drag
@@ -60,6 +64,9 @@ ROLE_COLORS = {"open_arm": "#ff9f1a", "closed_arm": "#2f9bff", "center": "#39d35
                "outline": "#d36bff"}
 OTHER_COLOR = "#cccccc"
 SCALE_COLOR = "#ffd23f"
+OBJECT_COLORS = {"Familiar": "#2f9bff", "Novel": "#ff9f1a", "Moved": "#ff5fd2"}
+ZONE_COLOR = "#ffffff"
+CIRCLE_POINTS = 72   # a drawn circle's fill is blended in as this many-sided polygon
 # Filled shapes (regions, exclusions) are 60% transparent, so the arena and
 # the other regions show through them (user, 2026-11-05).
 FILL_OPACITY = 0.4
@@ -274,6 +281,25 @@ class FrameCanvas(tk.Canvas):
             self.create_text(cx, cy, text=label, fill="white", tags=tag,
                              font=("TkDefaultFont", 11, "bold"))
 
+    def circle(self, x, y, r, color: str, tag: str = "overlay", label: str | None = None,
+               fill: bool = True, dash=None, width: int = 2) -> None:
+        """A circle centered at image point (x, y) with image radius r: the
+        outline solid (or dashed), the fill blended in 60% transparent."""
+        sx, sy = self.to_screen(x, y)
+        sr = r * self.scale
+        self.create_oval(sx - sr, sy - sr, sx + sr, sy + sr, outline=color, width=width,
+                         dash=dash, tags=tag)
+        if fill and sr > 1:
+            t = np.linspace(0, 2 * np.pi, CIRCLE_POINTS, endpoint=False)
+            pts = [c for a in t for c in (sx + sr * np.cos(a), sy + sr * np.sin(a))]
+            self._fills.append((pts, color, tag))
+            self._schedule_fills()
+        if fill:
+            self.create_oval(sx - 3, sy - 3, sx + 3, sy + 3, outline=color, fill=color, tags=tag)
+        if label:
+            self.create_text(sx, sy - sr - 10, text=label, fill="white", tags=tag,
+                             font=("TkDefaultFont", 11, "bold"))
+
     def rectangle(self, x0, y0, x1, y1, color: str, tag: str = "overlay",
                   dash=(6, 3)) -> None:
         self.create_rectangle(*self.to_screen(x0, y0), *self.to_screen(x1, y1),
@@ -343,7 +369,7 @@ class SetupWindow(tk.Toplevel):
         steps.pack(side=tk.LEFT, fill=tk.Y)
         self.step_buttons = {}
         for key in STEPS:
-            b = ttk.Button(steps, text=STEP_TITLES[key], width=20,
+            b = ttk.Button(steps, text=self._title(key), width=20,
                            command=lambda k=key: self._go(k))
             b.pack(fill=tk.X, pady=2)
             self.step_buttons[key] = b
@@ -400,6 +426,15 @@ class SetupWindow(tk.Toplevel):
     def _test(self) -> str:
         return self.app.test_var.get()
 
+    def _objects_test(self) -> bool:
+        return self._test() == OBJECT_TEST
+
+    def _title(self, key: str) -> str:
+        """A step's title (step 5 is "Objects" for Object Recognition)."""
+        if key == "regions" and self.app.test_var.get() == OBJECT_TEST:
+            return "5  Objects"
+        return STEP_TITLES[key]
+
     def _dsmpl(self) -> float:
         return float(self.app.config_data["video_downsample"])
 
@@ -424,6 +459,10 @@ class SetupWindow(tk.Toplevel):
             self.canvas.unbind(seq)
         self.canvas.redraw_overlay = lambda: None
         self._drag = None
+        trace = getattr(self, "_zone_trace", None)
+        if trace:
+            self.app.zone_var.trace_remove("write", trace)
+            self._zone_trace = None
 
     def _mark(self, step: str) -> None:
         self.setup.steps_done.add(step)
@@ -433,7 +472,7 @@ class SetupWindow(tk.Toplevel):
     def _update_step_list(self) -> None:
         for key, b in self.step_buttons.items():
             mark = "✓ " if key in self.setup.steps_done else "   "
-            b.configure(text=mark + STEP_TITLES[key])
+            b.configure(text=mark + self._title(key))
             b.state(["pressed"] if key == self.step else ["!pressed"])
 
     def _reference_ok(self) -> bool:
@@ -489,11 +528,12 @@ class SetupWindow(tk.Toplevel):
         self._clear_controls()
         {"trim": self._step_trim, "exclusions": self._step_exclusions,
          "reference": self._step_reference, "tracking": self._step_tracking,
-         "regions": self._step_regions, "scale": self._step_scale}[step]()
+         "regions": (self._step_objects if self._objects_test() else self._step_regions),
+         "scale": self._step_scale}[step]()
         k = STEPS.index(step)
         self.back_btn.configure(state="normal" if k > 0 else "disabled")
         if k < len(STEPS) - 1:
-            nxt = STEP_TITLES[STEPS[k + 1]].split("  ", 1)[1]
+            nxt = self._title(STEPS[k + 1]).split("  ", 1)[1]
             self.next_step_btn.configure(text=f"Next: {nxt.lower()}")
         elif self.index < len(self.entries) - 1:
             self.next_step_btn.configure(text="Next video")
@@ -545,6 +585,19 @@ class SetupWindow(tk.Toplevel):
                 return False
             if self._read_params(save=True) is None:
                 return False
+        elif step == "regions" and self._objects_test():
+            missing = s.missing_regions(self._test())
+            if missing and not ask_yes_no(
+                    self, "Some objects aren't drawn",
+                    f"Not drawn yet: {', '.join(missing)}. Interactions can only be "
+                    "logged and tallied for drawn objects. Go on anyway?"):
+                return False
+            if not s.trial_phase or not s.trial_day:
+                if not ask_yes_no(
+                        self, "Trial day or phase not set",
+                        "This video's trial day or phase isn't set, so the results "
+                        "won't show it. Go on anyway?"):
+                    return False
         elif step == "regions":
             if len(self._points) >= 3:
                 self._close_region()
@@ -1270,6 +1323,294 @@ class SetupWindow(tk.Toplevel):
     def _redraw_regions(self) -> None:
         self.canvas.delete("overlay")
         self._draw_regions()
+
+    # ------------------------------------------------- step 5: objects (§15)
+    def _step_objects(self) -> None:
+        """Object Recognition: draw each object as a circle, mark it familiar,
+        novel or moved, and set the trial's day and phase."""
+        self.instructions.configure(text=(
+            "Draw each object on the reference: pick it in the list, then press at the "
+            "object's center and drag out to its edge. Drag a drawn object's center to "
+            "move it, or its edge to resize it. The dashed ring is the zone around it: "
+            "time with the tracked point inside the ring is listed in the Review tab "
+            "for you to score. Mark which object is novel or moved, and set the trial "
+            "day and phase. Zoom in for precision."))
+        s = self.setup
+        row = ttk.Frame(self.controls)
+        row.pack(fill=tk.X)
+        self.object_list = ttk.Treeview(row, columns=("object", "type", "status"),
+                                        show="headings", height=4, selectmode="browse")
+        for col, text, width in (("object", "Object", 120), ("type", "Type", 90),
+                                 ("status", "", 90)):
+            self.object_list.heading(col, text=text)
+            self.object_list.column(col, width=width)
+        self.object_list.pack(side=tk.LEFT)
+        self.object_list.bind("<<TreeviewSelect>>", lambda _e: self._object_selected())
+
+        side = ttk.Frame(row)
+        side.pack(side=tk.LEFT, fill=tk.Y, padx=(10, 0))
+        b1 = ttk.Frame(side)
+        b1.pack(fill=tk.X)
+        ttk.Label(b1, text="Type:").pack(side=tk.LEFT)
+        self.kind_var = tk.StringVar()
+        kind = ttk.Combobox(b1, textvariable=self.kind_var, values=KINDS, state="readonly",
+                            width=9)
+        kind.pack(side=tk.LEFT, padx=(4, 8))
+        kind.bind("<<ComboboxSelected>>", lambda _e: self._set_kind())
+        Tooltip(kind, "Familiar: seen before. Novel: new in this trial. Moved: a familiar "
+                      "object in a new place (object location). The results compare "
+                      "novel and moved objects against familiar ones.")
+        ttk.Button(b1, text="Redraw", command=self._redraw_object).pack(side=tk.LEFT)
+        add = ttk.Button(b1, text="Add object", command=self._add_object)
+        add.pack(side=tk.LEFT, padx=(6, 0))
+        Tooltip(add, "Add another object to draw (two are listed to start).")
+        self.remove_obj_btn = ttk.Button(b1, text="Remove", command=self._remove_object)
+        Tooltip(self.remove_obj_btn, "Remove this added object.")
+
+        b2 = ttk.Frame(side)
+        b2.pack(fill=tk.X, pady=(8, 0))
+        ttk.Label(b2, text="Trial day:").pack(side=tk.LEFT)
+        self.day_var = tk.StringVar(value=s.trial_day)
+        day = ttk.Entry(b2, textvariable=self.day_var, width=5)
+        day.pack(side=tk.LEFT, padx=(4, 12))
+        self.day_var.trace_add("write", lambda *_: self._set_trial())
+        Tooltip(day, "Which day of the trial this video is (1, 2, ...). Recorded in the "
+                     "tracking file and shown in the results.")
+        ttk.Label(b2, text="Phase:").pack(side=tk.LEFT)
+        self.phase_var = tk.StringVar(value=s.trial_phase)
+        phase = ttk.Combobox(b2, textvariable=self.phase_var, values=PHASES,
+                             state="readonly", width=11)
+        phase.pack(side=tk.LEFT, padx=(4, 12))
+        phase.bind("<<ComboboxSelected>>", lambda _e: self._set_trial())
+        ttk.Label(b2, text="Zone distance (cm):").pack(side=tk.LEFT)
+        zone = ttk.Entry(b2, textvariable=self.app.zone_var, width=5)
+        zone.pack(side=tk.LEFT, padx=(4, 0))
+        Tooltip(zone, "How far from each object's edge its zone reaches. The same box "
+                      "as in the main window; it's worked out at analysis, so changing "
+                      "it never needs re-tracking.")
+        self._zone_trace = self.app.zone_var.trace_add("write", lambda *_: self._zone_changed())
+        self.object_note = ttk.Label(side, foreground="#b26a00", wraplength=440,
+                                     justify=tk.LEFT)
+        self.object_note.pack(fill=tk.X, pady=(6, 0))
+
+        self.canvas.bind("<Button-1>", self._object_press)
+        self.canvas.bind("<B1-Motion>", self._object_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._object_release)
+        self.canvas.redraw_overlay = self._draw_objects
+        self.canvas.show(self._prepared_image())
+        self._current_object = None
+        self._fill_object_list()
+
+    def _zone_changed(self) -> None:
+        if self.step == "regions" and self._objects_test() and self.winfo_exists():
+            try:
+                self._redraw_objects()
+            except tk.TclError:
+                pass
+
+    def _zone_image_px(self) -> float | None:
+        """The zone distance in prepared-image pixels, or None without a scale."""
+        s = self.setup
+        try:
+            cm = float(self.app.zone_var.get())
+        except ValueError:
+            return None
+        if len(s.scale_points) != 2 or not s.scale_cm or cm < 0:
+            return None
+        (x0, y0), (x1, y1) = s.scale_points
+        full_px = np.hypot(x1 - x0, y1 - y0)
+        if not full_px:
+            return None
+        return cm * full_px / s.scale_cm * effective_dsmpl(self._dsmpl())
+
+    def _object_image(self, name: str):
+        """(x, y, r) of a drawn object in prepared-image pixels."""
+        x, y, r = self.setup.objects[name]
+        (ix,), (iy,) = self._to_image([x], [y])
+        return ix, iy, r * effective_dsmpl(self._dsmpl())
+
+    def _fill_object_list(self, select: str | None = None) -> None:
+        s, tree = self.setup, self.object_list
+        tree.delete(*tree.get_children())
+        for n in s.object_names:
+            tree.insert("", tk.END, iid=n, values=(
+                n, s.object_kinds.get(n, "Familiar"),
+                "✓ drawn" if n in s.objects else "not drawn"))
+        names = s.object_names
+        if select is None:
+            select = self._current_object if self._current_object in names else next(
+                (n for n in names if n not in s.objects), names[0] if names else None)
+        if select:
+            tree.selection_set(select)
+            tree.see(select)
+        self._current_object = select
+        self._update_object_controls()
+
+    def _object_selected(self) -> None:
+        sel = self.object_list.selection()
+        if sel:
+            self._current_object = sel[0]
+            self._update_object_controls()
+            self._redraw_objects()
+
+    def _update_object_controls(self) -> None:
+        s, name = self.setup, self._current_object
+        self.kind_var.set(s.object_kinds.get(name, "Familiar") if name else "")
+        extra = name is not None and s.object_names.index(name) >= 2
+        if extra:
+            self.remove_obj_btn.pack(side=tk.LEFT, padx=(6, 0))
+        else:
+            self.remove_obj_btn.pack_forget()
+        notes = []
+        if self._zone_image_px() is None:
+            notes.append("The zone rings show once the scale is set (step 6), since "
+                         "the zone distance is in cm; you can come back here.")
+        kinds = [s.object_kinds.get(n, "Familiar") for n in s.object_names]
+        if s.trial_phase == "Test" and all(k == "Familiar" for k in kinds):
+            notes.append("Test phase, but no object is marked novel or moved, so the "
+                         "discrimination index and % preference will be blank.")
+        self.object_note.configure(text=" ".join(notes))
+
+    def _set_kind(self) -> None:
+        name = self._current_object
+        if name:
+            self.setup.object_kinds[name] = self.kind_var.get()
+            self.setup.steps_done.discard("regions")
+            self._fill_object_list(select=name)
+            self._update_step_list()
+            self._redraw_objects()
+
+    def _set_trial(self) -> None:
+        s = self.setup
+        day, phase = self.day_var.get().strip(), self.phase_var.get()
+        if (day, phase) != (s.trial_day, s.trial_phase):
+            s.trial_day, s.trial_phase = day, phase
+            s.steps_done.discard("regions")
+            self._update_step_list()
+            self._update_object_controls()
+
+    def _add_object(self) -> None:
+        s = self.setup
+        k = len(s.object_names) + 1
+        while f"object {k}" in s.object_names:
+            k += 1
+        s.object_names.append(f"object {k}")
+        s.steps_done.discard("regions")
+        self._fill_object_list(select=f"object {k}")
+        self._update_step_list()
+
+    def _remove_object(self) -> None:
+        s, name = self.setup, self._current_object
+        if not name or s.object_names.index(name) < 2:
+            return
+        s.object_names.remove(name)
+        s.objects.pop(name, None)
+        s.object_kinds.pop(name, None)
+        self._current_object = None
+        self._fill_object_list()
+        self._redraw_objects()
+        self.app._refresh()
+
+    def _redraw_object(self) -> None:
+        name = self._current_object
+        if name and self.setup.objects.pop(name, None) is not None:
+            self.setup.steps_done.discard("regions")
+            self._fill_object_list(select=name)
+            self._update_step_list()
+            self._redraw_objects()
+            self.app._refresh()
+
+    def _object_hit(self, e):
+        """("move" | "resize", name) for a press on a drawn object's center
+        or edge, else None."""
+        best = None
+        for name in self.setup.objects:
+            ix, iy, ir = self._object_image(name)
+            sx, sy = self.canvas.to_screen(ix, iy)
+            sr = ir * self.canvas.scale
+            d = np.hypot(e.x - sx, e.y - sy)
+            if abs(d - sr) <= GRAB_DISTANCE:
+                return ("resize", name)
+            if d <= max(sr * 0.6, GRAB_DISTANCE) and best is None:
+                best = ("move", name)
+        return best
+
+    def _object_press(self, e) -> None:
+        hit = self._object_hit(e)
+        if hit:
+            self._drag = hit + (e.x, e.y, self.setup.objects[hit[1]])
+            if hit[1] != self._current_object:
+                self._fill_object_list(select=hit[1])
+            return
+        name = self._current_object
+        if not name:
+            return
+        if name in self.setup.objects:
+            self.object_note.configure(text=f"{name} is already drawn: drag its center "
+                                            "or edge, or click Redraw to draw it again.")
+            return
+        (fx,), (fy,) = self._to_full(*[[v] for v in self.canvas.to_image(e.x, e.y)])
+        self._drag = ("new", name, e.x, e.y, (fx, fy, 0.0))
+
+    def _object_drag(self, e) -> None:
+        if not self._drag:
+            return
+        what, name, px, py, (x, y, r) = self._drag
+        per_full = self.canvas.scale * effective_dsmpl(self._dsmpl())  # screen px per full px
+        if what == "move":
+            self.setup.objects[name] = (x + (e.x - px) / per_full, y + (e.y - py) / per_full, r)
+        else:
+            (ix, iy) = self._to_image([x], [y])
+            sx, sy = self.canvas.to_screen(ix[0], iy[0])
+            self.setup.objects[name] = (x, y, max(1.0, np.hypot(e.x - sx, e.y - sy) / per_full))
+        self._redraw_objects()
+
+    def _object_release(self, e) -> None:
+        if not self._drag:
+            return
+        what, name = self._drag[:2]
+        self._drag = None
+        if what == "new":
+            r = self.setup.objects.get(name, (0, 0, 0))[2]
+            if r * effective_dsmpl(self._dsmpl()) * self.canvas.scale < 4:
+                self.setup.objects.pop(name, None)   # a click, not a drag
+                self.object_note.configure(text="Press at the object's center and drag "
+                                                "out to its edge.")
+                self._redraw_objects()
+                return
+            nxt = next((n for n in self.setup.object_names if n not in self.setup.objects),
+                       name)
+            self._current_object = nxt
+        self.setup.steps_done.discard("regions")
+        self._fill_object_list(select=self._current_object)
+        self._update_step_list()
+        self._redraw_objects()
+        self.app._refresh()
+
+    def _draw_objects(self) -> None:
+        s = self.setup
+        zone = self._zone_image_px()
+        for name in s.object_names:
+            if name not in s.objects:
+                continue
+            ix, iy, ir = self._object_image(name)
+            color = OBJECT_COLORS.get(s.object_kinds.get(name, "Familiar"), OTHER_COLOR)
+            kind = s.object_kinds.get(name, "Familiar").lower()
+            self.canvas.circle(ix, iy, ir, color)
+            if zone is not None:
+                self.canvas.circle(ix, iy, ir + zone, ZONE_COLOR, fill=False, dash=(6, 4),
+                                   width=1)
+            sx, sy = self.canvas.to_screen(ix, iy)   # label above the outer ring
+            self.canvas.create_text(sx, sy - (ir + (zone or 0)) * self.canvas.scale - 10,
+                                    text=f"{name} ({kind})", fill="white", tags="overlay",
+                                    font=("TkDefaultFont", 11, "bold"))
+            if name == self._current_object:
+                self.canvas.circle(ix, iy, ir + 3 / max(self.canvas.scale, 1e-6), "#ffffff",
+                                   fill=False, width=1)
+
+    def _redraw_objects(self) -> None:
+        self.canvas.delete("overlay")
+        self._draw_objects()
 
     def _grab(self, e, polygons: dict) -> tuple | None:
         """(key, point index) of a drawn point near the click, if any."""

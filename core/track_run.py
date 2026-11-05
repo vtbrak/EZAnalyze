@@ -29,7 +29,8 @@ from .loader import TrackingData, load_csv
 from .tracking import (Region, Scale, TrackingParams, assemble_output, make_reference,
                        save_outputs, track_video)
 from .video import Prep
-from .video_setup import VideoSetup
+from .objects import objects_to_text
+from .video_setup import OBJECT_TEST, VideoSetup
 
 
 @dataclass
@@ -48,6 +49,7 @@ class TrackJob:
     reference_frames: int
     exclusion_count: int
     fps: float
+    extra: dict | None = None         # more settings columns (object recognition)
 
 
 def make_job(setup: VideoSetup, params: TrackingParams, dsmpl: float,
@@ -71,7 +73,14 @@ def make_job(setup: VideoSetup, params: TrackingParams, dsmpl: float,
         reference_frames=int(reference_frames),
         exclusion_count=len(setup.exclusions),
         fps=float(setup.info.fps or 0),
+        extra=object_settings(setup, dsmpl) if test == OBJECT_TEST else None,
     )
+
+
+def object_settings(setup: VideoSetup, dsmpl: float) -> dict:
+    """The tracking file's object recognition columns (ROADMAP §15)."""
+    return {"Objects": objects_to_text(setup.tracking_objects(dsmpl)),
+            "Trial_Day": setup.trial_day, "Trial_Phase": setup.trial_phase}
 
 
 def run_job(job: TrackJob, progress=None, should_cancel=None,
@@ -95,7 +104,7 @@ def run_job(job: TrackJob, progress=None, should_cancel=None,
         raise ValueError("No frames could be tracked between the start and the end.")
     out = assemble_output(job.path, result.df, job.params, job.prep, job.start,
                           job.regions, job.shape, job.scale, job.reference_frames,
-                          job.exclusion_count, job.fps)
+                          job.exclusion_count, job.fps, extra=job.extra)
     paths = save_outputs(job.path, out, reference)
     return load_csv(paths["csv"]), paths["csv"]
 

@@ -100,7 +100,8 @@ not just crashes.
 
 ## 3. Reporting problems
 
-For each problem, please send:
+If you see anything, just let the person who invited you know. These details
+help:
 - **What you did** (the steps), **what you expected**, and **what happened**.
 - **Mac or Windows**, and which version (e.g. macOS 15, Windows 11).
 - **Screenshot** of the window or message, if there is one.
@@ -109,9 +110,6 @@ For each problem, please send:
   program keeps going.
 - If it's about one video: its length and size, and if you can, the video or
   its `_LocationOutput.csv`.
-
-Send reports to the person who invited you to test, or open an **Issue** on
-the GitHub page if you have access.
 
 ### Known limitations
 - An object's type, the trial day and the phase can't be changed after

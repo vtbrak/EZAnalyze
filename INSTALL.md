@@ -90,7 +90,7 @@ text window, so macOS doesn't block them and no password is needed.
 It should look similar to this (your location will differ):
 
 ```
-bash /Users/yourname/Documents/EZanalyze/Install\ Behavior\ Tracker.command
+bash /Users/yourname/Documents/Track\ Tamer/Install\ Track\ Tamer.command
 ```
 
 ### Step 5. Wait for "Done"

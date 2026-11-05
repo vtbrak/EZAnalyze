@@ -1,4 +1,4 @@
-# EZanalyze — Roadmap
+# Track Tamer — Roadmap
 
 Feature and analysis plan for the behavior-tracking analyzer. This is the design
 doc: what's built, what was decided (and why), and what's next. Nothing new is

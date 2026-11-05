@@ -1,4 +1,4 @@
-# EZanalyze — Project Context
+# Track Tamer — Project Context
 
 This file is auto-loaded when a Claude Code session starts in this folder. It is
 the handoff brief so a fresh session continues the work with full context. The
@@ -53,7 +53,10 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   and `environment.yml` in step (the regression test checks). `.sh` and
   `.command` are LF via `.gitattributes`.
 - `Open Track Tamer.command`: Mac double-click launcher.
-- Git repo pushed to GitHub `vtbrak/EZAnalyze` (private). `*.csv`,
+- Project folder: `Desktop/Track Tamer` (was `EZanalyze`; renamed by the
+  user 2026-11-05). The path has a space, so always quote it.
+- Git repo pushed to GitHub `vtbrak/EZAnalyze` (private; the user is
+  renaming it `TrackTamer`, GitHub redirects the old URL). `*.csv`,
   `config.json`, and export outputs (`*_analysis.xlsx`, `*_path.png`,
   `*_heatmap.png`) are gitignored.
 
@@ -149,6 +152,6 @@ describes them).
 
 ## How to run
 ```bash
-cd ~/Desktop/EZanalyze && ./.venv/bin/python gui.py
+cd ~/Desktop/"Track Tamer" && ./.venv/bin/python gui.py
 ```
 Or double-click `Open Track Tamer.command`.

@@ -110,7 +110,10 @@ and §9 export are done. Immobility is deferred (ROADMAP §11). Everything in
 the current build order is built; next steps come from the user (and the
 first PC test when they're ready). **ROADMAP "Build order" is
 the source of truth.**
-**Video analysis (ROADMAP §12) is in progress on the `video-tracking` branch**
+**`video-tracking` was merged into `main` on 2026-11-05** (fast-forward) for
+the user's first outside testers; work continues on `main`. Tester guide:
+`TESTING.md` (keep it in step with the UI).
+**Video analysis (ROADMAP §12) was built on the `video-tracking` branch**
 (started 2026-10-30): adapting ezTrack (GPL-3.0, github.com/denisecailab/ezTrack;
 local reference copy in `ezTrack/`, gitignored) for location tracking (freeze
 analysis is logged for later; it will use ezTrack's thresholds instead of the

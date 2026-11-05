@@ -10,6 +10,8 @@ plots, and occupancy heatmaps.
 
 For a step-by-step guide written for non-programmers, including a method
 that needs no administrator password, see **[INSTALL.md](INSTALL.md)**.
+Testers: **[TESTING.md](TESTING.md)** covers installing, what to try, and
+how to report problems.
 
 ### With Anaconda (recommended, Mac or Windows)
 1. Install [Anaconda or Miniconda](https://www.anaconda.com/download) if the

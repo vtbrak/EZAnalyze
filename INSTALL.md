@@ -1,6 +1,6 @@
-# Installing the Behavior Tracker
+# Installing Track Tamer
 
-These steps set up the Behavior Tracker on a Mac or Windows computer. No
+These steps set up Track Tamer on a Mac or Windows computer. No
 programming is needed. Installing takes about 10–15 minutes, most of it
 waiting, and needs an internet connection.
 
@@ -34,8 +34,8 @@ Try Method 1 first. Steps 1 and 2 are the same for both methods.
 
 ### Step 3. Run the installer
 - Open the program folder.
-- **Mac:** double-click **Install Behavior Tracker.command**.
-- **Windows:** double-click **Install Behavior Tracker.bat**.
+- **Mac:** double-click **Install Track Tamer.command**.
+- **Windows:** double-click **Install Track Tamer.bat**.
 - A window with text opens. This is normal.
 
 **If the Mac says the file "can't be opened"** or is from an unidentified
@@ -58,8 +58,8 @@ use **Method 2** instead.
 - If it says **Failed**, see *If something goes wrong* below.
 
 ### Step 5. Open the program
-- **Mac:** double-click **Open Behavior Tracker.command**.
-- **Windows:** double-click **Open Behavior Tracker.bat**.
+- **Mac:** double-click **Open Track Tamer.command**.
+- **Windows:** double-click **Open Track Tamer.bat**.
 - A text window opens first, then the program. **Leave the text window open**
   while you use the program. Closing it closes the program.
 - From now on, this is the only step you need to start the program.
@@ -83,7 +83,7 @@ text window, so macOS doesn't block them and no password is needed.
 
 ### Step 4. Run the installer
 - Type **`bash`** followed by **one space**. Don't press Return yet.
-- Drag **Install Behavior Tracker.command** from the program folder into the
+- Drag **Install Track Tamer.command** from the program folder into the
   Terminal window. Its location appears after `bash `.
 - Press **Return**.
 
@@ -100,7 +100,7 @@ bash /Users/yourname/Documents/EZanalyze/Install\ Behavior\ Tracker.command
 
 ### Step 6. Open the program
 - In Terminal, type **`bash`** followed by **one space**.
-- Drag **Open Behavior Tracker.command** into the Terminal window.
+- Drag **Open Track Tamer.command** into the Terminal window.
 - Press **Return**. The program opens.
 - **Leave Terminal open** while you use the program. Closing it closes the
   program.
@@ -114,8 +114,8 @@ each time.
 Windows doesn't usually need a password for these files. If double-clicking
 is blocked:
 1. Open the **Start** menu, type **Anaconda Prompt**, and open it.
-2. Drag **Install Behavior Tracker.bat** into the window and press **Enter**.
-3. When it says Done, drag **Open Behavior Tracker.bat** in the same way to
+2. Drag **Install Track Tamer.bat** into the window and press **Enter**.
+3. When it says Done, drag **Open Track Tamer.bat** in the same way to
    start the program.
 
 ---
@@ -128,7 +128,7 @@ is blocked:
   was installed"*, that also means: run the installer again.
 
 ## Removing the program
-- Run **Uninstall Behavior Tracker** the same way you ran the installer, and
+- Run **Uninstall Track Tamer** the same way you ran the installer, and
   type **y** when asked.
 - This removes only what the installer added. Your data files and results
   are kept.
@@ -140,7 +140,7 @@ is blocked:
     and try again.
 - **"Install failed"**
   - Check your internet connection and run the installer again.
-- **"The Behavior Tracker isn't installed yet"**
+- **"Track Tamer isn't installed yet"**
   - Run the installer first, then open the program.
 - **"Some videos are hard to read," or a video won't open**
   - Convert the video to .mp4 (H.264), for example with HandBrake (free), and

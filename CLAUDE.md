@@ -5,7 +5,7 @@ the handoff brief so a fresh session continues the work with full context. The
 detailed plan lives in [ROADMAP.md](ROADMAP.md) — read it before building.
 
 ## What this is
-A desktop app ("Behavior Tracker") that analyzes video-based rodent locomotion
+A desktop app ("Track Tamer") that analyzes video-based rodent locomotion
 tracking CSVs (`*_LocationOutput.csv`, one row per video frame) and produces
 summary metrics, time-binned tables, path plots, and heatmaps. Supports two
 assays: **Elevated Plus Maze (EPM)** and **Open Field**.
@@ -37,22 +37,22 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   show_error/ask_yes_no), never `tkinter.messagebox`. It renders the first
   sentence bold on both Mac and Windows, so write messages whose first
   sentence says what happened.
-- `Open Behavior Tracker.bat`: Windows launcher (CRLF via `.gitattributes`).
+- `Open Track Tamer.bat`: Windows launcher (CRLF via `.gitattributes`).
 - `core/export.py`: writes each analyzed file's `_analysis.xlsx` (Summary,
   Time Bins, Settings sheets), `_path.png`, and `_heatmap.png` next to its CSV.
 - `region_dialog.py`: the Match regions dialog.
 - `tests/regress_gui.py`: workflow regression test. Run it after GUI changes
   (`.venv/bin/python tests/regress_gui.py`); it needs the Examples files.
 - **Anaconda install (ROADMAP §14, built 2026-11-03):** `environment.yml`
-  (env `behavior-tracker`, conda-forge only; `tkinterdnd2` via its `pip:`
+  (env `track-tamer`, conda-forge only; `tkinterdnd2` via its `pip:`
   section), `find_conda.sh` / `find_conda.bat` (shared conda finders),
-  `Install` / `Uninstall Behavior Tracker` `.command` / `.bat`. The `Open`
+  `Install` / `Uninstall Track Tamer` `.command` / `.bat`. The `Open`
   launchers use the conda env when installed (Windows activates it first),
   note when `environment.yml` changed since install (stamp copy inside the
   env), and fall back to `.venv` without Anaconda. Keep `requirements.txt`
   and `environment.yml` in step (the regression test checks). `.sh` and
   `.command` are LF via `.gitattributes`.
-- `Open Behavior Tracker.command`: Mac double-click launcher.
+- `Open Track Tamer.command`: Mac double-click launcher.
 - Git repo pushed to GitHub `vtbrak/EZAnalyze` (private). `*.csv`,
   `config.json`, and export outputs (`*_analysis.xlsx`, `*_path.png`,
   `*_heatmap.png`) are gitignored.
@@ -151,4 +151,4 @@ describes them).
 ```bash
 cd ~/Desktop/EZanalyze && ./.venv/bin/python gui.py
 ```
-Or double-click `Open Behavior Tracker.command`.
+Or double-click `Open Track Tamer.command`.

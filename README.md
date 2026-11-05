@@ -1,4 +1,4 @@
-# Behavior Tracker
+# Track Tamer
 
 Tracks a rodent's position in **videos** of an Elevated Plus Maze or Open
 Field, and analyzes location tracking CSVs (`*_LocationOutput.csv`: one row per
@@ -17,14 +17,14 @@ that needs no administrator password, see **[INSTALL.md](INSTALL.md)**.
 2. Get the program folder: download the zip from GitHub (or `git clone`).
    The repository is private, so others need access or a zip from you. Copy
    the folder **without** its `.venv`, if it has one.
-3. Double-click **`Install Behavior Tracker.command`** (Mac) or
-   **`Install Behavior Tracker.bat`** (Windows). It finds Anaconda, builds the
-   program's own environment (`behavior-tracker`, from `environment.yml`,
+3. Double-click **`Install Track Tamer.command`** (Mac) or
+   **`Install Track Tamer.bat`** (Windows). It finds Anaconda, builds the
+   program's own environment (`track-tamer`, from `environment.yml`,
    using the free conda-forge channel), and says Done or Failed. It only needs
    doing once; run it again after an update to bring the environment up to
    date.
-4. From then on, double-click **`Open Behavior Tracker.command`** (Mac) or
-   **`Open Behavior Tracker.bat`** (Windows). If the program's package list has
+4. From then on, double-click **`Open Track Tamer.command`** (Mac) or
+   **`Open Track Tamer.bat`** (Windows). If the program's package list has
    changed since you installed, it says so; run the installer again.
 
 **First time on a Mac:** macOS may block a downloaded script. Right-click the
@@ -33,7 +33,7 @@ file → **Open** → **Open**; after that, double-clicking works.
 **Run anyway**. A console window stays open while the app runs and shows any
 error messages.
 
-**Uninstall:** `Uninstall Behavior Tracker.command` / `.bat` removes the
+**Uninstall:** `Uninstall Track Tamer.command` / `.bat` removes the
 environment only; the program folder and your data, results and settings
 stay.
 
@@ -46,7 +46,7 @@ PATH" during setup).
 To run from a terminal instead:
 
 ```bash
-conda activate behavior-tracker && python gui.py   # Anaconda
+conda activate track-tamer && python gui.py   # Anaconda
 ./.venv/bin/python gui.py                          # .venv, Mac
 .venv\Scripts\python.exe gui.py                     # .venv, Windows
 ```
@@ -276,7 +276,7 @@ before exporting again.
 
 ## Layout
 ```
-BehaviorTracker/
+TrackTamer/
 ├── core/            analysis and tracking engine (no GUI dependencies)
 │   ├── export.py    write _analysis.xlsx and plot images
 │   ├── loader.py    read & validate CSVs, detect region columns
@@ -301,9 +301,9 @@ BehaviorTracker/
 ├── environment.yml  Anaconda environment (keep in step with requirements.txt)
 ├── requirements.txt packages for the .venv fallback
 ├── find_conda.sh / find_conda.bat   locate Anaconda for the launchers
-├── Install Behavior Tracker.command / .bat     build or update the environment
-├── Open Behavior Tracker.command / .bat        start the app
-└── Uninstall Behavior Tracker.command / .bat   remove the environment
+├── Install Track Tamer.command / .bat     build or update the environment
+├── Open Track Tamer.command / .bat        start the app
+└── Uninstall Track Tamer.command / .bat   remove the environment
 ```
 
 The engine in `core/` is deliberately GUI-free so it can be scripted or, later,

@@ -14,7 +14,7 @@ set "ENV_NAME="
 for /f "tokens=2" %%N in ('findstr /b /c:"name:" environment.yml') do (
     if not defined ENV_NAME set "ENV_NAME=%%N"
 )
-set "STAMP_NAME=behavior-tracker-environment.yml"
+set "STAMP_NAME=track-tamer-environment.yml"
 set "CONDA_BASE="
 set "CONDA_BAT="
 

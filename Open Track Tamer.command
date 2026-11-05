@@ -1,6 +1,6 @@
 #!/bin/bash
-# Double-click launcher for the Behavior Tracker GUI (macOS).
-# Uses the Anaconda environment from "Install Behavior Tracker.command" when
+# Double-click launcher for Track Tamer GUI (macOS).
+# Uses the Anaconda environment from "Install Track Tamer.command" when
 # it's installed. On computers without Anaconda it falls back to the
 # project's own virtual environment (.venv), creating it on first run.
 
@@ -12,14 +12,14 @@ if find_conda; then
     if env_exists && conda activate "$ENV_NAME"; then
         if ! cmp -s environment.yml "$CONDA_PREFIX/$STAMP_NAME"; then
             echo "Note: the program's package list has changed since it was installed."
-            echo "Double-click \"Install Behavior Tracker.command\" to update."
+            echo "Double-click \"Install Track Tamer.command\" to update."
             echo
         fi
         exec python gui.py
     fi
     if [ ! -x ".venv/bin/python" ]; then
-        echo "The Behavior Tracker isn't installed yet."
-        echo "Double-click \"Install Behavior Tracker.command\" first."
+        echo "Track Tamer isn't installed yet."
+        echo "Double-click \"Install Track Tamer.command\" first."
         echo
         read -r -p "Press Return to close this window." _
         exit 1

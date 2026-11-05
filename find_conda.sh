@@ -9,7 +9,7 @@
 #   env_exists    returns 0 if the environment is installed
 
 ENV_NAME="$(sed -n 's/^name:[[:space:]]*//p' environment.yml | head -n 1)"
-STAMP_NAME="behavior-tracker-environment.yml"
+STAMP_NAME="track-tamer-environment.yml"
 
 find_conda() {
     local candidates=() base

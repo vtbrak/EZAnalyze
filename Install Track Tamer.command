@@ -1,8 +1,8 @@
 #!/bin/bash
-# Double-click installer for the Behavior Tracker (macOS, Anaconda).
+# Double-click installer for Track Tamer (macOS, Anaconda).
 # Builds the conda environment from environment.yml, or updates it to match
 # if it's already installed, so it's safe to run again after an update.
-# (Windows equivalent: "Install Behavior Tracker.bat")
+# (Windows equivalent: "Install Track Tamer.bat")
 
 # Move to this script's own directory (handles spaces in the path).
 cd "$(dirname "$0")" || exit 1
@@ -46,5 +46,5 @@ fi
 cp environment.yml "$CONDA_PREFIX/$STAMP_NAME"
 
 echo
-echo "Done. Double-click \"Open Behavior Tracker.command\" to start the app."
+echo "Done. Double-click \"Open Track Tamer.command\" to start the app."
 finish 0

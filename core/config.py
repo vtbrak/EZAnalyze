@@ -1,4 +1,4 @@
-"""Persistent settings (config.json) for the Behavior Tracker.
+"""Persistent settings (config.json) for Track Tamer.
 
 Everything the user can tune lives here so it carries over between sessions.
 Loading is forgiving: a missing, unreadable, or partly-invalid file falls back

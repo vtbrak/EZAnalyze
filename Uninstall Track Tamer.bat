@@ -1,8 +1,8 @@
 @echo off
-REM Double-click uninstaller for the Behavior Tracker (Windows, Anaconda).
+REM Double-click uninstaller for Track Tamer (Windows, Anaconda).
 REM Removes only the conda environment; the program folder and your data,
 REM results and settings are left untouched.
-REM (Mac equivalent: "Uninstall Behavior Tracker.command")
+REM (Mac equivalent: "Uninstall Track Tamer.command")
 
 cd /d "%~dp0"
 
@@ -31,7 +31,7 @@ if errorlevel 1 (
     goto done
 )
 echo.
-echo Removed. Run "Install Behavior Tracker.bat" to install it again.
+echo Removed. Run "Install Track Tamer.bat" to install it again.
 
 :done
 echo.

@@ -1,8 +1,8 @@
 @echo off
-REM Double-click installer for the Behavior Tracker (Windows, Anaconda).
+REM Double-click installer for Track Tamer (Windows, Anaconda).
 REM Builds the conda environment from environment.yml, or updates it to match
 REM if it's already installed, so it's safe to run again after an update.
-REM (Mac equivalent: "Install Behavior Tracker.command")
+REM (Mac equivalent: "Install Track Tamer.command")
 
 REM Move to this script's own folder (handles spaces in the path).
 cd /d "%~dp0"
@@ -46,7 +46,7 @@ REM Remember which environment.yml this was built from (see the Open launcher).
 copy /y environment.yml "%CONDA_PREFIX%\%STAMP_NAME%" >nul
 
 echo.
-echo Done. Double-click "Open Behavior Tracker.bat" to start the app.
+echo Done. Double-click "Open Track Tamer.bat" to start the app.
 echo.
 pause
 exit /b 0

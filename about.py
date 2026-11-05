@@ -28,12 +28,12 @@ CREDITS = (
 class AboutDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("About Behavior Tracker")
+        self.title("About Track Tamer")
         self.transient(parent)
         self.resizable(True, True)
         frame = ttk.Frame(self, padding=16)
         frame.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(frame, text="Behavior Tracker", font=("TkDefaultFont", 14, "bold")).pack(
+        ttk.Label(frame, text="Track Tamer", font=("TkDefaultFont", 14, "bold")).pack(
             anchor="w", pady=(0, 8))
         ttk.Label(frame, text=CREDITS, wraplength=460, justify=tk.LEFT).pack(anchor="w")
 

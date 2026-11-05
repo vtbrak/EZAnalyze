@@ -26,7 +26,7 @@ import setup_window, review_panel
 for mod in (setup_window, review_panel):
     mod.show_info, mod.show_warning = gui.show_info, gui.show_warning
 setup_window.ask_yes_no = gui.ask_yes_no
-gui.BehaviorTrackerApp.wait_window = lambda self, w=None: None
+gui.TrackTamerApp.wait_window = lambda self, w=None: None
 import pandas as pd
 from core.track_run import make_job, run_job
 from core.tracking import TrackingParams
@@ -39,7 +39,7 @@ def check(label, cond):
     global fails; fails += not cond; print(("ok  " if cond else "FAIL"), label)
 
 
-app = gui.BehaviorTrackerApp(); app.update()
+app = gui.TrackTamerApp(); app.update()
 app.test_var.set("Object Recognition"); app._on_test_type()
 app.fps_var.set("9.84")
 app.add_files([VIDEO]); app.update()

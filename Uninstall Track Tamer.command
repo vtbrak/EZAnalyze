@@ -1,8 +1,8 @@
 #!/bin/bash
-# Double-click uninstaller for the Behavior Tracker (macOS, Anaconda).
+# Double-click uninstaller for Track Tamer (macOS, Anaconda).
 # Removes only the conda environment; the program folder and your data,
 # results and settings are left untouched.
-# (Windows equivalent: "Uninstall Behavior Tracker.bat")
+# (Windows equivalent: "Uninstall Track Tamer.bat")
 
 cd "$(dirname "$0")" || exit 1
 . ./find_conda.sh
@@ -30,7 +30,7 @@ esac
 
 if conda remove -n "$ENV_NAME" --all -y; then
     echo
-    echo "Removed. Run \"Install Behavior Tracker.command\" to install it again."
+    echo "Removed. Run \"Install Track Tamer.command\" to install it again."
     finish 0
 fi
 echo

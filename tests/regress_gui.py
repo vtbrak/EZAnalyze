@@ -1,4 +1,4 @@
-"""Workflow regression test for the Behavior Tracker GUI.
+"""Workflow regression test for Track Tamer GUI.
 
 Drives the real app (window hidden behind fakes for pop-ups) through the file
 list, locking, Analyze, repeats, Clear, region checks, and saved settings,
@@ -38,10 +38,10 @@ setup_window.ask_yes_no = gui.ask_yes_no
 import review_panel
 review_panel.show_info = gui.show_info
 review_panel.show_warning = gui.show_warning
-gui.BehaviorTrackerApp.wait_window = lambda self, w=None: None
+gui.TrackTamerApp.wait_window = lambda self, w=None: None
 from samples import EPM as E, OF as O, require
 require(E, O)
-app = gui.BehaviorTrackerApp(); app.update()
+app = gui.TrackTamerApp(); app.update()
 fails = 0
 def check(label, cond):
     global fails; fails += not cond; print(("ok  " if cond else "FAIL"), label)
@@ -496,7 +496,7 @@ else:
 
 app.show_about(); app.update()
 about = [w for w in app.winfo_children() if w.winfo_class() == "Toplevel"]
-check("About window opens", about and "Behavior Tracker" in about[0].title())
+check("About window opens", about and "Track Tamer" in about[0].title())
 about[0].destroy()
 app._on_close()
 c = json.load(open(cfg))

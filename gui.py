@@ -1,5 +1,5 @@
 """
-Behavior Tracker — GUI front end.
+Track Tamer — GUI front end.
 
 A tkinter desktop app over the `core` analysis engine. Files (added one at a
 time, by folder, or by drag-and-drop) build up the file list, which stays
@@ -12,7 +12,7 @@ lock at the first Analyze, so every file in a load is analyzed the same way.
 Clear empties the list and unlocks them. Plot styling (Path/Heatmap tabs) is
 never locked. The list itself is not saved between sessions.
 
-Run:  python gui.py     (or use the "Open Behavior Tracker.command" launcher)
+Run:  python gui.py     (or use the "Open Track Tamer.command" launcher)
 """
 
 from __future__ import annotations
@@ -214,12 +214,12 @@ class FileEntry:
         return "Video" if self.video is not None else "CSV"
 
 
-class BehaviorTrackerApp(tk.Tk, _DnDMixin):
+class TrackTamerApp(tk.Tk, _DnDMixin):
     LOCKED_TRACKING_TIP = LOCKED_TRACKING_TIP
 
     def __init__(self):
         super().__init__()
-        self.title("Behavior Tracker")
+        self.title("Track Tamer")
         self.geometry("1080x720")
         self.minsize(900, 600)
 
@@ -2257,7 +2257,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
 
 def main():
-    app = BehaviorTrackerApp()
+    app = TrackTamerApp()
     app.mainloop()
 
 

@@ -1,9 +1,9 @@
 @echo off
-REM Double-click launcher for the Behavior Tracker GUI (Windows).
-REM Uses the Anaconda environment from "Install Behavior Tracker.bat" when
+REM Double-click launcher for Track Tamer GUI (Windows).
+REM Uses the Anaconda environment from "Install Track Tamer.bat" when
 REM it's installed. On computers without Anaconda it falls back to the
 REM project's own virtual environment (.venv), creating it on first run.
-REM (Mac equivalent: "Open Behavior Tracker.command")
+REM (Mac equivalent: "Open Track Tamer.command")
 
 REM Move to this script's own folder (handles spaces in the path).
 cd /d "%~dp0"
@@ -21,7 +21,7 @@ if errorlevel 1 goto no_conda_env
 fc /b environment.yml "%CONDA_PREFIX%\%STAMP_NAME%" >nul 2>nul
 if errorlevel 1 (
     echo Note: the program's package list has changed since it was installed.
-    echo Double-click "Install Behavior Tracker.bat" to update.
+    echo Double-click "Install Track Tamer.bat" to update.
     echo.
 )
 set "PY=%CONDA_PREFIX%\python.exe"
@@ -29,8 +29,8 @@ goto launch
 
 :no_conda_env
 if exist ".venv\Scripts\python.exe" goto venv
-echo The Behavior Tracker isn't installed yet.
-echo Double-click "Install Behavior Tracker.bat" first.
+echo Track Tamer isn't installed yet.
+echo Double-click "Install Track Tamer.bat" first.
 echo.
 pause
 exit /b 1
@@ -53,7 +53,7 @@ if %errorlevel%==0 (
 if not exist "%PY%" (
     echo.
     echo Could not create the virtual environment.
-    echo Install Anaconda and run "Install Behavior Tracker.bat", or install
+    echo Install Anaconda and run "Install Track Tamer.bat", or install
     echo Python 3 from https://www.python.org/downloads/ and tick
     echo "Add python.exe to PATH" during setup, then run this again.
     pause

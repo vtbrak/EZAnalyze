@@ -30,7 +30,7 @@ import setup_window, review_panel
 for mod in (setup_window, review_panel):
     mod.show_info, mod.show_warning = gui.show_info, gui.show_warning
 setup_window.ask_yes_no = gui.ask_yes_no
-gui.BehaviorTrackerApp.wait_window = lambda self, w=None: None
+gui.TrackTamerApp.wait_window = lambda self, w=None: None
 
 SRC = os.path.join(ROOT, "ezTrack", "PracticeVideos", "LocationTracking_Clip.mp4")
 if not os.path.exists(SRC):
@@ -43,7 +43,7 @@ def check(label, cond):
     global fails; fails += not cond; print(("ok  " if cond else "FAIL"), label)
 
 
-app = gui.BehaviorTrackerApp(); app.update()
+app = gui.TrackTamerApp(); app.update()
 app.test_var.set("Object Recognition"); app._on_test_type(); app.update()
 check("Object Recognition settings section with the zone distance box",
       bool(app.or_bar.winfo_manager()) and not app.of_bar.winfo_manager()

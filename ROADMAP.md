@@ -1487,6 +1487,20 @@ Done:
   (trial start/end, Tracking check) gained **frame steps**: ◀◀ −10, ◀ −1,
   ▶ +1, ▶▶ +10, and the , and . keys step one frame (not while typing in a
   box).
+- **Load a video with an existing tracking file (requested 2026-11-05; lower
+  priority, not built).** The user closed the app and had to re-track. Wanted:
+  bring in a video plus its tracking file to remake the Path/Heatmap and
+  double-check the tracking (playback), with frames labeled from the right
+  place in the full-length video. Already in place to build on: tracking
+  files record `Start_Frame` (the video frame of row 1), `Crop` and
+  `Downsample`, so playback lines rows up with the full video
+  (`core/playback.py`); re-adding a video and clicking Track already offers
+  **Use Existing Tracking** when `<name>_LocationOutput.csv` is beside it;
+  adding the CSV itself, with the video in the same folder, already allows
+  Play video… and the reference background. To do: make this one obvious
+  step (e.g. adding a video that has a tracking file loads it as tracked,
+  or an "Open tracked video" action), show the video frame and video time
+  (not only the session row) in playback, and a "Go to frame" box.
 - **OPEN DECISION: frames outside every drawn region (logged 2026-11-05;
   must be decided whatever the testing shows, as it will happen again).**
   In the Open Field sample 38 frames (1.9 s) have a position outside both

@@ -1466,6 +1466,18 @@ Done:
   they're dropped from the Summary and Time Bins (`drop_duplicates`); the
   arms keep their per-arm columns. Open Field's center/periphery columns
   still repeat its OF_ measures (not asked to change).
+  **Then (user):** Open Field done the same way (center time/%/entries and
+  periphery time/% dropped; periphery entries kept, with no same-visit gap).
+  Every derived measure is now a **formula of the shown values** (rounded
+  inputs): % in a region = time / duration, % open = open / (open + closed),
+  % closed = 100 − % open, ratios from the shown times, anxiety index =
+  1 − (% open time + % open entries) / 200, mean speed = distance / duration,
+  duration in minutes = Duration_s / 60. Counted from frames: times,
+  entries, latencies, distances, crossings, sides. Reference chart published
+  for the user (claude.ai artifact "Behavior Tracker Measures").
+  **Open question for the user:** Open Field side times count every tracked
+  non-center frame, so they add to 1.9 s more than periphery time in the
+  sample; limit sides to periphery frames?
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

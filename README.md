@@ -72,6 +72,13 @@ arena.
 Every analyzed row records the settings that produced it (test, entry rule,
 and the Open Field thresholds), so exported tables show how they were made.
 
+**Key measures** come first, on screen and in exports. For the Elevated
+Plus Maze they are, in order: closed/open time ratio, center time, % center
+(of the session), open-arm time, % open (of arm time), closed-arm time, %
+closed (of arm time), open entries, and closed entries. The Summary tab shows
+only these by default; tick **More test measures**, **Session basics** and the
+other boxes to add columns. Open Field shows its basics and test measures.
+
 **Summary metrics** (one row per file):
 - Total distance (cm / px), duration, mean speed
 - Time and percent spent in each region (e.g. center / peripheral, or EPM arms) and each ROI label

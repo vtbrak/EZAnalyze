@@ -102,6 +102,23 @@ check("Open Field row hidden for EPM", not bool(app.of_bar.winfo_manager()))
 app.add_files([E, O]); log.clear(); dialogs.clear(); app.select_all(); app.analyze(); app.update()
 check("EPM test: OF file gets dialog, skipped", dialogs == [["center", "peripheral"]] and "Some files not analyzed" in log)
 check("EPM file analyzed with EPM measures", rows()[0][1] == "Analyzed" and "EPM_AnxietyIndex" in app._summary_df.columns)
+KEY = ["EPM_ClosedOpenRatio", "EPM_Center_s", "EPM_PctSession_Center", "EPM_OpenArm_s",
+       "EPM_PctOpenTime", "EPM_ClosedArm_s", "EPM_PctClosedTime", "EPM_OpenEntries",
+       "EPM_ClosedEntries"]
+check("EPM Summary shows the key measures by default, in the user's order",
+      list(app.summary_tree["columns"]) == ["File", "Status"] + KEY)
+r0 = app.files[0].summary
+check("summary row: File, then the key measures; open/closed ratio kept in the details",
+      list(r0)[:10] == ["File"] + KEY and "EPM_OpenClosedRatio" in r0
+      and abs(r0["EPM_PctOpenTime"] + r0["EPM_PctClosedTime"] - 100) < 0.2)
+check("Time Bins start with Bin, Start, End, then the key measures",
+      list(app.files[0].bins.columns)[:12] == ["Bin", "Start_s", "End_s"]
+      + [k.replace("PctSession", "PctBin") for k in KEY])
+app.group_vars["test"].set(True); app._show_summary()
+check("More test measures adds the other EPM columns after the key ones",
+      list(app.summary_tree["columns"])[:11] == ["File", "Status"] + KEY
+      and "EPM_OpenClosedRatio" in app.summary_tree["columns"])
+app.group_vars["test"].set(False); app._show_summary()
 check("Time Bins include EPM measures", {"EPM_OpenEntries", "EPM_AnxietyIndex", "EPM_PctOpenTime"} <= set(app.files[0].bins.columns))
 check("rule recorded in export", app._summary_df["MinEntryFrames"][0] == 5)
 # Export, on copies of the samples in a temp folder (never the project folder).
@@ -118,6 +135,8 @@ out = output_paths(E2)
 check("export writes _analysis.xlsx, _path.png, _heatmap.png", all(os.path.exists(p) for p in out.values()))
 sheets = pd.read_excel(out["analysis"], sheet_name=None)
 check("workbook sheets", list(sheets) == ["Summary", "Time Bins", "Settings"])
+check("exported Summary starts with File and the key measures",
+      list(sheets["Summary"].columns)[:10] == ["File"] + KEY)
 check("exported Time Bins sheet has the EPM measures", "EPM_AnxietyIndex" in sheets["Time Bins"].columns)
 names = set(sheets["Settings"]["Setting"])
 check("settings sheet lists entry rule, bins, plot style",

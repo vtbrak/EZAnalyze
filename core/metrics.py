@@ -105,8 +105,9 @@ def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float) -> 
         "EPM_OpenArm_s": secs(frames["open_arm"]),
         "EPM_ClosedArm_s": secs(frames["closed_arm"]),
         "EPM_Center_s": secs(frames["center"]),
-        # % of time on the arms that was spent on the open arms.
+        # % of time on the arms that was spent on the open (closed) arms.
         "EPM_PctOpenTime": round(100 * open_time_frac, 1),
+        "EPM_PctClosedTime": round(100 * (1 - open_time_frac), 1),
         "EPM_OpenEntries": counts["open_arm"],
         "EPM_ClosedEntries": counts["closed_arm"],
         "EPM_CenterEntries": counts["center"],
@@ -117,6 +118,10 @@ def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float) -> 
         "EPM_ClosedOpenRatio": (
             round(frames["closed_arm"] / frames["open_arm"], 3)
             if frames["open_arm"] else nan
+        ),
+        "EPM_OpenClosedRatio": (
+            round(frames["open_arm"] / frames["closed_arm"], 3)
+            if frames["closed_arm"] else nan
         ),
     }
 
@@ -519,23 +524,67 @@ def binned_metrics(
 
 
 _BASICS = ("Duration_min", "TotalDistance_cm", "MeanSpeed_cm_s")
+
+# The measures shown first, in this order: on screen by default ("Key
+# measures") and at the start of the exported Summary and Time Bins (user's
+# order, 2026-11-05). Time Bins use each bin's own % of the bin for the center.
+KEY_MEASURES = {
+    "Elevated Plus Maze": ["EPM_ClosedOpenRatio", "EPM_Center_s", "EPM_PctSession_Center",
+                           "EPM_OpenArm_s", "EPM_PctOpenTime", "EPM_ClosedArm_s",
+                           "EPM_PctClosedTime", "EPM_OpenEntries", "EPM_ClosedEntries"],
+}
+_BIN_KEY_RENAMES = {"EPM_PctSession_Center": "EPM_PctBin_Center"}
+
+
+def key_measures(test: str, bins: bool = False) -> list[str]:
+    """The test's key measures, in order (empty if it has none set)."""
+    keys = KEY_MEASURES.get(test, [])
+    return [_BIN_KEY_RENAMES.get(k, k) for k in keys] if bins else list(keys)
+
+
+def order_summary(row: dict, test: str) -> dict:
+    """The row with File first, then the test's key measures, then the rest
+    in their usual order. Tests without key measures are unchanged."""
+    keys = [k for k in key_measures(test) if k in row]
+    if not keys:
+        return row
+    first = [k for k in ("File",) if k in row] + keys
+    return {**{k: row[k] for k in first}, **{k: v for k, v in row.items() if k not in first}}
+
+
+def order_bins(bins: pd.DataFrame, test: str) -> pd.DataFrame:
+    """Time Bins with Bin / Start_s / End_s first, then the key measures."""
+    keys = [k for k in key_measures(test, bins=True) if k in bins.columns]
+    if not keys or bins.empty:
+        return bins
+    first = [c for c in ("Bin", "Start_s", "End_s") if c in bins.columns] + keys
+    return bins[first + [c for c in bins.columns if c not in first]]
 _DETAILS = ("Frames", "FPS", "Duration_s", "TotalDistance_px", "UnreadableFrames",
             "FilledFrames")
 
 
-def summary_column_groups(columns) -> dict[str, list[str]]:
+def summary_column_groups(columns, test: str = "") -> dict[str, list[str]]:
     """Sort summary-table columns into display groups (File is not grouped).
 
-    Groups: basics, test (EPM_/OF_ measures), zones (per-region time/%),
-    entries, roi, details.
+    Groups: key (the test's key measures, in their set order; for a test
+    without a set, its usual default view: basics and the test's measures),
+    basics, test (the test's other EPM_/OF_ measures), zones (per-region
+    time/%), entries, roi, details.
     Anything unrecognized lands in details so a new column is never silently
     lost from the on-screen table.
     """
     groups: dict[str, list[str]] = {
-        "basics": [], "test": [], "zones": [], "entries": [], "roi": [], "details": []
+        "key": [], "basics": [], "test": [], "zones": [], "entries": [], "roi": [],
+        "details": []
     }
+    columns = list(columns)
+    keys = [k for k in key_measures(test) if k in columns]
+    if not keys:  # e.g. Open Field: key = what it showed by default before
+        keys = [c for c in columns if c in _BASICS] + [
+            c for c in columns if c.startswith(("EPM_", "OF_"))]
+    groups["key"] = keys
     for c in columns:
-        if c == "File":
+        if c == "File" or c in keys:
             continue
         if c in _BASICS:
             groups["basics"].append(c)

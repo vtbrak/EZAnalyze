@@ -71,9 +71,12 @@ DEFAULTS: dict = {
         "heatmap_labels": True,
     },
     # Which Summary-table column groups are shown on screen (export has all).
-    "summary_groups": {
-        "basics": True,
-        "test": True,  # EPM / open-field measures
+    # (Was "summary_groups" before the Key measures group; renamed so the new
+    # default view, key measures only, reaches existing configs.)
+    "summary_columns": {
+        "key": True,   # the test's key measures (EPM: the user's order)
+        "basics": False,
+        "test": False,  # the test's other measures
         "zones": False,
         "entries": False,
         "roi": False,

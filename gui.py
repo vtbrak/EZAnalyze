@@ -58,6 +58,8 @@ from core import (
     load_config,
     save_config,
     summary_column_groups,
+    order_summary,
+    order_bins,
     ROLE_LABELS,
     TEST_TYPES,
     auto_role,
@@ -90,8 +92,9 @@ NO_REFERENCE_TIP = ("Reference image: the empty arena behind the plot. Only file
 
 # Summary-table column groups, in checkbox order (keys match summary_column_groups).
 SUMMARY_GROUP_LABELS = {
+    "key": "Key measures",
     "basics": "Session basics",
-    "test": "Test measures",
+    "test": "More test measures",
     "zones": "Zone time & %",
     "entries": "Entries & transitions",
     "roi": "ROI label time & %",
@@ -627,20 +630,21 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     def _build_summary_controls(self, parent):
         """Checkboxes choosing which column groups the Summary table shows."""
-        groups = self.config_data["summary_groups"]
+        groups = self.config_data["summary_columns"]
         bar = ttk.Frame(parent, padding=(4, 6))
         bar.pack(side=tk.TOP, fill=tk.X)
-        ttk.Label(bar, text="Show:").pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Label(bar, text="Show:").grid(row=0, column=0, sticky="nw", padx=(0, 6))
         self.group_vars = {}
-        for key, label in SUMMARY_GROUP_LABELS.items():
+        # Two rows of four, so the checkboxes fit a narrow window.
+        for n, (key, label) in enumerate(SUMMARY_GROUP_LABELS.items()):
             var = tk.BooleanVar(value=groups.get(key, False))
             ttk.Checkbutton(
                 bar, text=label, variable=var, command=self._show_summary
-            ).pack(side=tk.LEFT, padx=(0, 10))
+            ).grid(row=n // 4, column=1 + n % 4, sticky="w", padx=(0, 10))
             self.group_vars[key] = var
         ttk.Label(
             bar, text="(Export includes all columns)", foreground="gray"
-        ).pack(side=tk.RIGHT)
+        ).grid(row=1, column=4, sticky="w")
 
     def _enable_drop(self) -> None:
         """Register the window as a drop target for files and folders."""
@@ -898,7 +902,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         except ValueError:
             pass  # keep the last good value
         self._plot_settings()
-        self.config_data["summary_groups"] = {
+        self.config_data["summary_columns"] = {
             k: bool(v.get()) for k, v in self.group_vars.items()
         }
         try:
@@ -938,7 +942,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         if df.empty:
             self._fill_tree(self.summary_tree, df)
             return
-        groups = summary_column_groups([c for c in df.columns if c != "Status"])
+        groups = summary_column_groups([c for c in df.columns if c != "Status"],
+                                       self.test_var.get())
         cols = ["File", "Status"]
         for key, var in self.group_vars.items():
             if var.get():
@@ -1867,11 +1872,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                                      "MinCenterAdjoiningCrossing_s": adj,
                                      "SpeedSmoothing_frames": smooth})
                 summary.update(settings)
-                e.summary = summary
+                e.summary = order_summary(summary, test)
                 # The test's measures per bin go after the general bin columns.
                 if test_bins is not None and not bins.empty:
                     bins = bins.merge(test_bins, on="Bin", how="left")
-                e.bins = bins
+                e.bins = order_bins(bins, test)
         finally:
             self.config(cursor="")
         self._refresh()

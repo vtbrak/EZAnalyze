@@ -1429,11 +1429,20 @@ Done:
 - **Acoustic startle (ASR) from video** (§13): planned, including PPI and
   habituation; not built. **When starting it, remind the user to add a sample
   video and stimulus logs to the folder.**
-- **Order of results (requested 2026-11-04, remind the user at the next chat):**
-  revisit the order results appear in after analysis: what comes first,
-  second, third, both in the exported files (Summary / Time Bins) and on
-  screen (Summary table columns). Decide the priority order with the user
-  before changing anything.
+- ✅ **Order of results (requested 2026-11-04, decided and built 2026-11-05).**
+  Elevated Plus Maze key measures, in this order: closed/open time ratio,
+  center time, % center (of the session), open-arm time, % open (of arm
+  time), closed-arm time, % closed (of arm time, new `EPM_PctClosedTime`),
+  open entries, closed entries. They're the default on-screen Summary view
+  (new first checkbox **Key measures**, the only one on by default; the old
+  "Test measures" is now **More test measures**, the test's other columns)
+  and come first in the exported Summary (after File) and Time Bins (after
+  Bin / Start / End; bins use % of the bin for center). New
+  `EPM_OpenClosedRatio` (open ÷ closed time) sits with the detailed measures.
+  Speed, per-arm breakdowns and the rest follow. **Open Field left as is**
+  (its default view is still basics + its measures; export order unchanged).
+  Config key `summary_groups` became `summary_columns` so the new default
+  reaches existing configs. Order lives in `KEY_MEASURES` (core/metrics.py).
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

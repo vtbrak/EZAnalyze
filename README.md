@@ -90,6 +90,12 @@ other boxes to add columns. Open Field shows its basics and test measures.
   (e.g. closed-arm time = closed arm 1 + closed arm 2). Only the center may
   share; frames in two other regions are counted for the first and reported
   in a warning. Tracking writes border pixels to the center only, too.
+- **Outside every region:** a tracked point outside all the drawn regions
+  still counts. In Open Field it's periphery, since anything that isn't center
+  is periphery (usually the mouse jumping at the wall). In EPM it goes to the
+  nearest region, so a head dip over the side of an arm counts for that arm.
+  The Summary's Details reports how often this happened (`OutsideEvents`),
+  for how long (`OutsideTime_s`), and the average and longest stretch.
 - The tracking settings recorded in the file
 
 **Time bins** (per file): the session split into fixed-length bins (default
@@ -159,10 +165,22 @@ Credits).
      every setting used and a `Frame_Unreadable` column) and
      `<name>_reference.png` next to it, and becomes **Not analyzed**.
 4. **Analyze** and **Export** as for CSVs (below).
-5. **Play video…** (Path and Heatmap tabs) plays a tracked file's video with
-   its tracked position drawn on, to check the tracking.
-   - It shows a red marker, a short trail, region outlines, the time, and
-     the current region.
+5. The **Review** tab plays the selected file's video with its tracked
+   position drawn on, to check the tracking.
+   - It shows a red marker, a short trail, region outlines, and an info line
+     with the session frame and time, the video's own frame and time, and the
+     current region.
+   - Controls: play/pause (space bar with the pointer on the video), ◀ ▶ one
+     frame, ◀◀ ▶▶ 10 seconds, a slider, and a speed choice (0.25x to 8x).
+   - **Points to review** lists every stretch where the tracked point was
+     outside all the drawn regions, with its frame, session time, video frame
+     and time, length, the region it counted for, and how far outside it
+     went. Click a row to jump to that frame. Brief stretches are usually jumps
+     at the wall or head dips. A stretch at least as long as the cutoff
+     (**Flag stretches at least (s)**, saved per test; Open Field 1 s, EPM
+     5 s) is flagged because the tracker may have got stuck on a dark spot
+     or a reflection. Analyze also warns about these. Because brief ones are
+     handled, exclusion shapes can be drawn generously.
    - **Save as video…** writes `<name>_tracked.mp4` next to the video, at
      its real frame rate. It plays on Mac and Windows.
    - It works for any file tracked in this program whose video is in the
@@ -181,8 +199,8 @@ are listed, Select all, Analyze, Export), then the settings, with **About**
 at the bottom. In a short window the panel scrolls. The file list sits above
 the tabs. The **Path** and **Heatmap** tabs have their controls in a column
 beside the plot: point or cell style, Background, **Region labels** (show or
-hide the region names on the plot and in the exported image), and **Play
-video…**.
+hide the region names on the plot and in the exported image). The **Review**
+tab plays the selected file's video and lists the points to review.
 
 ## Working with files
 1. **Add files…**, **Add folder…**, or drag files/folders onto the window.
@@ -252,7 +270,7 @@ BehaviorTracker/
 │   └── config.py    saved settings (config.json)
 ├── gui.py           tkinter front end
 ├── setup_window.py  Set up videos… window
-├── playback_window.py  Play video… window
+├── review_panel.py  Review tab (video playback and points to review)
 ├── about.py         About window (credits, citation, license)
 ├── region_dialog.py Match regions dialog
 ├── tooltip.py       hover tooltips

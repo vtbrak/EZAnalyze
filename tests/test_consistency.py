@@ -80,6 +80,33 @@ if os.path.exists(ex):
 else:
     print("skip examples/ checks (no example file)")
 
+# Frames outside every drawn region (user, 2026-11-05): Open Field counts them
+# as periphery, EPM as the nearest region; brief stretches are listed.
+from core import outside_events
+ofx = os.path.join(ROOT, "examples", "1_2026-08-17_13-27-03_LocationOutput.csv")
+if os.path.exists(ofx):
+    d = load_csv(ofx); roles = resolve_roles(d.regions, {}); fps = float(d.settings["Video_FPS"])
+    s = summary_metrics(d, fps, roles, 5, min_gap_s=1.0)
+    s.update(of_metrics(d, roles, fps, 5, min_between_entries_s=1.0))
+    sides = s["OF_Left_s"] + s["OF_Right_s"] + s["OF_Top_s"] + s["OF_Bottom_s"]
+    ev = outside_events(d, roles, fps)
+    check("Open Field video: outside frames count as periphery (center + periphery = session; "
+          "sides add up to periphery)",
+          close(s["OF_Center_s"] + s["OF_Periphery_s"], s["Duration_s"], 0.02)
+          and close(sides, s["OF_Periphery_s"], 0.02)
+          and all(e["region"] == "periphery" for e in ev))
+    check("Open Field video: outside stretches listed and summarized (brief: jumps)",
+          s["OutsideEvents"] == len(ev) > 0 and s["OutsideEventMax_s"] < 1
+          and close(s["OutsideEventMean_s"], s["OutsideTime_s"] / len(ev), 0.001))
+if os.path.exists(ex):
+    d = load_csv(ex); roles = resolve_roles(d.regions, {}); fps = float(d.settings["Video_FPS"])
+    s = summary_metrics(d, fps, roles, 5); s.update(epm_metrics(d, roles, fps, 5))
+    ev = outside_events(d, roles, fps)
+    check("EPM example: outside frames go to the nearest region (every frame counted)",
+          close(s["EPM_OpenArm_s"] + s["EPM_ClosedArm_s"] + s["EPM_Center_s"], s["Duration_s"], 0.03)
+          and [e["region"] for e in ev] == ["closed arm 1", "closed arm 1", "open arm 2"]
+          and [e["row"] for e in ev] == [373, 409, 495])
+
 # Open Field: per-region columns equal the OF_ measures.
 d = load_csv(os.path.join(ROOT, "Open Field.csv"))
 roles = resolve_roles(d.regions, {})

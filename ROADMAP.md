@@ -1501,7 +1501,7 @@ Done:
   step (e.g. adding a video that has a tracking file loads it as tracked,
   or an "Open tracked video" action), show the video frame and video time
   (not only the session row) in playback, and a "Go to frame" box.
-- **OPEN DECISION: frames outside every drawn region (logged 2026-11-05;
+- ✅ **DECIDED 2026-11-05 (see below): frames outside every drawn region (logged 2026-11-05;
   must be decided whatever the testing shows, as it will happen again).**
   In the Open Field sample 38 frames (1.9 s) have a position outside both
   regions, so the four side times add to 1.9 s more than periphery time
@@ -1531,7 +1531,31 @@ Done:
   inside the outline and track well (9473, 10172). Also jumps: 10248,
   10716-10740 (several bouts), 17100, 29158 (a series), 29389. So the
   outside frames are a mouse at the edge, not time elsewhere, which supports
-  option B. Awaiting the user's choice.
+  option B.
+  **Decision (user):** build B for Open Field, and count EPM outside frames
+  too (a head dip that takes the point off an arm still counts): EPM uses the
+  nearest region. The real problem to catch is the tracker getting **stuck**
+  outside the bounds (a dark spot on the floor, the mouse's reflection), so
+  time outside is measured as events. Event lengths from the examples: Open
+  Field jumps average 0.11 s (longest 0.20 s; the sample file 0.15 s, longest
+  0.35 s); EPM example 1.9 s (3 events, longest 2.34 s, look like head dips
+  or pokes beside closed arm 1). Provisional "tracker may be lost" cutoffs:
+  Open Field 1 s, EPM 5 s (config `review_cutoff_s`, editable in the Review
+  tab, saved per test), for the user to settle.
+  **Built:** `region_labels` assigns outside frames (`_outside_targets`:
+  periphery when the file has one, else the nearest polygon edge);
+  `outside_events` lists the stretches; Summary Details gain
+  `OutsideEvents`, `OutsideTime_s`, `OutsideEventMean_s` (= time / events),
+  `OutsideEventMax_s`; Analyze warns about stretches at or over the cutoff.
+  **Review tab** (`review_panel.py`, next to Path and Heatmap; replaces the
+  Play video… window and the Play video buttons): the playback (◀◀ / ▶▶ 10 s,
+  ◀ / ▶ one frame, speed, trail, regions, Save as video…) with the info line
+  showing session and video frame/time, and a **Points to review** list (one
+  row per stretch: frame, session time, video frame, video time, length,
+  counted as, px outside, flagged or brief); clicking a row shows that frame.
+  With brief stretches handled, exclusion shapes can be drawn more liberally
+  so real tracking continues through jumps. The setup window's ◀◀ / ▶▶ now
+  skip 10 seconds (were 10 frames).
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

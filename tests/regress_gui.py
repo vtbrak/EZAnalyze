@@ -35,9 +35,9 @@ import setup_window
 setup_window.show_info = gui.show_info
 setup_window.show_warning = gui.show_warning
 setup_window.ask_yes_no = gui.ask_yes_no
-import playback_window
-playback_window.show_info = gui.show_info
-playback_window.show_warning = gui.show_warning
+import review_panel
+review_panel.show_info = gui.show_info
+review_panel.show_warning = gui.show_warning
 gui.BehaviorTrackerApp.wait_window = lambda self, w=None: None
 E = os.path.join(ROOT, "EPM.csv"); O = os.path.join(ROOT, "Open Field.csv")
 if not (os.path.exists(E) and os.path.exists(O)):
@@ -165,16 +165,21 @@ def inside(w):
 check("at the smallest window, run buttons are inside the window",
       all(inside(b) for b in (app.analyze_btn, app.export_btn, app.select_all_btn)))
 app.nb.select(app.tab_path); app.update()
-play = [w for w in app.tab_path.winfo_children()[0].winfo_children()
-        if isinstance(w, gui.ttk.Button) and "Play" in str(w.cget("text"))]
-check("at the smallest window, the Path controls (Play video) are inside the window",
-      play and inside(play[0]))
+labels = [w for w in app.tab_path.winfo_children()[0].winfo_children()
+          if isinstance(w, gui.ttk.Checkbutton) and "Region labels" in str(w.cget("text"))]
+check("at the smallest window, the Path controls (Region labels) are inside the window",
+      labels and inside(labels[0]))
+check("no Play video button on the plot tabs (the Review tab replaces it)",
+      not any("Play" in str(getattr(w, "cget", lambda k: "")("text"))
+              for t in (app.tab_path, app.tab_heat) for w in t.winfo_children()[0].winfo_children()
+              if isinstance(w, gui.ttk.Button)))
 app.nb.select(app.tab_summary); app.geometry("1080x720"); app.update()
 check("no reference image: note shown, plots still drawn",
       "no reference" in app.path_bg_note.cget("text") and "no reference" in app.heat_bg_note.cget("text"))
-log.clear(); app.play_video(); app.update()
-check("ezTrack CSV without its video or crop can't be played back",
-      "This file can't be played back" in log)
+app.nb.select(app.review); app.update()
+check("Review tab: an ezTrack CSV without its video or crop says why it can't be shown",
+      not app.review.body.winfo_manager() and "can't be shown" in app.review.message.cget("text"))
+app.nb.select(app.tab_summary); app.update()
 app.path_bg_var.set("None"); app.bg_var.set("None"); app._on_background()
 
 # Videos (ezTrack's short practice clip, if present): added as "Needs setup",
@@ -193,11 +198,14 @@ if os.path.exists(CLIP):
     v = app.files[0].video
     check("new video gets the test's default session length (EPM 5 min)", v.length_s == 300)
     win.scrub.set(98); win._load_scrub_frame()
-    win._step_frames(1); win._step_frames(1); win._step_frames(10); win._step_frames(-10)
-    check("frame-by-frame steps move the slider exactly (98 +1 +1 +10 -10 = 100)",
+    btns = {b.cget("text"): b for b in win.scrub.master.winfo_children()[1].winfo_children()}
+    btns["▶"].invoke(); btns["▶"].invoke()
+    check("frame-by-frame steps move the slider exactly (98 +1 +1 = 100)",
           win._current_frame() == 100 and "Frame 100" in win.frame_text.cget("text"))
-    win.scrub.set(1); win._step_frames(-10)
-    check("stepping stops at the first frame", win._current_frame() == 0)
+    btns["▶▶"].invoke()
+    check("▶▶ skips 10 seconds", win._current_frame() == 100 + round(10 * v.info.fps))
+    btns["◀◀"].invoke(); btns["◀◀"].invoke()
+    check("◀◀ skips back 10 seconds and stops at the first frame", win._current_frame() == 0)
     win.scrub.set(100); win._load_scrub_frame(); win._set_start()
     # The user's slip: Set end here with the slider still at the start, then
     # leaving the length box. Must ask, and never save a tiny default.
@@ -395,10 +403,11 @@ if os.path.exists(CLIP):
     check("Heatmap on the reference image (gray image under the cells)",
           len(hf.axes[0].images) == 2 and hf.opaque)
     app.path_bg_var.set("None"); app.bg_var.set("None")
-    log.clear(); app._set_selection([0]); app.play_video(); app.update()
-    pw = [w for w in app.winfo_children() if isinstance(w, gui.PlaybackWindow)]
-    check("Play video opens the playback window", len(pw) == 1 and not log)
-    pw = pw[0]; pw.update(); pw.show(10); pw.update()
+    log.clear(); app._set_selection([0]); app.nb.select(app.review); app.update()
+    pw = app.review
+    check("Review tab shows the tracked video", pw.pb is not None and not log
+          and pw.body.winfo_manager())
+    pw.show(10); pw.update()
     check("playback shows the frame with its info",
           pw.canvas._array is not None and "Frame 11 of" in pw.info.cget("text")
           and pw.canvas._array.shape[:2] == app._reference(e0).shape[:2])
@@ -408,6 +417,12 @@ if os.path.exists(CLIP):
         pw.update(); time.sleep(0.01)
     check("plays to the end and stops", not pw.playing and pw.row == pw.pb.n_frames - 1)
     pw.step(-5); check("frame step back", pw.row == pw.pb.n_frames - 6)
+    pw.show(50); pw.skip(-10)
+    check("10-second skip back (to the start here)", pw.row == max(0, 50 - round(10 * pw.pb.fps)))
+    pw.skip(10); check("10-second skip forward", pw.row == min(pw.pb.n_frames - 1,
+                                                                  round(10 * pw.pb.fps)))
+    check("info line shows the video's own frame and time",
+          "video frame" in pw.info.cget("text") and "video time" in pw.info.cget("text"))
     from core.playback import tracked_video_path
     tv = tracked_video_path(CLIP); outs.append(tv); log.clear()
     pw.save_video()
@@ -419,7 +434,23 @@ if os.path.exists(CLIP):
     vfps = cap.get(cv2.CAP_PROP_FPS); cap.release()
     check(f"saved _tracked.mp4: every frame, at the video's frame rate ({nf} frames, {vfps:.2f} fps)",
           "Video saved" in log and nf == pw.pb.n_frames and abs(vfps - v.info.fps) < 0.05)
-    pw.close(); app.update()
+    EX = os.path.join(ROOT, "examples", "6_2024-04-01_11-49-23_LocationOutput.csv")
+    if os.path.exists(EX):
+        from core import load_csv as _load
+        exd = _load(EX)
+        pw.load(exd, None, gui.resolve_roles(exd.regions, {}), 2.0); pw.update()
+        rows = [pw.tree.item(i, "values") for i in pw.tree.get_children()]
+        check("Review list: the EPM example's 3 outside stretches, 2 flagged at a 2 s cutoff",
+              len(rows) == 3 and sum("check" in r[-1] for r in rows) == 2
+              and rows[0][1] == "374" and rows[2][6] == "open arm 2")
+        pw.tree.selection_set("2"); pw.update()
+        check("clicking a row shows that exact frame", pw.row == 495
+              and "Frame 496 of" in pw.info.cget("text"))
+        pw.cutoff_var.set("5"); pw._apply_cutoff()
+        check("changing the cutoff re-flags the list and saves it for the test",
+              sum("check" in pw.tree.item(i, "values")[-1] for i in pw.tree.get_children()) == 0
+              and app.config_data["review_cutoff_s"][app.test_var.get()] == 5)
+    app.nb.select(app.tab_summary); app.update()
     check("a tracked video analyzes", app.files[0].analyzed
           and app.file_tree.item("0", "values")[2] == "Analyzed")
     # C9: the exported Settings sheet describes the tracking and the video.

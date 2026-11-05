@@ -49,6 +49,11 @@ DEFAULTS: dict = {
     "session_minutes": {"Elevated Plus Maze": 5.0, "Open Field": 60.0},
     # Last real length typed for the scale, per test, in cm (setup step 6).
     "scale_cm": {"Elevated Plus Maze": 75.0, "Open Field": 40.0},
+    # Review tab: an outside-the-regions stretch at least this long (seconds)
+    # is flagged as the tracker possibly lost. From the examples (2026-11-05):
+    # Open Field jumps average 0.11-0.15 s (longest 0.35 s); EPM head dips
+    # about 1.9 s (longest 2.3 s). Provisional; the user may change them.
+    "review_cutoff_s": {"Elevated Plus Maze": 5.0, "Open Field": 1.0},
     # Plot style.
     "plot": {
         "point_size": 4.0,  # float so sizes like 2.5 survive a reload

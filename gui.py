@@ -61,6 +61,7 @@ from core import (
     order_summary,
     order_bins,
     drop_duplicates,
+    outside_events,
     ROLE_LABELS,
     TEST_TYPES,
     auto_role,
@@ -76,11 +77,11 @@ from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_vi
 from core.video_setup import VideoSetup
 from core.tracking import TrackingParams
 from core.track_run import TrackRunner, existing_output, make_job
-from core.playback import load_reference, open_playback
+from core.playback import load_reference
 from about import AboutDialog
 from region_dialog import RegionDialog
 from setup_window import SetupWindow, default_session_minutes
-from playback_window import PlaybackWindow
+from review_panel import ReviewPanel
 from dialogs import ask_yes_no, show_error, show_info, show_warning
 from tooltip import Tooltip
 
@@ -573,19 +574,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.path_bg_note.grid(row=8, column=0, columnspan=2, sticky="w")
         self.path_labels_var = tk.BooleanVar(value=p["path_labels"])
         self._labels_check(col, 9, self.path_labels_var)
-        self._play_button(col, 10)
 
         for var in (self.size_var, self.alpha_var, self.path_bg_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
         self._on_color_mode(redraw=False)
-
-    def _play_button(self, col, row: int) -> None:
-        col.rowconfigure(row, weight=1)  # pushes the button to the bottom
-        btn = ttk.Button(col, text="Play video…", command=self.play_video)
-        btn.grid(row=row, column=0, columnspan=2, sticky="sew", pady=(12, 0))
-        Tooltip(btn, "Play the selected file's video with its tracked position drawn "
-                     "on, to check the tracking. Needs the video in the same folder as "
-                     "the tracking file.")
 
     def _build_heatmap_controls(self, parent):
         """Heatmap-tab controls, in a column beside the plot. Changes redraw it."""
@@ -622,7 +614,6 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.heat_bg_note.grid(row=7, column=0, columnspan=2, sticky="w")
         self.heat_labels_var = tk.BooleanVar(value=p["heatmap_labels"])
         self._labels_check(col, 8, self.heat_labels_var)
-        self._play_button(col, 9)
 
         for var in (self.hbins_var, self.cmap_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
@@ -692,6 +683,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._build_heatmap_controls(self.tab_heat)
         self.heat_area = ttk.Frame(self.tab_heat)
         self.heat_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Review tab: the selected file's video with its tracking drawn on, and
+        # the moments to check (outside the regions; long ones flagged).
+        self.review = ReviewPanel(self.nb, on_cutoff=self._save_review_cutoff)
+        self.nb.add(self.review, text="Review")
+        self.nb.bind("<<NotebookTabChanged>>", lambda _e: self._on_tab_change())
 
     def _make_tree(self, parent) -> ttk.Treeview:
         wrap = ttk.Frame(parent)
@@ -922,6 +919,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self._runner = None
         if self._redraw_job is not None:
             self.after_cancel(self._redraw_job)
+        self.review.unload()
         self._save_settings(self._fps(), self._bin_seconds())
         self.destroy()
 
@@ -1058,8 +1056,64 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         else:
             self.select_all()
 
+    # --------------------------------------------------------------- review
+    def _review_cutoff(self, test: str | None = None) -> float:
+        test = test or self.test_var.get()
+        return float(self.config_data["review_cutoff_s"].get(test, 1.0))
+
+    def _save_review_cutoff(self, value: float) -> None:
+        self.config_data["review_cutoff_s"][self.test_var.get()] = value
+        self._save_settings(self._fps_locked() if self._locked() else self._fps(),
+                            self._bin_seconds_locked() if self._locked() else self._bin_seconds())
+
+    def _on_tab_change(self) -> None:
+        if self.nb.select() == str(self.review):
+            self._show_review()
+        else:
+            self.review.pause()
+
+    def _show_review(self) -> None:
+        """Load the selected file into the Review tab (only while it's showing,
+        so the video isn't opened for nothing)."""
+        if self.nb.select() != str(self.review):
+            return
+        entry = self._selected_entry()
+        if entry is None:
+            self.review.show_message("Select a tracked file in the file list to review "
+                                     "its video.")
+        elif entry.data is None:
+            self.review.show_message(f"{entry.label} hasn't been tracked yet. Set it up "
+                                     "and click Track, then review it here.")
+        else:
+            self.review.load(entry.data, entry.video.path if entry.video else None,
+                             self._current_roles([entry]), self._review_cutoff())
+
+    def _warn_lost(self, entries) -> None:
+        """After Analyze: flag files where the point stayed outside the regions
+        at least the review cutoff (the tracker may have lost the animal)."""
+        cutoff = self._review_cutoff()
+        found = []
+        for e in entries:
+            if not e.summary or not e.summary.get("OutsideEvents"):
+                continue
+            fps = self.config_data["fps"]
+            long = [ev for ev in outside_events(e.data, self._current_roles([e]), fps)
+                    if ev["seconds"] >= cutoff]
+            if long:
+                found.append(f"• {e.label}: {len(long)} time(s), longest "
+                             f"{max(ev['seconds'] for ev in long):g} s")
+        if found:
+            show_warning(
+                self, "The tracker may have lost the animal",
+                "The tracked point stayed outside the drawn regions for a while in "
+                f"these files (at least {cutoff:g} s).\n\n" + "\n".join(found)
+                + "\n\nBrief stretches are usually jumps or head dips, but a long one "
+                "can mean the tracker got stuck on a dark spot or a reflection. Select "
+                "the file and open the Review tab to see each one in the video.")
+
     def _show_selected(self) -> None:
-        """Point Time Bins, Path, and Heatmap at the selected file."""
+        """Point Time Bins, Path, Heatmap, and Review at the selected file."""
+        self._show_review()
         entry = self._selected_entry()
         if entry is None:
             note = ("Add files, then select one in the file list." if not self.files
@@ -1490,30 +1544,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self._sel = []
         self._selected = None
         self._references.clear()
+        self.review.unload()
         self._refresh()
-
-    def play_video(self) -> None:
-        """Open the playback window for the file the tabs show."""
-        entry = self._selected_entry()
-        if entry is None:
-            show_info(self, "No file selected", "Select a file in the list first.")
-            return
-        if entry.data is None:
-            show_info(self, "Not tracked yet",
-                      f"{entry.label} hasn't been tracked yet, so there's nothing to "
-                      "play back. Set it up and click Track first.")
-            return
-        try:
-            pb = open_playback(entry.data, entry.video.path if entry.video else None)
-        except ValueError as exc:
-            show_info(self, "This file can't be played back",
-                      f"This file can't be played back.\n\n{exc}")
-            return
-        try:
-            PlaybackWindow(self, pb, entry.label)
-        except Exception as exc:
-            traceback.print_exc()
-            show_error(self, "Playback couldn't start", f"Playback couldn't start.\n\n{exc}")
 
     def show_about(self) -> None:
         AboutDialog(self)
@@ -1886,6 +1918,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self.config(cursor="")
         self._refresh()
         self._warn_shared(targets)
+        self._warn_lost(targets)
 
     def _warn_shared(self, entries) -> None:
         """Only the center may share frames with other regions (those frames

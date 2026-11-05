@@ -81,17 +81,84 @@ def pct(part: float, whole: float) -> float:
     return round(100.0 * part / whole, 1) if whole else float("nan")
 
 
+def _distance_to_polygon(xs, ys, px: np.ndarray, py: np.ndarray) -> np.ndarray:
+    """Distance from each point to the nearest edge of a polygon."""
+    pts = np.column_stack([px, py]).astype(float)
+    a_all = np.column_stack([xs, ys]).astype(float)
+    best = np.full(len(pts), np.inf)
+    for a, b in zip(a_all, np.roll(a_all, -1, axis=0)):
+        ab = b - a
+        length = float(ab @ ab)
+        t = np.clip(((pts - a) @ ab) / length, 0, 1) if length else np.zeros(len(pts))
+        nearest = a + t[:, None] * ab
+        best = np.minimum(best, np.hypot(*(pts - nearest).T))
+    return best
+
+
+def _outside_mask(data: TrackingData) -> np.ndarray:
+    """Frames with a tracked position that's in none of the file's regions."""
+    inside = np.zeros(data.n_frames, dtype=bool)
+    for r in data.regions:
+        inside |= data.df[r].to_numpy(dtype=bool)
+    return ~inside & data.df["X"].notna().to_numpy() & data.df["Y"].notna().to_numpy()
+
+
+def _outside_targets(data: TrackingData, roles: dict[str, str], rows: np.ndarray):
+    """For frames outside every region: the region each counts for, and how
+    far outside it the point was (pixels). Open Field (a file with a
+    periphery region): the periphery, since anything that isn't center is
+    periphery. EPM and others: the nearest region, so a head dip over the
+    side of an arm counts for that arm (user, 2026-11-05)."""
+    polys = match_polygons(data)
+    candidates = [r for r in polys if roles.get(r) == "periphery"] or list(polys)
+    if not candidates or not len(rows):
+        return np.array([""] * len(rows), dtype=object), np.full(len(rows), np.nan)
+    x = data.df["X"].to_numpy(dtype=float)[rows]
+    y = data.df["Y"].to_numpy(dtype=float)[rows]
+    dist = np.stack([_distance_to_polygon(*polys[r], x, y) for r in candidates])
+    nearest = dist.argmin(axis=0)
+    return np.array(candidates, dtype=object)[nearest], dist[nearest, np.arange(len(rows))]
+
+
 def region_labels(data: TrackingData, roles: dict[str, str] | None = None):
     """The one region per frame (`frame_regions`: shared frames count for the
-    center), with unreadable frames marked "unreadable" so they count toward
-    no region's time. Returns (labels, unreadable mask, shared frames,
-    {"a + b": frames})."""
+    center). A tracked frame outside every region counts for the region it
+    belongs to (`_outside_targets`). Unreadable frames are marked
+    "unreadable" so they count toward no region's time. Returns (labels,
+    unreadable mask, shared frames, {"a + b": frames})."""
     roles = roles if roles is not None else resolve_roles(data.regions, {})
     labels, shared_n, shared = frame_regions(data, roles)
+    labels = labels.astype(object)
+    out = np.flatnonzero(_outside_mask(data))
+    if len(out):
+        target, _dist = _outside_targets(data, roles, out)
+        labels[out] = target
     bad = data.unreadable
     if bad.any():
-        labels = np.where(bad, "unreadable", labels)
-    return labels, bad, shared_n, shared
+        labels[bad] = "unreadable"
+    return labels.astype(str), bad, shared_n, shared
+
+
+def outside_events(data: TrackingData, roles: dict[str, str] | None = None,
+                   fps: float = 20.0) -> list[dict]:
+    """Every stretch of consecutive frames where the tracked point was outside
+    all the drawn regions (jumps at the wall, head dips, or the tracker
+    stuck on a dark spot or a reflection): first row (0-based), frames,
+    seconds, the region those frames counted for, and the farthest the point
+    got outside it (pixels). A long one may mean the tracker lost the animal
+    and the video should be reviewed."""
+    roles = roles if roles is not None else resolve_roles(data.regions, {})
+    rows = np.flatnonzero(_outside_mask(data))
+    if not len(rows):
+        return []
+    target, dist = _outside_targets(data, roles, rows)
+    events = []
+    for run in np.split(np.arange(len(rows)), np.flatnonzero(np.diff(rows) > 1) + 1):
+        first = int(rows[run[0]])
+        events.append({"row": first, "frames": len(run), "seconds": secs(len(run), fps),
+                       "region": str(target[run[0]]),
+                       "px_outside": round(float(np.nanmax(dist[run])), 1)})
+    return events
 
 
 def region_entry_starts(inside: np.ndarray, bad: np.ndarray, min_frames: int,
@@ -305,6 +372,15 @@ def summary_metrics(data: TrackingData, fps: float = 20.0,
     if n:
         carried = carry_over_gaps(labels, bad)
         out["Region_transitions"] = int(np.sum(carried[1:] != carried[:-1]))
+    # Stretches outside every drawn region (counted for their region above):
+    # brief ones are jumps or head dips; long ones may be the tracker lost.
+    events = outside_events(data, roles, fps)
+    total = sum(e["frames"] for e in events)
+    out["OutsideEvents"] = len(events)
+    out["OutsideTime_s"] = secs(total, fps)
+    out["OutsideEventMean_s"] = (round(out["OutsideTime_s"] / len(events), 3)
+                                 if events else 0.0)
+    out["OutsideEventMax_s"] = max((e["seconds"] for e in events), default=0.0)
     # Frames in two regions neither of which is the center (shouldn't happen:
     # only the center may share; reported so the regions can be fixed).
     out["SharedRegionFrames"] = shared_n

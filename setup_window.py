@@ -590,12 +590,13 @@ class SetupWindow(tk.Toplevel):
         # Frame-by-frame steps (the slider alone moves many frames per pixel).
         steps = ttk.Frame(row)
         steps.pack(side=tk.RIGHT, padx=(8, 0))
-        for text, delta, tip in (("◀◀", -10, "Back 10 frames"), ("◀", -1, "Back 1 frame"),
-                                 ("▶", 1, "Forward 1 frame"), ("▶▶", 10, "Forward 10 frames")):
+        ten_s = max(1, int(round(10 * (self.setup.info.fps or 10))))
+        for text, delta, tip in (("◀◀", -ten_s, "Back 10 seconds"), ("◀", -1, "Back 1 frame"),
+                                 ("▶", 1, "Forward 1 frame"), ("▶▶", ten_s, "Forward 10 seconds")):
             btn = ttk.Button(steps, text=text, width=3,
                              command=lambda d=delta: self._step_frames(d))
             btn.pack(side=tk.LEFT)
-            Tooltip(btn, tip + ". The , and . keys step one frame too.")
+            Tooltip(btn, tip + ". The , and . keys step one frame.")
         self._scrub_range = (lo, max(lo, hi))
         self.scrub = ttk.Scale(row, from_=lo, to=max(lo, hi), orient=tk.HORIZONTAL)
         self.scrub.set(value)

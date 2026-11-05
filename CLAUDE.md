@@ -75,7 +75,13 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   per-bin number, so the same quantity is never two different numbers;
   tracking writes non-center regions minus the center; no ROI-label
   (`Time_ROI_*`) columns. Only the center may share; other shared frames are
-  reported (`SharedRegionFrames`, Analyze warning). **Center/periphery must never
+  reported (`SharedRegionFrames`, Analyze warning).
+- **Frames outside every drawn region still count** (user, 2026-11-05):
+  Open Field = periphery (anything not center); EPM = nearest region (head
+  dips count for that arm). Stretches outside are listed in the **Review tab**
+  and flagged at a per-test cutoff (config `review_cutoff_s`, OF 1 s / EPM
+  5 s) as "tracker may be lost". The Review tab replaced the Play video…
+  window and buttons. **Center/periphery must never
   overlap**: that's a file error, so warn the user.
 - **Test type** chosen via a **dropdown** (EPM / Open Field); no auto-detect.
 - **All thresholds** are **input boxes in the UI, persisted to `config.json`**.
@@ -112,7 +118,7 @@ build (Location Tracking first). The GUI review is decided (ROADMAP §12, end):
 settings panel, always-visible file list, Track / Analyze / Export acting on
 the selected files with a Select all button, one video setup window.
 **Video build (ROADMAP §12, "Video build progress" checklist):**
-C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. **Open decision pending (ROADMAP Next steps): how to count frames outside every drawn region (options A/B/C); test video in `examples/`.** Next steps come from the user (PC test with ROADMAP §10's video checklist, merge into `main`, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
+C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. Next steps come from the user (PC test with ROADMAP §10's video checklist, merge into `main`, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion
@@ -124,7 +130,7 @@ and ASR decisions are recorded only; **don't build them until the user says
 so.** Adapted ezTrack code (core/video.py, tracking.py, playback.py) keeps the
 GPL-3.0 license and credits ezTrack at the top of each file; keep doing so.
 Video-side modules: `core/video_setup.py`, `core/track_run.py`,
-`setup_window.py`, `playback_window.py` (see README Layout).
+`setup_window.py`, `review_panel.py` (Review tab; see README Layout).
 Sample files `EPM.csv` and `Open Field.csv` are in the project folder
 (gitignored). See ROADMAP "Sample data findings" and "Decisions from sample
 data".

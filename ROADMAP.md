@@ -1556,6 +1556,11 @@ Done:
   With brief stretches handled, exclusion shapes can be drawn more liberally
   so real tracking continues through jumps. The setup window's ◀◀ / ▶▶ now
   skip 10 seconds (were 10 frames).
+  **EPM review (user, 2026-11-05):** in the EPM example, outside stretches 1
+  and 2 (0:22–0:26) are before the mouse was placed (that tracking starts at
+  video frame 0), so they wouldn't exist with the start set at placement;
+  stretch 3 (0:29.74, 2.34 s, beside open arm 2) is a head dip. **The EPM
+  rules hold** (nearest region; 5 s cutoff).
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

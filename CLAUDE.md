@@ -53,10 +53,10 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   and `environment.yml` in step (the regression test checks). `.sh` and
   `.command` are LF via `.gitattributes`.
 - `Open Track Tamer.command`: Mac double-click launcher.
-- Project folder: `Desktop/Track Tamer` (was `EZanalyze`; renamed by the
+- Project folder: `Desktop/Tracker Tamer` (was `EZanalyze`; renamed by the
   user 2026-11-05). The path has a space, so always quote it.
-- Git repo pushed to GitHub `vtbrak/EZAnalyze` (private; the user is
-  renaming it `TrackTamer`, GitHub redirects the old URL). `*.csv`,
+- Git repo pushed to GitHub `vtbrak/TrackTamer` (private; renamed from
+  `EZAnalyze` 2026-11-05, and the old URL redirects). `*.csv`,
   `config.json`, and export outputs (`*_analysis.xlsx`, `*_path.png`,
   `*_heatmap.png`) are gitignored.
 
@@ -152,6 +152,6 @@ describes them).
 
 ## How to run
 ```bash
-cd ~/Desktop/"Track Tamer" && ./.venv/bin/python gui.py
+cd ~/Desktop/"Tracker Tamer" && ./.venv/bin/python gui.py
 ```
 Or double-click `Open Track Tamer.command`.

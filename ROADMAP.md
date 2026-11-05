@@ -1636,8 +1636,9 @@ Done:
 - ✅ **Renamed Track Tamer (user, 2026-11-05)** (was "Behavior Tracker"):
   window titles, About, docs, launchers (`Install` / `Open` / `Uninstall
   Track Tamer` `.command` / `.bat`), the Anaconda environment
-  (`track-tamer`; run the installer once to create it) and the GitHub
-  repository. Earlier entries below keep the old name as written then.
+  (`track-tamer`; run the installer once to create it), the GitHub
+  repository (`vtbrak/TrackTamer`) and the project folder
+  (`Desktop/Tracker Tamer`). Earlier entries below keep the old name as written then.
 - ✅ **Tests use the Examples files (user, 2026-11-05).** The old
   `EPM.csv` / `Open Field.csv` samples were removed; every test now uses the
   real videos tracked in this app and their tracking files in `Examples/`

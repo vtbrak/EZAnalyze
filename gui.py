@@ -1734,6 +1734,44 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             self.config_data["fps"] = rate
         return True
 
+    def _check_file_frame_rates(self, entries) -> bool:
+        """Before the first Analyze: tracking files from this app record their
+        video's frame rate. Offer it if the Frame rate box differs (times
+        would be wrong otherwise). False if the user cancels."""
+        rates = {}
+        for e in entries:
+            try:
+                fps = float(e.data.settings.get("Video_FPS", "nan"))
+            except (TypeError, ValueError):
+                continue
+            if fps > 0:
+                rates.setdefault(round(fps, 2), []).append(e)
+        if not rates:
+            return True
+        try:
+            setting = float(self.fps_var.get())
+        except ValueError:
+            setting = None
+        if len(rates) > 1:
+            lines = "\n".join(f"• {g[0].label}: {r:g} fps" for r, g in sorted(rates.items()))
+            return ask_yes_no(
+                self, "The files have different frame rates",
+                "The selected files' videos weren't all recorded at the same frame "
+                f"rate.\n\n{lines}\n\nThe analysis uses one frame rate for every file "
+                f"({self.fps_var.get()} fps), so times for the others will be off. "
+                "Analyze them in separate loads (Clear between them). Analyze anyway?",
+                yes="Analyze Anyway", no="Cancel")
+        rate = next(iter(rates))
+        if setting is not None and abs(rate - setting) < 0.005:
+            return True
+        if ask_yes_no(
+                self, "The video's frame rate isn't the frame rate setting",
+                f"The tracking file says its video was recorded at {rate:g} fps, but the "
+                f"Frame rate setting is {self.fps_var.get()} fps. Use {rate:g} fps for the "
+                "analysis?", yes=f"Use {rate:g} fps", no=f"Keep {self.fps_var.get()} fps"):
+            self.fps_var.set(f"{rate:g}")
+        return True
+
     def cancel_tracking(self) -> None:
         if self._runner is not None:
             self._runner.cancel()
@@ -1854,6 +1892,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             return
 
         if not self._locked():
+            if not self._check_file_frame_rates(targets):
+                return
             self._lock_in_settings()  # the first Analyze of a load sets them
         targets = self._ready_to_analyze(targets)
         if not targets:

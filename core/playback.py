@@ -138,7 +138,7 @@ class Playback:
         if "ROI_location" not in self.data.df.columns:
             return ""
         v = self.data.df["ROI_location"].iat[row]
-        return "" if pd.isna(v) else str(v)
+        return "" if pd.isna(v) or v == "non_roi" else str(v)
 
     def trail(self, row: int, frames: int) -> list[tuple[float, float] | None]:
         lo = max(0, row - frames)

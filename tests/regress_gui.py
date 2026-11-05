@@ -446,6 +446,12 @@ if os.path.exists(CLIP):
         pw.tree.selection_set("2"); pw.update()
         check("clicking a row shows that exact frame", pw.row == 495
               and "Frame 496 of" in pw.info.cget("text"))
+        keep_fps = app.fps_var.get(); app.fps_var.set("20"); log.clear(); yesno[:] = [True]
+        fake = gui.FileEntry(path=EX, data=exd, label="ex")
+        check("Analyze offers the tracking file's own frame rate",
+              app._check_file_frame_rates([fake]) and app.fps_var.get() == "16.64"
+              and "isn't the frame rate setting" in " ".join(log))
+        app.fps_var.set(keep_fps)
         pw.cutoff_var.set("5"); pw._apply_cutoff()
         check("changing the cutoff re-flags the list and saves it for the test",
               sum("check" in pw.tree.item(i, "values")[-1] for i in pw.tree.get_children()) == 0

@@ -27,7 +27,7 @@ import tkinter as tk
 import traceback
 from tkinter import ttk
 
-from core.metrics import outside_events
+from core.metrics import _outside_mask, outside_events, region_labels
 from core.playback import FrameSource, open_playback, tracked_video_path, write_tracked_video
 from dialogs import show_info, show_warning
 from setup_window import FrameCanvas
@@ -39,9 +39,9 @@ SKIP_SECONDS = 10
 MARKER_COLOR = "#ff2828"
 TRAIL_COLOR = "#ffc828"
 ROI_COLOR = "#5adc5a"
-EVENT_COLUMNS = (("#", 40), ("Frame", 70), ("Session time", 95), ("Video frame", 85),
-                 ("Video time", 85), ("Length (s)", 75), ("Counted as", 110),
-                 ("Px outside", 75), ("Check", 110))
+EVENT_COLUMNS = (("#", 34), ("Frame", 64), ("Session time", 84), ("Video frame", 78),
+                 ("Video time", 78), ("Length (s)", 66), ("Counted as", 96),
+                 ("Px outside", 70), ("Check", 70))
 
 
 def clock(seconds: float) -> str:
@@ -73,18 +73,24 @@ class ReviewPanel(ttk.Frame):
 
         top = ttk.Frame(self.body)
         self.body.add(top, weight=3)
-        self.canvas = FrameCanvas(top, height=260)
+        # Controls are packed first, from the bottom, so a short window shrinks
+        # the video instead of hiding them.
+        # Two short rows, so nothing is cut off in a narrow window.
+        bar2 = ttk.Frame(top, padding=(8, 0, 8, 6))
+        bar2.pack(side=tk.BOTTOM, fill=tk.X)
+        bar = ttk.Frame(top, padding=(8, 6, 8, 4))
+        bar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.slider = ttk.Scale(top, from_=0, to=1, orient=tk.HORIZONTAL,
+                                command=self._on_slider)
+        self.slider.pack(side=tk.BOTTOM, fill=tk.X, padx=8)
+        self.info = ttk.Label(top, anchor=tk.W, padding=(8, 4), justify=tk.LEFT)
+        self.info.pack(side=tk.BOTTOM, fill=tk.X)
+        self.info.bind("<Configure>",
+                       lambda e: self.info.configure(wraplength=max(200, e.width - 16)))
+        self.canvas = FrameCanvas(top, height=200)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas.redraw_overlay = self._overlay
         self.canvas.bind("<space>", lambda _e: self.toggle())
-        self.info = ttk.Label(top, anchor=tk.W, padding=(8, 4))
-        self.info.pack(side=tk.TOP, fill=tk.X)
-        self.slider = ttk.Scale(top, from_=0, to=1, orient=tk.HORIZONTAL,
-                                command=self._on_slider)
-        self.slider.pack(side=tk.TOP, fill=tk.X, padx=8)
-
-        bar = ttk.Frame(top, padding=(8, 6))
-        bar.pack(side=tk.TOP, fill=tk.X)
         for text, cmd, tip in (
                 ("◀◀", lambda: self.skip(-SKIP_SECONDS), "Back 10 seconds"),
                 ("◀", lambda: self.step(-1), "Back 1 frame")):
@@ -107,15 +113,15 @@ class ReviewPanel(ttk.Frame):
         speed.pack(side=tk.LEFT)
         speed.bind("<<ComboboxSelected>>", lambda _e: self._restart_clock())
         self.trail_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar, text="Trail", variable=self.trail_var,
-                        command=self._redraw).pack(side=tk.LEFT, padx=(12, 0))
+        ttk.Checkbutton(bar2, text="Trail", variable=self.trail_var,
+                        command=self._redraw).pack(side=tk.LEFT)
         self.roi_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(bar, text="Regions", variable=self.roi_var,
+        ttk.Checkbutton(bar2, text="Regions", variable=self.roi_var,
                         command=self._redraw).pack(side=tk.LEFT, padx=(8, 0))
-        self.save_btn = ttk.Button(bar, text="Save as video…", command=self.save_video)
+        self.save_btn = ttk.Button(bar2, text="Save as video…", command=self.save_video)
         self.save_btn.pack(side=tk.RIGHT)
         self.save_tip = Tooltip(self.save_btn, "")
-        self.save_text = ttk.Label(bar, foreground="gray")
+        self.save_text = ttk.Label(bar2, foreground="gray")
         self.save_text.pack(side=tk.RIGHT, padx=8)
 
         # The points in question.
@@ -143,12 +149,15 @@ class ReviewPanel(ttk.Frame):
                                  show="headings", height=5, selectmode="browse")
         for col, width in EVENT_COLUMNS:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=width, anchor=tk.CENTER, stretch=col == "Check")
+            self.tree.column(col, width=width, minwidth=width, anchor=tk.CENTER,
+                             stretch=col == "Check")
         self.tree.tag_configure("flag", foreground="#c62828")
         vsb = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscrollcommand=vsb.set)
+        hsb = ttk.Scrollbar(wrap, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         self.tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
         wrap.rowconfigure(0, weight=1)
         wrap.columnconfigure(0, weight=1)
         self.tree.bind("<<TreeviewSelect>>", self._on_event)
@@ -177,6 +186,10 @@ class ReviewPanel(ttk.Frame):
             return
         self.pb, self.source, self._data = pb, source, data
         self.events = outside_events(data, roles, pb.fps)
+        # The region each frame counted for (outside frames included) and
+        # which frames were outside the drawn regions, for the info line.
+        self._labels = region_labels(data, roles)[0]
+        self._outside = _outside_mask(data)
         self.message.pack_forget()
         self.body.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.slider.configure(to=max(pb.n_frames - 1, 0))
@@ -224,7 +237,7 @@ class ReviewPanel(ttk.Frame):
             self.tree.insert("", tk.END, iid=str(n), tags=("flag",) if long else (), values=(
                 n + 1, f"{e['row'] + 1:,}", clock(e["row"] / pb.fps), f"{vf:,}",
                 clock(vf / pb.fps), f"{e['seconds']:g}", e["region"] or "none",
-                f"{e['px_outside']:g}", "⚠ check: tracker lost?" if long else "brief"))
+                f"{e['px_outside']:g}", "⚠ check" if long else "brief"))
         total = sum(e["seconds"] for e in self.events)
         if not self.events:
             self.summary.configure(text="The tracked point never left the drawn regions.")
@@ -298,10 +311,12 @@ class ReviewPanel(ttk.Frame):
             parts.append("unreadable frame (no position)")
         elif pb.position(row) is None:
             parts.append("no position found")
-        elif pb.region(row):
-            parts.append(f"region: {pb.region(row)}")
         else:
-            parts.append("outside the regions")
+            region = self._labels[row] if row < len(self._labels) else ""
+            text = f"region: {region}" if region else "in no region"
+            if row < len(self._outside) and self._outside[row]:
+                text += " (outside the drawn regions)"
+            parts.append(text)
         if unread_video:
             parts.append("the video frame couldn't be read")
         self.info.configure(text="   ·   ".join(parts))

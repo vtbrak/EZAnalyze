@@ -1646,8 +1646,8 @@ Done:
 - ✅ **Merged `video-tracking` into `main` (user, 2026-11-05)** for outside
   testers downloading from GitHub the next day; `TESTING.md` added (install,
   what to try for each test, how to report problems, known limitations).
-  Before release: repository access for testers (private repo) and the
-  first Windows run are still open.
+  The repository is **public** (checked 2026-11-05; history holds no data
+  files or tokens). The first Windows run is still open.
 - ✅ **Renamed Track Tamer (user, 2026-11-05)** (was "Behavior Tracker"):
   window titles, About, docs, launchers (`Install` / `Open` / `Uninstall
   Track Tamer` `.command` / `.bat`), the Anaconda environment

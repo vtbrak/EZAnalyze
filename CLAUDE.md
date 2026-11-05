@@ -55,7 +55,7 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
 - `Open Track Tamer.command`: Mac double-click launcher.
 - Project folder: `Desktop/Tracker Tamer` (was `EZanalyze`; renamed by the
   user 2026-11-05). The path has a space, so always quote it.
-- Git repo pushed to GitHub `vtbrak/TrackTamer` (private; renamed from
+- Git repo pushed to GitHub `vtbrak/TrackTamer` (**public**, GPL-3.0; renamed from
   `EZAnalyze` 2026-11-05, and the old URL redirects). `*.csv`,
   `config.json`, and export outputs (`*_analysis.xlsx`, `*_path.png`,
   `*_heatmap.png`) are gitignored.

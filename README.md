@@ -17,7 +17,7 @@ how to report problems.
 1. Install [Anaconda or Miniconda](https://www.anaconda.com/download) if the
    computer doesn't have it.
 2. Get the program folder: download the zip from GitHub (or `git clone`).
-   The repository is private, so others need access or a zip from you. Copy
+   The repository is public: github.com/vtbrak/TrackTamer. Copy
    the folder **without** its `.venv`, if it has one.
 3. Double-click **`Install Track Tamer.command`** (Mac) or
    **`Install Track Tamer.bat`** (Windows). It finds Anaconda, builds the

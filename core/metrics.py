@@ -69,6 +69,18 @@ def carry_over_gaps(labels: np.ndarray, unreadable: np.ndarray) -> np.ndarray:
     return labels[idx]
 
 
+def secs(frames: int, fps: float) -> float:
+    """Frames -> seconds, as every time column shows it (2 decimals)."""
+    return round(frames / fps, 2) if fps else float("nan")
+
+
+def pct(part: float, whole: float) -> float:
+    """A percentage formula of two shown values (1 decimal). Percentages are
+    always worked out from the numbers in the table (e.g. % in a region =
+    its time / the session length), so they can be checked from them."""
+    return round(100.0 * part / whole, 1) if whole else float("nan")
+
+
 def region_labels(data: TrackingData, roles: dict[str, str] | None = None):
     """The one region per frame (`frame_regions`: shared frames count for the
     center), with unreadable frames marked "unreadable" so they count toward
@@ -138,13 +150,13 @@ def _role_sums(labels, groups, lo: int, hi: int, fps: float) -> tuple[dict, dict
     per-region values as displayed (rounded the same way), so a role total
     always equals its regions added up (e.g. closed = closed arm 1 + 2)."""
     seg = labels[lo:hi]
-    n = hi - lo
-    secs, pct = {}, {}
+    length = secs(hi - lo, fps)
+    times, pcts = {}, {}
     for k, regions in groups.items():
-        counts = [int(np.sum(seg == r)) for r in regions]
-        secs[k] = round(sum(round(c / fps, 2) for c in counts), 2) if fps else float("nan")
-        pct[k] = round(sum(round(100.0 * c / n, 1) for c in counts), 1) if n else float("nan")
-    return secs, pct
+        region_secs = [secs(int(np.sum(seg == r)), fps) for r in regions]
+        times[k] = round(sum(region_secs), 2)
+        pcts[k] = round(sum(pct(t, length) for t in region_secs), 1)
+    return times, pcts
 
 
 def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float,
@@ -153,38 +165,31 @@ def _epm_block(per_frame: np.ndarray, entries, lo: int, hi: int, fps: float,
     start in them. Used for the whole session and for each time bin. Times
     are the sums of the per-region times (`_role_sums`)."""
     nan = float("nan")
-    seg = per_frame[lo:hi]
-    frames = {k: int(np.sum(seg == k)) for k in ("open_arm", "closed_arm", "center")}
-    counts = {k: sum(1 for r, f in entries if r == k and lo <= f < hi) for k in frames}
-    arm_frames = frames["open_arm"] + frames["closed_arm"]
-    arm_entries = counts["open_arm"] + counts["closed_arm"]
-    open_time_frac = frames["open_arm"] / arm_frames if arm_frames else nan
-    open_entry_frac = counts["open_arm"] / arm_entries if arm_entries else nan
-
-    role_secs, _pct = _role_sums(labels, groups, lo, hi, fps)
-
+    counts = {k: sum(1 for r, f in entries if r == k and lo <= f < hi)
+              for k in ("open_arm", "closed_arm", "center")}
+    # Times are counted from the frames (sums of the per-region times);
+    # everything after them is a formula of the shown values.
+    t, _pcts = _role_sums(labels, groups, lo, hi, fps)
+    o, c = t["open_arm"], t["closed_arm"]
+    oe, ce = counts["open_arm"], counts["closed_arm"]
+    pct_open = pct(o, o + c)
+    pct_open_entries = pct(oe, oe + ce)
     return {
-        "EPM_OpenArm_s": role_secs["open_arm"],
-        "EPM_ClosedArm_s": role_secs["closed_arm"],
-        "EPM_Center_s": role_secs["center"],
-        # % of time on the arms that was spent on the open (closed) arms.
-        "EPM_PctOpenTime": round(100 * open_time_frac, 1),
-        "EPM_PctClosedTime": round(100 * (1 - open_time_frac), 1),
-        "EPM_OpenEntries": counts["open_arm"],
-        "EPM_ClosedEntries": counts["closed_arm"],
+        "EPM_OpenArm_s": o,
+        "EPM_ClosedArm_s": c,
+        "EPM_Center_s": t["center"],
+        # % of time on the arms that was on the open (closed) arms; the two add to 100.
+        "EPM_PctOpenTime": pct_open,
+        "EPM_PctClosedTime": round(100 - pct_open, 1) if not np.isnan(pct_open) else nan,
+        "EPM_OpenEntries": oe,
+        "EPM_ClosedEntries": ce,
         "EPM_CenterEntries": counts["center"],
         # % of arm entries that were into the open arms.
-        "EPM_PctOpenEntries": round(100 * open_entry_frac, 1),
-        # 1 - mean(open time fraction, open entry fraction); higher = more anxious.
-        "EPM_AnxietyIndex": round(1 - (open_time_frac + open_entry_frac) / 2, 3),
-        "EPM_ClosedOpenRatio": (
-            round(frames["closed_arm"] / frames["open_arm"], 3)
-            if frames["open_arm"] else nan
-        ),
-        "EPM_OpenClosedRatio": (
-            round(frames["open_arm"] / frames["closed_arm"], 3)
-            if frames["closed_arm"] else nan
-        ),
+        "EPM_PctOpenEntries": pct_open_entries,
+        # 1 - mean(% open time, % open entries) / 100; higher = more anxious.
+        "EPM_AnxietyIndex": round(1 - (pct_open + pct_open_entries) / 200, 3),
+        "EPM_ClosedOpenRatio": round(c / o, 3) if o else nan,
+        "EPM_OpenClosedRatio": round(o / c, 3) if c else nan,
     }
 
 
@@ -266,8 +271,8 @@ def summary_metrics(data: TrackingData, fps: float = 20.0,
         "File": data.name,
         "Frames": n,
         "FPS": fps,
-        "Duration_s": round(duration_s, 2),
-        "Duration_min": round(duration_s / 60.0, 3),
+        "Duration_s": secs(n, fps),
+        "Duration_min": round(secs(n, fps) / 60.0, 3),
         "TotalDistance_cm": round(dist_cm, 2),
         "TotalDistance_px": round(dist_px, 1),
         # Video frames that couldn't be read: no position, so they add no
@@ -279,20 +284,22 @@ def summary_metrics(data: TrackingData, fps: float = 20.0,
 
     # Mean speed over the whole session.
     if duration_s and not np.isnan(dist_cm):
-        out["MeanSpeed_cm_s"] = round(dist_cm / duration_s, 3)
+        out["MeanSpeed_cm_s"] = round(round(dist_cm, 2) / out["Duration_s"], 3)
 
     # Time and % of the session in each region, one region per frame.
     labels, bad, shared_n, shared = region_labels(data, roles)
     for zone in data.regions:
-        frames_in = int(np.sum(labels == zone))
-        out[f"Time_{zone}_s"] = round(frames_in / fps, 2) if fps else float("nan")
-        out[f"Percent_{zone}"] = round(100.0 * frames_in / n, 1) if n else 0.0
+        out[f"Time_{zone}_s"] = secs(int(np.sum(labels == zone)), fps)
+        out[f"Percent_{zone}"] = pct(out[f"Time_{zone}_s"], out["Duration_s"])
 
-    # Entries into each region, under the entry rule.
+    # Entries into each region, under the entry rule (the Open Field "same
+    # visit" gap applies to center entries only, as in OF_CenterEntries).
+    roles_used = roles if roles is not None else resolve_roles(data.regions, {})
     gap = min_gap_s * fps if fps else 0
     for zone in data.regions:
+        zone_gap = gap if roles_used.get(zone) == "center" else 0
         out[f"Entries_{zone}"] = len(region_entry_starts(labels == zone, bad,
-                                                         min_entry_frames, gap))
+                                                         min_entry_frames, zone_gap))
 
     # Moves from one region (or none) to another between readable frames.
     if n:
@@ -442,16 +449,16 @@ def _of_block(ev: dict, lo: int, hi: int, fps: float) -> dict:
     nan = float("nan")
     n = hi - lo
 
-    def secs(f):
-        return round(f / fps, 2) if fps else nan
-
     center = ev["in_center"][lo:hi]
     periphery = ev["periphery"][lo:hi]
+    length = secs(n, fps)
+    center_s = secs(int(center.sum()), fps)
+    periphery_s = secs(int(periphery.sum()), fps)
     out = {
-        "OF_Center_s": secs(int(center.sum())),
-        "OF_PctCenter": round(100 * center.mean(), 1) if n else nan,
-        "OF_Periphery_s": secs(int(periphery.sum())),
-        "OF_PctPeriphery": round(100 * periphery.mean(), 1) if n else nan,
+        "OF_Center_s": center_s,
+        "OF_PctCenter": pct(center_s, length),
+        "OF_Periphery_s": periphery_s,
+        "OF_PctPeriphery": pct(periphery_s, length),
         "OF_CenterEntries": sum(1 for f in ev["center_entries"] if lo <= f < hi),
     }
     side_cols = [f"OF_{side.capitalize()}_s" for side in SIDES]
@@ -464,7 +471,7 @@ def _of_block(ev: dict, lo: int, hi: int, fps: float) -> dict:
         return out
     place = ev["place"][lo:hi]
     for side, col in zip(SIDES, side_cols):
-        out[col] = secs(int(np.sum(place == side)))
+        out[col] = secs(int(np.sum(place == side)), fps)
     here = [c for c in ev["crossings"] if lo <= c[0] < hi]
     lr = sum(1 for c in here if c[1] == "lr")
     tb = sum(1 for c in here if c[1] == "tb")
@@ -566,19 +573,19 @@ def binned_metrics(
         gframes = len(g)
         dist_cm = float(g["Distance_cm"].sum()) if "Distance_cm" in g else float("nan")
         bin_dur_s = gframes / fps
+        length = secs(gframes, fps)
         row = {
             "Bin": int(bin_idx) + 1,
             "Start_s": round(bin_idx * bin_seconds, 2),
             "End_s": round(bin_idx * bin_seconds + bin_dur_s, 2),
             "Frames": gframes,
             "Distance_cm": round(dist_cm, 2),
-            "MeanSpeed_cm_s": round(dist_cm / bin_dur_s, 3) if bin_dur_s else float("nan"),
+            "MeanSpeed_cm_s": round(round(dist_cm, 2) / length, 3) if length else float("nan"),
             "UnreadableFrames": int(g["_unreadable"].sum()),
         }
         for zone in zones:
-            frames_in = int((g["_region"] == zone).sum())
-            row[f"Time_{zone}_s"] = round(frames_in / fps, 2)
-            row[f"Percent_{zone}"] = round(100.0 * frames_in / gframes, 1) if gframes else 0.0
+            row[f"Time_{zone}_s"] = secs(int((g["_region"] == zone).sum()), fps)
+            row[f"Percent_{zone}"] = pct(row[f"Time_{zone}_s"], length)
         rows.append(row)
 
     return pd.DataFrame(rows)
@@ -614,18 +621,22 @@ def order_summary(row: dict, test: str) -> dict:
 
 
 def drop_duplicates(table, roles: dict[str, str], test: str):
-    """Remove per-region columns that repeat a test measure exactly. EPM:
-    the center region's Time_/Percent_/Entries_ columns repeat EPM_Center_s,
-    EPM_PctSession_Center (EPM_PctBin_Center in bins) and EPM_CenterEntries,
-    so only the EPM_ ones are kept (user, 2026-11-05). Works on a summary
-    row (dict) or a Time Bins table."""
-    if test != "Elevated Plus Maze":
-        return table
+    """Remove per-region columns that repeat a test measure exactly, keeping
+    the test's own (user, 2026-11-05). EPM: the center region's Time_ /
+    Percent_ / Entries_ repeat EPM_Center_s, EPM_PctSession_Center
+    (EPM_PctBin_Center in bins) and EPM_CenterEntries. Open Field: the center's
+    repeat OF_Center_s, OF_PctCenter, OF_CenterEntries, and the periphery's
+    time / % repeat OF_Periphery_s, OF_PctPeriphery. Works on a summary row
+    (dict) or a Time Bins table."""
     centers = [r for r, k in roles.items() if k == "center"]
-    if len(centers) != 1:
-        return table  # several center regions: each one's own numbers differ from the total
-    c = centers[0]
-    dupes = {f"Time_{c}_s", f"Percent_{c}", f"Entries_{c}"}
+    dupes = set()
+    if test in ("Elevated Plus Maze", "Open Field") and len(centers) == 1:
+        c = centers[0]  # (several centers: each one's numbers differ from the total)
+        dupes |= {f"Time_{c}_s", f"Percent_{c}", f"Entries_{c}"}
+    peripheries = [r for r, k in roles.items() if k == "periphery"]
+    if test == "Open Field" and len(peripheries) == 1:
+        p = peripheries[0]  # its entries have no OF_ twin, so they stay
+        dupes |= {f"Time_{p}_s", f"Percent_{p}"}
     if isinstance(table, dict):
         return {k: v for k, v in table.items() if k not in dupes}
     return table.drop(columns=[d for d in dupes if d in table.columns])

@@ -48,6 +48,22 @@ def epm_checks(path, fps=None):
               s[f"EPM_{key}Entries"] == sum(s[f"Entries_{r}"] for r in by(role)))
     check(f"{name}: region %s add up to at most 100",
           sum(s[f"Percent_{r}"] for r in d.regions) <= 100.0 + 0.05 * len(d.regions))
+    # Formulas re-worked from the shown values give exactly the shown values.
+    O, C, D = s["EPM_OpenArm_s"], s["EPM_ClosedArm_s"], s["Duration_s"]
+    oe, ce = s["EPM_OpenEntries"], s["EPM_ClosedEntries"]
+    check(f"{name}: % open / closed time, ratios, % open entries, anxiety index are "
+          "formulas of the shown values",
+          s["EPM_PctOpenTime"] == round(100 * O / (O + C), 1)
+          and s["EPM_PctOpenTime"] + s["EPM_PctClosedTime"] == 100
+          and s["EPM_ClosedOpenRatio"] == round(C / O, 3)
+          and s["EPM_OpenClosedRatio"] == round(O / C, 3)
+          and s["EPM_PctOpenEntries"] == round(100 * oe / (oe + ce), 1)
+          and s["EPM_AnxietyIndex"] == round(1 - (s["EPM_PctOpenTime"]
+                                                   + s["EPM_PctOpenEntries"]) / 200, 3))
+    check(f"{name}: region % = region time / session length; mean speed = distance / duration",
+          all(s[f"Percent_{r}"] == round(100 * s[f"Time_{r}_s"] / D, 1) for r in d.regions)
+          and s["MeanSpeed_cm_s"] == round(s["TotalDistance_cm"] / D, 3)
+          and s["Duration_min"] == round(D / 60, 3))
     bins = binned_metrics(d, fps, 60, roles).merge(epm_binned(d, roles, fps, 60, 5), on="Bin")
     check(f"{name}: per-bin closed time = its regions' bin times added up",
           all(close(row["EPM_ClosedArm_s"], sum(row[f"Time_{r}_s"] for r in by("closed_arm")))
@@ -76,6 +92,17 @@ check("Open Field: center time / % / entries equal the OF_ measures",
       and s[f"Entries_{c}"] == s["OF_CenterEntries"])
 check("Open Field: periphery time / % equal the OF_ measures (center wins where they overlap)",
       s[f"Time_{p}_s"] == s["OF_Periphery_s"] and s[f"Percent_{p}"] == s["OF_PctPeriphery"])
+
+check("Open Field: % center / periphery = their time / session length",
+      s["OF_PctCenter"] == round(100 * s["OF_Center_s"] / s["Duration_s"], 1)
+      and s["OF_PctPeriphery"] == round(100 * s["OF_Periphery_s"] / s["Duration_s"], 1)
+      and s["OF_Crossings_Total"] == s["OF_Crossings_Opposite"] + s["OF_Crossings_Adjoining"]
+      and s["OF_Crossings_Opposite"] == s["OF_Crossings_LeftRight"] + s["OF_Crossings_TopBottom"])
+from core import drop_duplicates
+kept = drop_duplicates(s, roles, "Open Field")
+check("Open Field: per-region center / periphery columns that repeat OF_ measures are dropped",
+      not {f"Time_{c}_s", f"Percent_{c}", f"Entries_{c}", f"Time_{p}_s", f"Percent_{p}"} & set(kept)
+      and f"Entries_{p}" in kept and "OF_Center_s" in kept)
 
 # A made-up file: frames on the center's border, and two arms sharing frames.
 df = pd.DataFrame({

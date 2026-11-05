@@ -114,6 +114,10 @@ check("summary row: File, then the key measures; open/closed ratio kept in the d
 check("Time Bins start with Bin, Start, End, then the key measures",
       list(app.files[0].bins.columns)[:12] == ["Bin", "Start_s", "End_s"]
       + [k.replace("PctSession", "PctBin") for k in KEY])
+check("EPM: the center's per-region columns (repeats of EPM center) are dropped",
+      not {"Time_mid_s", "Percent_mid", "Entries_mid"} & set(r0)
+      and not {"Time_mid_s", "Percent_mid"} & set(app.files[0].bins.columns)
+      and "Time_ol_s" in r0 and "EPM_Center_s" in r0)
 app.group_vars["test"].set(True); app._show_summary()
 check("More test measures adds the other EPM columns after the key ones",
       list(app.summary_tree["columns"])[:11] == ["File", "Status"] + KEY

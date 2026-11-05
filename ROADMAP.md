@@ -1460,6 +1460,12 @@ Done:
   "ROI label time & %" checkbox are gone. Tracking writes every non-center
   region minus the center, so new files never mark a border frame twice.
   Checked by `tests/test_consistency.py`. `examples/` is gitignored.
+  **Then (user):** EPM's center per-region columns (`Time_/Percent_/Entries_`
+  of the center region) were exact repeats of `EPM_Center_s`,
+  `EPM_PctSession_Center` / `EPM_PctBin_Center` and `EPM_CenterEntries`, so
+  they're dropped from the Summary and Time Bins (`drop_duplicates`); the
+  arms keep their per-arm columns. Open Field's center/periphery columns
+  still repeat its OF_ measures (not asked to change).
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

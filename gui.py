@@ -60,6 +60,7 @@ from core import (
     summary_column_groups,
     order_summary,
     order_bins,
+    drop_duplicates,
     ROLE_LABELS,
     TEST_TYPES,
     auto_role,
@@ -1876,11 +1877,11 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                                      "MinCenterAdjoiningCrossing_s": adj,
                                      "SpeedSmoothing_frames": smooth})
                 summary.update(settings)
-                e.summary = order_summary(summary, test)
+                e.summary = order_summary(drop_duplicates(summary, roles, test), test)
                 # The test's measures per bin go after the general bin columns.
                 if test_bins is not None and not bins.empty:
                     bins = bins.merge(test_bins, on="Bin", how="left")
-                e.bins = order_bins(bins, test)
+                e.bins = order_bins(drop_duplicates(bins, roles, test), test)
         finally:
             self.config(cursor="")
         self._refresh()

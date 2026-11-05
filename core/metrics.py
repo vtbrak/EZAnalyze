@@ -613,6 +613,24 @@ def order_summary(row: dict, test: str) -> dict:
     return {**{k: row[k] for k in first}, **{k: v for k, v in row.items() if k not in first}}
 
 
+def drop_duplicates(table, roles: dict[str, str], test: str):
+    """Remove per-region columns that repeat a test measure exactly. EPM:
+    the center region's Time_/Percent_/Entries_ columns repeat EPM_Center_s,
+    EPM_PctSession_Center (EPM_PctBin_Center in bins) and EPM_CenterEntries,
+    so only the EPM_ ones are kept (user, 2026-11-05). Works on a summary
+    row (dict) or a Time Bins table."""
+    if test != "Elevated Plus Maze":
+        return table
+    centers = [r for r, k in roles.items() if k == "center"]
+    if len(centers) != 1:
+        return table  # several center regions: each one's own numbers differ from the total
+    c = centers[0]
+    dupes = {f"Time_{c}_s", f"Percent_{c}", f"Entries_{c}"}
+    if isinstance(table, dict):
+        return {k: v for k, v in table.items() if k not in dupes}
+    return table.drop(columns=[d for d in dupes if d in table.columns])
+
+
 def order_bins(bins: pd.DataFrame, test: str) -> pd.DataFrame:
     """Time Bins with Bin / Start_s / End_s first, then the key measures."""
     keys = [k for k in key_measures(test, bins=True) if k in bins.columns]

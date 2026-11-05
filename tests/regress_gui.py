@@ -58,12 +58,12 @@ check("unlocked after add, no prompts", lockw() == UN and not log and not dialog
 check("Status column after File", list(app.summary_tree["columns"])[:2] == ["File", "Status"])
 check("tabs say not analyzed", "isn't analyzed" in app.bins_note.get())
 app.test_var.set("Open Field"); app._on_test_type(); app.bin_var.set("30"); app.update()
-check("Open Field row shown for Open Field", app.of_bar.winfo_ismapped())
+check("Open Field row shown for Open Field", bool(app.of_bar.winfo_manager()))
 app.gap_var.set("2"); app.update()
 check("file list: File, Type, Status", list(app.file_tree["columns"]) == ["File", "Type", "Status"]
       and app.file_tree.item("0", "values")[1] == "CSV")
 check("first file selected, buttons count it", app._sel == [0] and app.analyze_btn.cget("text") == "Analyze (1)")
-check("no unreadable-frames section for ezTrack files", not app.gaps_section.winfo_ismapped())
+check("no unreadable-frames section for ezTrack files", not bool(app.gaps_section.winfo_manager()))
 app.select_all(); app.analyze(); app.update()
 cols = list(app._summary_df.columns)
 check("Open Field measures computed", all(c in cols for c in ("OF_CenterEntries", "OF_Crossings_Total", "OF_CrossingSpeed_Peak_cm_s")))
@@ -77,7 +77,7 @@ check("Time Bins include OF crossings and center entries",
 check("OF bin crossings add up to the session",
       app.files[0].bins["OF_Crossings_Total"].sum() == app.files[0].summary["OF_Crossings_Total"])
 check("locked after Analyze", lockw() == LK)
-check("lock note shown", app.lock_note.winfo_ismapped())
+check("lock note shown", bool(app.lock_note.winfo_manager()))
 check("overlap warning for OF", "Center and periphery overlap" in log)
 check("bins use 30 s", "30 s" in app.bins_note.get() and app.bins_tree.get_children())
 check("no EPM columns under Open Field", not any(c.startswith("EPM_") for c in app._summary_df.columns))
@@ -98,7 +98,7 @@ check("selection drives tabs", "(2)" in app.bins_note.get())
 app.clear_files(); app.update()
 check("clear empties + unlocks", rows() == [] and lockw() == UN)
 app.test_var.set("Elevated Plus Maze"); app._on_test_type(); app.update()
-check("Open Field row hidden for EPM", not app.of_bar.winfo_ismapped())
+check("Open Field row hidden for EPM", not bool(app.of_bar.winfo_manager()))
 app.add_files([E, O]); log.clear(); dialogs.clear(); app.select_all(); app.analyze(); app.update()
 check("EPM test: OF file gets dialog, skipped", dialogs == [["center", "peripheral"]] and "Some files not analyzed" in log)
 check("EPM file analyzed with EPM measures", rows()[0][1] == "Analyzed" and "EPM_AnxietyIndex" in app._summary_df.columns)
@@ -126,6 +126,27 @@ check("export finished message", "Export finished" in log)
 # A CSV without a reference image: the choice falls back with a note; an
 # ezTrack file (no recorded crop) can't be played back.
 app.path_bg_var.set("Reference image"); app.bg_var.set("Reference image"); app._redraw_plots()
+e1 = app._selected_entry(); p = app._plot_settings()
+texts = lambda fig: {t.get_text() for t in fig.axes[0].texts}
+on = texts(app._path_fig(e1, p)) | texts(app._heat_fig(e1, p))
+app.path_labels_var.set(False); app.heat_labels_var.set(False); p = app._plot_settings()
+off = texts(app._path_fig(e1, p)) | texts(app._heat_fig(e1, p))
+check("Region labels toggle shows/hides the region names on Path and Heatmap",
+      set(e1.data.regions) <= on and not (set(e1.data.regions) & off))
+app.path_labels_var.set(True); app.heat_labels_var.set(True)
+# Smallest window: the left panel's buttons and the plot controls stay reachable.
+app.geometry("900x600"); app.update()
+def inside(w):
+    x, y, r = w.winfo_rootx(), w.winfo_rooty(), app.winfo_rootx() + app.winfo_width()
+    return w.winfo_ismapped() and x + w.winfo_width() <= r + 1 and x >= app.winfo_rootx()
+check("at the smallest window, run buttons are inside the window",
+      all(inside(b) for b in (app.analyze_btn, app.export_btn, app.select_all_btn)))
+app.nb.select(app.tab_path); app.update()
+play = [w for w in app.tab_path.winfo_children()[0].winfo_children()
+        if isinstance(w, gui.ttk.Button) and "Play" in str(w.cget("text"))]
+check("at the smallest window, the Path controls (Play video) are inside the window",
+      play and inside(play[0]))
+app.nb.select(app.tab_summary); app.geometry("1080x720"); app.update()
 check("no reference image: note shown, plots still drawn",
       "no reference" in app.path_bg_note.cget("text") and "no reference" in app.heat_bg_note.cget("text"))
 log.clear(); app.play_video(); app.update()
@@ -142,7 +163,7 @@ if os.path.exists(CLIP):
     check("video listed as Video / Needs setup", vals[1] == "Video" and vals[2] == "Needs setup")
     check("status bar before any regions are drawn points to setup",
           "draw them in Set up videos" in app.status.get())
-    check("Set up videos button shown", app.setup_btn.winfo_ismapped())
+    check("Set up videos button shown", bool(app.setup_btn.winfo_manager()))
     app.open_setup(); app.update()
     win = app._setup_win
     check("setup window opens on the video", win.winfo_exists() and "Clip" in win.video_label.cget("text"))
@@ -204,7 +225,7 @@ if os.path.exists(CLIP):
     win.thresh_var.set("99"); win._step_by(1); app.update()
     check("tracking settings saved and step done", app.config_data["loc_thresh"] == 99
           and "tracking" in v.steps_done and win.step == "regions")
-    check("Tracking section shown in the main window", app.tracking_section.winfo_ismapped()
+    check("Tracking section shown in the main window", bool(app.tracking_section.winfo_manager())
           and "threshold 99%" in app.tracking_text.cget("text"))
     app.test_var.set("Open Field"); win._go("regions"); app.update()
     check("Open Field lists outline and center",
@@ -281,7 +302,7 @@ if os.path.exists(CLIP):
           "⚠" not in app.status.get() and "1 Center" in app.status.get())
     log.clear(); app._set_selection([0]); app.analyze(); app.update()
     check("Analyze skips an untracked video", "Videos not tracked yet" in log)
-    check("gap-filling section shown when videos are listed", app.gaps_section.winfo_ismapped())
+    check("gap-filling section shown when videos are listed", bool(app.gaps_section.winfo_manager()))
 
     # Track (C7): a short session so it's quick; outputs land beside the clip
     # (in the gitignored ezTrack folder) and are removed afterwards.

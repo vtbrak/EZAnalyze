@@ -119,6 +119,66 @@ LOCKED_TIP = (
 )
 
 
+class ScrollPanel(ttk.Frame):
+    """A column whose contents (`inner`) scroll vertically when the window is
+    too short for them. The mouse wheel scrolls it while the pointer is over
+    it; the scrollbar shows only when needed."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.canvas = tk.Canvas(self, highlightthickness=0, borderwidth=0,
+                                background=parent.winfo_toplevel().cget("background"))
+        self.bar = ttk.Scrollbar(self, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.bar.set)
+        self.canvas.grid(row=0, column=0, sticky="ns")
+        self.rowconfigure(0, weight=1)
+        self.inner = ttk.Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.inner, anchor="nw")
+        self.inner.bind("<Configure>", lambda _e: self._fit())
+        self.canvas.bind("<Configure>", lambda _e: self._fit())
+        self.bind("<Enter>", lambda _e: self._wheel_on(True))
+        self.bind("<Leave>", lambda _e: self._wheel_on(self._pointer_inside()))
+
+    def _fit(self) -> None:
+        self.canvas.configure(width=self.inner.winfo_reqwidth(),
+                              scrollregion=(0, 0, self.inner.winfo_reqwidth(),
+                                            self.inner.winfo_reqheight()))
+        needed = self.inner.winfo_reqheight() > self.canvas.winfo_height() > 1
+        if needed and not self.bar.winfo_manager():
+            self.bar.grid(row=0, column=1, sticky="ns")
+        elif not needed and self.bar.winfo_manager():
+            self.bar.grid_forget()
+            self.canvas.yview_moveto(0)
+
+    def _pointer_inside(self) -> bool:
+        """True if the pointer is over this panel or anything in it (a Leave
+        also fires when the pointer moves onto a child widget)."""
+        w = self.winfo_containing(*self.winfo_pointerxy())
+        while w is not None:
+            if w is self:
+                return True
+            w = w.master
+        return False
+
+    def _wheel_on(self, on: bool) -> None:
+        for seq in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            if on:
+                self.bind_all(seq, self._wheel)
+            else:
+                self.unbind_all(seq)
+
+    def _wheel(self, e) -> None:
+        if not self.bar.winfo_manager():
+            return
+        if getattr(e, "num", None) in (4, 5):        # Linux
+            step = -1 if e.num == 4 else 1
+        elif self.tk.call("tk", "windowingsystem") == "aqua":
+            step = -e.delta                           # Mac: small deltas
+        else:
+            step = -int(e.delta / 120) or (-1 if e.delta > 0 else 1)  # Windows
+        self.canvas.yview_scroll(step, "units")
+
+
 @dataclass
 class FileEntry:
     """One file in the list. `summary`/`bins` are filled in by Analyze.
@@ -187,64 +247,10 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
 
     # ------------------------------------------------------------------ UI
     def _build_controls(self):
-        # Toolbar, in working order: files | (video steps) | act on the selection.
-        bar = ttk.Frame(self, padding=(8, 8, 8, 6))
-        bar.pack(side=tk.TOP, fill=tk.X)
-        add_file = ttk.Button(bar, text="Add files…", command=self.open_file)
-        add_file.pack(side=tk.LEFT)
-        Tooltip(add_file, "Add tracking CSVs or videos to the list. You can also "
-                          "drag files or folders onto the window.")
-        add_folder = ttk.Button(bar, text="Add folder…", command=self.open_folder)
-        add_folder.pack(side=tk.LEFT, padx=(6, 0))
-        Tooltip(add_folder, "Add every CSV and video in a folder to the list.")
-        remove = self.remove_btn = ttk.Button(bar, text="Remove",
-                                              command=self.remove_selected)
-        remove.pack(side=tk.LEFT, padx=(6, 0))
-        Tooltip(remove, "Take the selected files out of the list. The files "
-                        "themselves aren't touched.")
-        self.clear_btn = ttk.Button(bar, text="Clear", command=self.clear_files)
-        self.clear_btn.pack(side=tk.LEFT, padx=(6, 0))
-        Tooltip(self.clear_btn, "Clears the file list and unlocks the settings so you "
-                                "can choose them again (e.g. after analyzing one file, "
-                                "before running a folder).")
-        ttk.Separator(bar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
-
-        # Video steps, shown only while videos are in the list.
-        self.video_tools = ttk.Frame(bar)
-        self.setup_btn = ttk.Button(self.video_tools, text="Set up videos…",
-                                    command=self.open_setup)
-        self.setup_btn.pack(side=tk.LEFT)
-        Tooltip(self.setup_btn, "Trim, crop, and prepare each video for tracking, one "
-                                "at a time.")
-        self.video_sep = ttk.Separator(self.video_tools, orient=tk.VERTICAL)
-        self.video_sep.pack(side=tk.LEFT, fill=tk.Y, padx=10)
-
-        self.select_all_btn = ttk.Button(bar, text="Select all", width=10,
-                                         command=self.toggle_select_all)
-        self.select_all_btn.pack(side=tk.LEFT)
-        Tooltip(self.select_all_btn, "Select every file in the list, so Analyze and "
-                                     "Export act on all of them. Ctrl+A (Cmd+A on a "
-                                     "Mac) in the list does the same.")
-        # Track, shown only while videos are in the list.
-        self.track_btn = ttk.Button(bar, text="Track", width=12, command=self.track)
-        Tooltip(self.track_btn, "Track the selected videos, one at a time in the "
-                                "background. Each gets <name>_LocationOutput.csv and "
-                                "<name>_reference.png next to it. The number shows how "
-                                "many videos are selected.")
-        self.analyze_btn = ttk.Button(bar, text="Analyze", width=12, command=self.analyze)
-        self.analyze_btn.pack(side=tk.LEFT, padx=(6, 0))
-        Tooltip(self.analyze_btn, "Analyze the selected files. The number shows how "
-                                  "many are selected.")
-        self.export_btn = ttk.Button(bar, text="Export", width=12, command=self.export)
-        self.export_btn.pack(side=tk.LEFT, padx=(6, 0))
-        Tooltip(self.export_btn, "Export the selected files that have been analyzed. "
-                                 "Each gets <name>_analysis.xlsx, <name>_path.png, and "
-                                 "<name>_heatmap.png next to its CSV (existing files "
-                                 "are overwritten).")
-        about = ttk.Button(bar, text="About", command=self.show_about)
-        about.pack(side=tk.RIGHT)
-        Tooltip(about, "Credits, citation, and license.")
-
+        """Layout (GUI review, option C): a left panel with the file and run
+        buttons above the settings (it scrolls when it doesn't fit), and the
+        file list over the tabs on the right. Each plot tab has its own
+        controls in a column beside the plot."""
         self.status = tk.StringVar()
         status_bar = ttk.Label(
             self, textvariable=self.status, relief=tk.SUNKEN, anchor=tk.W, padding=4
@@ -265,17 +271,77 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                                               maximum=100)
         self.track_progress.pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=8)
 
-        # Body: settings panel on the left; file list over the tabs on the right.
+        # Body: the left panel; the file list over the tabs on the right.
         body = self.body = ttk.Frame(self)
         body.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         body.columnconfigure(1, weight=1)
         body.rowconfigure(0, weight=1)
-        self.settings_panel = ttk.Frame(body, padding=(8, 0, 4, 8))
-        self.settings_panel.grid(row=0, column=0, sticky="ns")
+        scroller = ScrollPanel(body)
+        scroller.grid(row=0, column=0, sticky="ns", pady=(8, 8))
+        self.settings_panel = scroller.inner
+        self.settings_panel.configure(padding=(8, 0, 6, 0))
+        self._build_actions(self.settings_panel)
         self._build_settings_panel(self.settings_panel)
         self.content = ttk.PanedWindow(body, orient=tk.VERTICAL)
-        self.content.grid(row=0, column=1, sticky="nsew", padx=(4, 8), pady=(0, 8))
+        self.content.grid(row=0, column=1, sticky="nsew", padx=(4, 8), pady=8)
         self._build_file_list(self.content)
+
+    def _build_actions(self, panel) -> None:
+        """The Files and Run buttons at the top of the left panel, full width,
+        in working order. About sits at the bottom of the panel."""
+        files = ttk.LabelFrame(panel, text="Files", padding=6)
+        files.pack(side=tk.TOP, fill=tk.X, pady=(0, 8))
+        add_file = ttk.Button(files, text="Add files…", command=self.open_file)
+        add_file.pack(fill=tk.X)
+        Tooltip(add_file, "Add tracking CSVs or videos to the list. You can also "
+                          "drag files or folders onto the window.")
+        add_folder = ttk.Button(files, text="Add folder…", command=self.open_folder)
+        add_folder.pack(fill=tk.X, pady=(4, 0))
+        Tooltip(add_folder, "Add every CSV and video in a folder to the list.")
+        pair = ttk.Frame(files)
+        pair.pack(fill=tk.X, pady=(4, 0))
+        pair.columnconfigure((0, 1), weight=1, uniform="pair")
+        remove = self.remove_btn = ttk.Button(pair, text="Remove", width=7,
+                                              command=self.remove_selected)
+        remove.grid(row=0, column=0, sticky="ew", padx=(0, 2))
+        Tooltip(remove, "Take the selected files out of the list. The files "
+                        "themselves aren't touched.")
+        self.clear_btn = ttk.Button(pair, text="Clear", width=7, command=self.clear_files)
+        self.clear_btn.grid(row=0, column=1, sticky="ew", padx=(2, 0))
+        Tooltip(self.clear_btn, "Clears the file list and unlocks the settings so you "
+                                "can choose them again (e.g. after analyzing one file, "
+                                "before running a folder).")
+
+        run = self.run_section = ttk.LabelFrame(panel, text="Run", padding=6)
+        run.pack(side=tk.TOP, fill=tk.X, pady=(0, 8))
+        # Set up videos… and Track show only while videos are in the list.
+        self.setup_btn = ttk.Button(run, text="Set up videos…", command=self.open_setup)
+        Tooltip(self.setup_btn, "Trim, crop, and prepare each video for tracking, one "
+                                "at a time.")
+        self.select_all_btn = ttk.Button(run, text="Select all", command=self.toggle_select_all)
+        self.select_all_btn.pack(fill=tk.X)
+        Tooltip(self.select_all_btn, "Select every file in the list, so Track, Analyze "
+                                     "and Export act on all of them. Ctrl+A (Cmd+A on a "
+                                     "Mac) in the list does the same.")
+        self.track_btn = ttk.Button(run, text="Track", command=self.track)
+        Tooltip(self.track_btn, "Track the selected videos, one at a time in the "
+                                "background. Each gets <name>_LocationOutput.csv and "
+                                "<name>_reference.png next to it. The number shows how "
+                                "many videos are selected.")
+        self.analyze_btn = ttk.Button(run, text="Analyze", command=self.analyze)
+        self.analyze_btn.pack(fill=tk.X, pady=(4, 0))
+        Tooltip(self.analyze_btn, "Analyze the selected files. The number shows how "
+                                  "many are selected.")
+        self.export_btn = ttk.Button(run, text="Export", command=self.export)
+        self.export_btn.pack(fill=tk.X, pady=(4, 0))
+        Tooltip(self.export_btn, "Export the selected files that have been analyzed. "
+                                 "Each gets <name>_analysis.xlsx, <name>_path.png, and "
+                                 "<name>_heatmap.png next to its CSV (existing files "
+                                 "are overwritten).")
+        about = ttk.Button(panel, text="About", command=self.show_about)
+        about.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 4))
+        Tooltip(about, "Credits, citation, and license.")
+
 
     def _setting_row(self, section, row: int, label: str, widget) -> None:
         ttk.Label(section, text=label, wraplength=130, justify=tk.LEFT).grid(
@@ -433,100 +499,127 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             except tk.TclError:
                 pass  # <Command-a> only exists on a Mac
 
+    CONTROL_WIDTH = 170  # the plot tabs' control column (wrap width for notes)
+
+    def _plot_column(self, parent) -> ttk.Frame:
+        """The control column on the right of a plot tab."""
+        col = ttk.Frame(parent, padding=(8, 8, 4, 8))
+        col.pack(side=tk.RIGHT, fill=tk.Y)
+        col.columnconfigure(1, weight=1)
+        return col
+
+    @staticmethod
+    def _col_row(col, row: int, label: str, widget) -> None:
+        ttk.Label(col, text=label).grid(row=row, column=0, sticky="w", pady=2)
+        widget.grid(row=row, column=1, sticky="e", padx=(6, 0), pady=2)
+
+    @staticmethod
+    def _col_heading(col, row: int, text: str) -> None:
+        ttk.Label(col, text=text, foreground="gray").grid(
+            row=row, column=0, columnspan=2, sticky="w", pady=(10 if row else 0, 2))
+
+    def _color_pick_row(self, col, row: int, text: str, command, color: str):
+        """A color button with a swatch (a plain tk.Label so its background
+        can show the chosen color). Returns (button, swatch)."""
+        frame = ttk.Frame(col)
+        frame.grid(row=row, column=0, columnspan=2, sticky="ew", pady=2)
+        btn = ttk.Button(frame, text=text, command=command)
+        btn.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        swatch = tk.Label(frame, width=2, background=color, relief=tk.SOLID, borderwidth=1)
+        swatch.pack(side=tk.LEFT, padx=(4, 0))
+        return btn, swatch
+
+    def _labels_check(self, col, row: int, var) -> None:
+        check = ttk.Checkbutton(col, text="Region labels", variable=var,
+                                command=self._schedule_redraw)
+        check.grid(row=row, column=0, columnspan=2, sticky="w", pady=2)
+        Tooltip(check, "Show each region's name on the plot (also in the exported "
+                       "image).")
+
     def _build_path_controls(self, parent):
-        """Path-tab styling row. Changes redraw the plots."""
+        """Path-tab controls, in a column beside the plot. Changes redraw it."""
         p = self.config_data["plot"]
-        bar = ttk.Frame(parent, padding=(4, 6))
-        bar.pack(side=tk.TOP, fill=tk.X)
+        col = self._plot_column(parent)
 
-        ttk.Label(bar, text="Point size:").pack(side=tk.LEFT)
+        self._col_heading(col, 0, "Points")
         self.size_var = tk.StringVar(value=f"{p['point_size']:g}")
-        ttk.Spinbox(
-            bar, from_=0.5, to=50, increment=0.5, width=5, textvariable=self.size_var
-        ).pack(side=tk.LEFT, padx=(4, 12))
-
-        ttk.Label(bar, text="Transparency (alpha):").pack(side=tk.LEFT)
+        self._col_row(col, 1, "Size", ttk.Spinbox(
+            col, from_=0.5, to=50, increment=0.5, width=5, textvariable=self.size_var))
         self.alpha_var = tk.StringVar(value=f"{p['alpha']:g}")
-        ttk.Spinbox(
-            bar, from_=0.05, to=1.0, increment=0.05, width=5, textvariable=self.alpha_var
-        ).pack(side=tk.LEFT, padx=(4, 12))
-
+        alpha = ttk.Spinbox(col, from_=0.05, to=1.0, increment=0.05, width=5,
+                            textvariable=self.alpha_var)
+        self._col_row(col, 2, "Transparency", alpha)
+        Tooltip(alpha, "Alpha: 1 = solid, lower = see-through, so overlapping points "
+                       "show where the animal spent more time.")
         self.speed_var = tk.BooleanVar(value=p["color_by_speed"])
-        ttk.Checkbutton(
-            bar, text="Color by speed", variable=self.speed_var,
-            command=self._on_color_mode,
-        ).pack(side=tk.LEFT, padx=(0, 8))
-
+        ttk.Checkbutton(col, text="Color by speed", variable=self.speed_var,
+                        command=self._on_color_mode).grid(
+            row=3, column=0, columnspan=2, sticky="w", pady=2)
         self.point_color = p["point_color"]
-        self.color_btn = ttk.Button(bar, text="Point color…", command=self._pick_color)
-        self.color_btn.pack(side=tk.LEFT)
-        # A plain tk.Label so its background can show the chosen color.
-        self.color_swatch = tk.Label(
-            bar, width=2, background=self.point_color, relief=tk.SOLID, borderwidth=1
-        )
-        self.color_swatch.pack(side=tk.LEFT, padx=(4, 0))
+        self.color_btn, self.color_swatch = self._color_pick_row(
+            col, 4, "Point color…", self._pick_color, self.point_color)
 
-        ttk.Label(bar, text="Background:").pack(side=tk.LEFT, padx=(12, 0))
+        self._col_heading(col, 5, "Show")
+        ttk.Label(col, text="Background").grid(row=6, column=0, columnspan=2, sticky="w")
         self.path_bg_var = tk.StringVar(value=PATH_BACKGROUNDS[p["path_background"]])
-        box = ttk.Combobox(bar, textvariable=self.path_bg_var, state="readonly", width=15,
+        box = ttk.Combobox(col, textvariable=self.path_bg_var, state="readonly", width=16,
                            values=list(PATH_BACKGROUNDS.values()))
-        box.pack(side=tk.LEFT, padx=(4, 0))
+        box.grid(row=7, column=0, columnspan=2, sticky="ew", pady=2)
         Tooltip(box, NO_REFERENCE_TIP)
-        self.path_bg_note = ttk.Label(bar, foreground="gray")
-        self.path_bg_note.pack(side=tk.LEFT, padx=(6, 0))
-        self._play_button(bar)
+        self.path_bg_note = ttk.Label(col, foreground="gray", wraplength=self.CONTROL_WIDTH)
+        self.path_bg_note.grid(row=8, column=0, columnspan=2, sticky="w")
+        self.path_labels_var = tk.BooleanVar(value=p["path_labels"])
+        self._labels_check(col, 9, self.path_labels_var)
+        self._play_button(col, 10)
 
         for var in (self.size_var, self.alpha_var, self.path_bg_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
         self._on_color_mode(redraw=False)
 
-    def _play_button(self, bar) -> None:
-        btn = ttk.Button(bar, text="Play video…", command=self.play_video)
-        btn.pack(side=tk.RIGHT)
+    def _play_button(self, col, row: int) -> None:
+        col.rowconfigure(row, weight=1)  # pushes the button to the bottom
+        btn = ttk.Button(col, text="Play video…", command=self.play_video)
+        btn.grid(row=row, column=0, columnspan=2, sticky="sew", pady=(12, 0))
         Tooltip(btn, "Play the selected file's video with its tracked position drawn "
                      "on, to check the tracking. Needs the video in the same folder as "
                      "the tracking file.")
 
     def _build_heatmap_controls(self, parent):
-        """Heatmap-tab styling row. Changes redraw the plots."""
+        """Heatmap-tab controls, in a column beside the plot. Changes redraw it."""
         p = self.config_data["plot"]
-        bar = ttk.Frame(parent, padding=(4, 6))
-        bar.pack(side=tk.TOP, fill=tk.X)
+        col = self._plot_column(parent)
 
-        ttk.Label(bar, text="Bins:").pack(side=tk.LEFT)
+        self._col_heading(col, 0, "Cells")
         self.hbins_var = tk.StringVar(value=str(p["heatmap_bins"]))
-        ttk.Spinbox(
-            bar, from_=5, to=300, increment=5, width=5, textvariable=self.hbins_var
-        ).pack(side=tk.LEFT, padx=(4, 12))
-
-        ttk.Label(bar, text="Colormap:").pack(side=tk.LEFT)
+        bins = ttk.Spinbox(col, from_=5, to=300, increment=5, width=5,
+                           textvariable=self.hbins_var)
+        self._col_row(col, 1, "Bins", bins)
+        Tooltip(bins, "Number of square cells along the longer side of the arena.")
         if p["heatmap_cmap"] not in HEATMAP_CMAPS:  # hand-edited config
             p["heatmap_cmap"] = HEATMAP_CMAPS[0]
         self.cmap_var = tk.StringVar(value=p["heatmap_cmap"])
-        ttk.Combobox(
-            bar, textvariable=self.cmap_var, values=HEATMAP_CMAPS,
-            state="readonly", width=10,
-        ).pack(side=tk.LEFT, padx=(4, 16))
+        self._col_row(col, 2, "Colormap", ttk.Combobox(
+            col, textvariable=self.cmap_var, values=HEATMAP_CMAPS, state="readonly",
+            width=8))
 
-        ttk.Label(bar, text="Background:").pack(side=tk.LEFT)
+        self._col_heading(col, 3, "Show")
+        ttk.Label(col, text="Background").grid(row=4, column=0, columnspan=2, sticky="w")
         self.bg_var = tk.StringVar(value=HEATMAP_BACKGROUNDS[p["heatmap_bg_mode"]])
-        bg_box = ttk.Combobox(bar, textvariable=self.bg_var, state="readonly", width=15,
+        bg_box = ttk.Combobox(col, textvariable=self.bg_var, state="readonly", width=16,
                               values=list(HEATMAP_BACKGROUNDS.values()))
-        bg_box.pack(side=tk.LEFT, padx=(4, 8))
+        bg_box.grid(row=5, column=0, columnspan=2, sticky="ew", pady=2)
         bg_box.bind("<<ComboboxSelected>>", lambda _e: self._on_background())
         Tooltip(bg_box, "What shows in cells the animal never entered. None: empty "
                         "(transparent in a saved PNG). Flat color: one color, easy to "
                         "recolor in an image editor. " + NO_REFERENCE_TIP)
         self.bg_color = p["heatmap_bg_color"]
-        self.bg_btn = ttk.Button(bar, text="Background color…", command=self._pick_bg_color)
-        self.bg_btn.pack(side=tk.LEFT)
-        self.bg_swatch = tk.Label(
-            bar, width=2, background=self.bg_color, relief=tk.SOLID, borderwidth=1
-        )
-        self.bg_swatch.pack(side=tk.LEFT, padx=(4, 0))
-        self.heat_bg_note = ttk.Label(bar, foreground="gray")
-        self.heat_bg_note.pack(side=tk.LEFT, padx=(6, 0))
-        self._play_button(bar)
+        self.bg_btn, self.bg_swatch = self._color_pick_row(
+            col, 6, "Background color…", self._pick_bg_color, self.bg_color)
+        self.heat_bg_note = ttk.Label(col, foreground="gray", wraplength=self.CONTROL_WIDTH)
+        self.heat_bg_note.grid(row=7, column=0, columnspan=2, sticky="w")
+        self.heat_labels_var = tk.BooleanVar(value=p["heatmap_labels"])
+        self._labels_check(col, 8, self.heat_labels_var)
+        self._play_button(col, 9)
 
         for var in (self.hbins_var, self.cmap_var):
             var.trace_add("write", lambda *_: self._schedule_redraw())
@@ -588,13 +681,13 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         self.nb.add(self.tab_path, text="Path")
         self._build_path_controls(self.tab_path)
         self.path_area = ttk.Frame(self.tab_path)
-        self.path_area.pack(fill=tk.BOTH, expand=True)
+        self.path_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.tab_heat = ttk.Frame(self.nb)
         self.nb.add(self.tab_heat, text="Heatmap")
         self._build_heatmap_controls(self.tab_heat)
         self.heat_area = ttk.Frame(self.tab_heat)
-        self.heat_area.pack(fill=tk.BOTH, expand=True)
+        self.heat_area.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     def _make_tree(self, parent) -> ttk.Treeview:
         wrap = ttk.Frame(parent)
@@ -697,6 +790,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
         p["heatmap_bg_mode"] = self._choice(HEATMAP_BACKGROUNDS, self.bg_var.get())
         p["heatmap_background"] = p["heatmap_bg_mode"] == "color"
         p["path_background"] = self._choice(PATH_BACKGROUNDS, self.path_bg_var.get())
+        p["path_labels"] = bool(self.path_labels_var.get())
+        p["heatmap_labels"] = bool(self.heat_labels_var.get())
         p["heatmap_bg_color"] = self.bg_color
         return p
 
@@ -750,6 +845,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             point_color=p["point_color"],
             alpha=p["alpha"],
             reference=self._reference(entry) if p["path_background"] == "reference" else None,
+            labels=p["path_labels"],
         )
 
     def _heat_fig(self, entry, p):
@@ -758,6 +854,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
             background=p["heatmap_bg_color"] if p["heatmap_bg_mode"] == "color" else None,
             reference=(self._reference(entry) if p["heatmap_bg_mode"] == "reference"
                        else None),
+            labels=p["heatmap_labels"],
         )
 
     def _on_color_mode(self, redraw: bool = True) -> None:
@@ -1186,14 +1283,12 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
     def _refresh(self) -> None:
         """Re-sync everything that depends on the file list."""
         if any(e.video is not None for e in self.files):
-            if not self.video_tools.winfo_ismapped():
-                self.video_tools.pack(side=tk.LEFT, before=self.select_all_btn)
-        else:
-            self.video_tools.pack_forget()
-        if any(e.video is not None for e in self.files):
+            if not self.setup_btn.winfo_manager():
+                self.setup_btn.pack(fill=tk.X, pady=(0, 4), before=self.select_all_btn)
             if not self.track_btn.winfo_manager():
-                self.track_btn.pack(side=tk.LEFT, padx=(6, 0), before=self.analyze_btn)
+                self.track_btn.pack(fill=tk.X, pady=(4, 0), before=self.analyze_btn)
         else:
+            self.setup_btn.pack_forget()
             self.track_btn.pack_forget()
         running = self._runner is not None
         for btn in (self.clear_btn, self.remove_btn, self.track_btn):
@@ -1815,6 +1910,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 "Transparency (alpha)": plot["alpha"],
                 "Color by speed": plot["color_by_speed"],
                 "Point color": plot["point_color"],
+                "Region labels": plot["path_labels"],
                 "Background": PATH_BACKGROUNDS[plot["path_background"]]
                 + ("" if plot["path_background"] != "reference"
                    or self._reference(entry) is not None else " (none for this file)"),
@@ -1826,6 +1922,7 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                 + ("" if plot["heatmap_bg_mode"] != "reference"
                    or self._reference(entry) is not None else " (none for this file)"),
                 "Background color": plot["heatmap_bg_color"],
+                "Region labels": plot["heatmap_labels"],
             },
             **self._tracking_sections(entry),
         })

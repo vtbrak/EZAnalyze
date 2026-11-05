@@ -66,6 +66,9 @@ DEFAULTS: dict = {
         # is kept in step with "color" for older configs).
         "path_background": "none",
         "heatmap_bg_mode": "none",
+        # Region names drawn on the Path and Heatmap plots.
+        "path_labels": True,
+        "heatmap_labels": True,
     },
     # Which Summary-table column groups are shown on screen (export has all).
     "summary_groups": {

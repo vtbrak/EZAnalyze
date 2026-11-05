@@ -159,6 +159,7 @@ def path_figure(
     point_color: str = "#1f77b4",
     alpha: float = 0.8,
     reference: np.ndarray | None = None,
+    labels: bool = True,
 ) -> Figure:
     """Trajectory plot of X/Y points, colored by speed or a single solid color.
     With `reference` (the arena's reference image), the plot sits on it and
@@ -169,7 +170,7 @@ def path_figure(
     ax = fig.add_subplot(111)
 
     extent = _draw_reference(ax, reference) if reference is not None else None
-    _draw_rois(ax, data, color=REFERENCE_ROI_COLOR if extent else "0.6")
+    _draw_rois(ax, data, labels=labels, color=REFERENCE_ROI_COLOR if extent else "0.6")
 
     x = df["X"].to_numpy()
     y = df["Y"].to_numpy()
@@ -226,6 +227,7 @@ def heatmap_figure(
     cmap: str = "inferno",
     background: str | None = None,
     reference: np.ndarray | None = None,
+    labels: bool = True,
 ) -> Figure:
     """Occupancy heatmap: where the animal spent the most time.
 
@@ -292,7 +294,8 @@ def heatmap_figure(
 
     _draw_rois(ax, data, labels=False,
                color=REFERENCE_ROI_COLOR if extent_ref else "0.6")
-    _outside_labels(ax, polys, boxed=extent_ref is not None)
+    if labels:
+        _outside_labels(ax, polys, boxed=extent_ref is not None)
     if extent_ref:
         _show_whole(ax, extent_ref)
 

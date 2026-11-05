@@ -444,8 +444,9 @@ the test/fps, Analyze, and check the settings grey out; hover a locked setting
 for its tooltip; add the same file twice (bold first line, Add Again /
 Ignore); drag a CSV or folder onto the window; analyze the Open Field file
 (overlap warning); restyle Path and Heatmap; open Regions… (✓/⚠ line); Export
-and open the workbook and images; check every toolbar row fits; close and
-reopen (settings remembered).
+and open the workbook and images; check the left panel's buttons and the
+plot control column fit (shrink the window: the left panel should scroll,
+nothing cut off); close and reopen (settings remembered).
 
 **PC test checklist, video tracking (C9, 2026-11-04):** on the
 `video-tracking` branch, run the installer again (new packages: OpenCV,
@@ -933,6 +934,19 @@ and license ezTrack requires.
 3. **Status steps per file** with color tags: *Needs setup → Ready to track →
    Tracking 45% → Not analyzed → Analyzed*, plus *Failed* (with the reason).
    CSVs start at *Not analyzed*.
+   **Changed 2026-11-04 (user, after C9):** buttons disappeared off the right
+   of the toolbar in a narrow window. Of three mocked layouts (wrapping rows;
+   two grouped rows; side panels) the user chose **side panels**: the Files
+   (Add files / Add folder / Remove / Clear) and Run (Set up videos… / Select
+   all / Track / Analyze / Export) buttons are full-width at the top of the
+   left panel above the settings, About at its bottom; the panel scrolls
+   (mouse wheel, scrollbar only when needed) when the window is short. The
+   Path and Heatmap controls moved from a row above the plot to a **column
+   on the right of the plot** (Points / Cells, then Show: Background, Region
+   labels, Play video… at the bottom). New **Region labels** checkbox on
+   both tabs (config `path_labels`, `heatmap_labels`; also in the Settings
+   sheet) turns the region names on the plots on and off. The item below
+   describes the original toolbar.
 4. **Toolbar in working order:** Add files / Add folder / **Remove** / Clear |
    **Set up videos…** | **Select all** / **Track** / **Analyze** / **Export** |
    **About**. Set up videos… and Track show only when videos are listed.

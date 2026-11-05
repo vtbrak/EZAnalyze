@@ -159,6 +159,17 @@ default they add no time, distance or entries. Turning on **Fill short gaps**
 in the settings panel instead joins gaps of up to the chosen length with a
 straight line for the analysis. The saved file is never changed.
 
+## Window layout
+
+The **left panel** holds the **Files** buttons (Add files…, Add folder…,
+Remove, Clear) and the **Run** buttons (Set up videos… and Track when videos
+are listed, Select all, Analyze, Export), then the settings, with **About**
+at the bottom. In a short window the panel scrolls. The file list sits above
+the tabs. The **Path** and **Heatmap** tabs have their controls in a column
+beside the plot: point or cell style, Background, **Region labels** (show or
+hide the region names on the plot and in the exported image), and **Play
+video…**.
+
 ## Working with files
 1. **Add files…**, **Add folder…**, or drag files/folders onto the window.
    Files build up the **file list** (always visible above the tabs), each

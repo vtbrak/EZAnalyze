@@ -1643,6 +1643,11 @@ Done:
   **object recognition** analysis that needs manual scoring (not planned
   yet; the user mentioned it 2026-11-05).
 - ✅ **Object recognition (§15)**: decided and built 2026-11-05 (O1–O4).
+- ✅ **Version 0.9, the testing release (user, 2026-11-05):** `core/version.py`
+  (`VERSION`), shown in About and recorded in each exported Settings sheet;
+  tagged `v0.9` (GitHub pre-release). The user first asked for 1.0, then chose
+  0.x since it's about to be tested: fixes become 0.9.1, 0.9.2, …, and 1.0
+  follows testing.
 - ✅ **Merged `video-tracking` into `main` (user, 2026-11-05)** for outside
   testers downloading from GitHub the next day; `TESTING.md` added (install,
   what to try for each test, how to report problems, known limitations).

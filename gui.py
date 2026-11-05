@@ -74,6 +74,7 @@ from core.export import output_paths, save_figure, settings_table, write_analysi
 from core.gaps import fill_gaps
 from core.video import (VIDEO_EXTENSIONS, UNREADABLE_WARN, check_readable, is_video,
                         video_info)
+from core.version import VERSION
 from core.video_setup import OBJECT_TEST, VideoSetup
 from core.objects import (distance_px, load_scoring, object_metrics, scoring_table,
                           trial_summary)
@@ -2096,6 +2097,7 @@ class TrackTamerApp(tk.Tk, _DnDMixin):
                 "Source file": entry.path,
                 "Video (File column)": entry.data.name,
                 "Exported": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Track Tamer version": VERSION,
             },
             "Analysis": analysis,
             "Region roles": {r: ROLE_LABELS.get(k, k) or "Unassigned"

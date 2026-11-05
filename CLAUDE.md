@@ -7,8 +7,9 @@ detailed plan lives in [ROADMAP.md](ROADMAP.md) — read it before building.
 ## What this is
 A desktop app ("Track Tamer") that analyzes video-based rodent locomotion
 tracking CSVs (`*_LocationOutput.csv`, one row per video frame) and produces
-summary metrics, time-binned tables, path plots, and heatmaps. Supports two
-assays: **Elevated Plus Maze (EPM)** and **Open Field**.
+summary metrics, time-binned tables, path plots, and heatmaps. Supports
+**Elevated Plus Maze (EPM)**, **Open Field** and **Object Recognition**, and
+tracks videos itself (adapted from ezTrack).
 
 ## Hard constraints (from the user)
 - **Do NOT compile/bundle the app (PyInstaller etc.) until explicitly told.**
@@ -110,6 +111,10 @@ and §9 export are done. Immobility is deferred (ROADMAP §11). Everything in
 the current build order is built; next steps come from the user (and the
 first PC test when they're ready). **ROADMAP "Build order" is
 the source of truth.**
+**Version 0.9** (2026-11-05, the testing release; user chose 0.x): `core/version.py`
+holds `VERSION` (About window, exported Settings sheet); git tag `v0.9`
+(GitHub pre-release). Fixes from testers go out as 0.9.1, 0.9.2, …; 1.0 comes
+after testing. Bump `VERSION` and tag for each release.
 **`video-tracking` was merged into `main` on 2026-11-05** (fast-forward) for
 the user's first outside testers; work continues on `main`. Tester guide:
 `TESTING.md` (keep it in step with the UI).

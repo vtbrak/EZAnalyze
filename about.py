@@ -6,11 +6,14 @@ import os
 import tkinter as tk
 from tkinter import ttk
 
+from core.version import VERSION
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 CREDITS = (
-    "Analyzes rodent tracking data (Elevated Plus Maze and Open Field) and "
-    "turns it into summary measures, time bins, path plots, and heatmaps.\n\n"
+    "Tracks rodents in video and analyzes the tracking (Elevated Plus Maze, "
+    "Open Field and Object Recognition), turning it into summary measures, "
+    "time bins, path plots, and heatmaps.\n\n"
     "Video tracking is adapted from ezTrack (github.com/denisecailab/ezTrack) "
     "by Zachary T. Pennington, Zhe Dong, Yu Feng, Lauren M. Vetere, Lucia "
     "Page-Harley, Tristan Shuman, and Denise J. Cai, used under the GNU General "
@@ -34,6 +37,8 @@ class AboutDialog(tk.Toplevel):
         frame = ttk.Frame(self, padding=16)
         frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(frame, text="Track Tamer", font=("TkDefaultFont", 14, "bold")).pack(
+            anchor="w")
+        ttk.Label(frame, text=f"Version {VERSION}", foreground="gray").pack(
             anchor="w", pady=(0, 8))
         ttk.Label(frame, text=CREDITS, wraplength=460, justify=tk.LEFT).pack(anchor="w")
 

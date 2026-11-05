@@ -98,6 +98,10 @@ if os.path.exists(xlsx):
     print("   sheets:", list(sheets))
     check("export has the summary columns and an Interactions sheet",
           "OR_DiscriminationIndex" in sheets["Summary"].columns and "Interactions" in sheets)
+    from core.version import VERSION
+    st = dict(zip(sheets["Settings"]["Setting"], sheets["Settings"]["Value"]))
+    check("the Settings sheet records the program version",
+          str(st.get("Track Tamer version")) == VERSION)
 from core.plotting import path_figure, heatmap_figure
 for fig in (app._path_fig(e, app._plot_settings()), app._heat_fig(e, app._plot_settings())):
     ax = fig.axes[0]

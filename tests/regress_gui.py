@@ -496,7 +496,10 @@ else:
 
 app.show_about(); app.update()
 about = [w for w in app.winfo_children() if w.winfo_class() == "Toplevel"]
-check("About window opens", about and "Track Tamer" in about[0].title())
+from core.version import VERSION
+check(f"About window opens and shows version {VERSION}", about and "Track Tamer" in about[0].title()
+      and any(getattr(w, "cget", lambda k: "")("text") == f"Version {VERSION}"
+              for w in about[0].winfo_children()[0].winfo_children()))
 about[0].destroy()
 app._on_close()
 c = json.load(open(cfg))

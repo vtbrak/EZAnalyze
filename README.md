@@ -1,5 +1,8 @@
 # Track Tamer
 
+**Version 0.9** (November 2026): the testing release. See
+[TESTING.md](TESTING.md) to try it.
+
 Tracks a rodent's position in **videos** of an Elevated Plus Maze or Open
 Field, and analyzes location tracking CSVs (`*_LocationOutput.csv`: one row per
 video frame with position, region, and distance data, from this program or

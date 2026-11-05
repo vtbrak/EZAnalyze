@@ -141,6 +141,9 @@ the user's object trial `Examples/1_2026-06-26_14-03-15.mp4`
 (`tests/test_objects_video.py`).
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
+**Capture-software JSON (ROADMAP §16)** is planned for after 1.0: a JSON
+sidecar per video from the user's own capture software; draft spec in
+`docs/capture_metadata.md` (its own `schema_version`). Don't build before 1.0.
 **Acoustic startle (ASR) from video** is planned in ROADMAP §13 (motion
 index with an adjustable 0–255 intensity threshold, default 15; PPI and
 habituation); not built. **When ASR work starts, first remind the user to put

@@ -1441,6 +1441,43 @@ trial: 67 visits at 4 cm (37 at object 1, 30 at object 2).
 tracking; draw the objects on the Scale step; objects on the saved
 `_tracked.mp4`.
 
+### 16. Experiment information from the capture software (requested 2026-11-05; after 1.0)
+The user is writing capture software that records the videos. It will write
+a JSON file beside each video (`<video name>.json`) with the experiment
+information, and Track Tamer reads it when the video is added, filling in
+what it can. **Not before 1.0** (the user's order). Draft field list, for the
+user to hand to the capture-software project:
+**[docs/capture_metadata.md](docs/capture_metadata.md)** (schema 1).
+What it would fill in automatically:
+- **Test type** (and a warning when videos in one load differ).
+- **Frame rate** from the measured rate; **dropped frames** marked like
+  unreadable frames so timing stays right.
+- **Trial start** from an "animal placed" event, and the **session length**
+  from the planned duration.
+- **Object Recognition**: day, phase, each object's type (familiar / novel /
+  moved) and identity; draft circles if the rig is calibrated.
+- **Drafts for crop and scale** from a fixed rig's calibration, for the user
+  to check (each video is still analyzed against its own setup; same idea as
+  "Start from previous video").
+- **Animal and experiment columns** in the Summary and export: animal ID,
+  sex, strain, group/treatment, experimenter, rig, cohort and so on, so the
+  exported table is ready for statistics by group.
+- **Disturbances** marked during recording, listed in the Review tab.
+- Later, **ASR stimuli** (§13) instead of separate stimulus logs.
+Rules: every field optional except `schema_version` and `video.file`;
+unknown fields ignored; units in field names; frames counted in the video
+file from 0; exact strings for values Track Tamer acts on.
+**Open questions for when it's built:** what wins when the JSON and the
+user's setup disagree (proposed: JSON fills only what's empty or a draft,
+and the user can always change it); whether the sidecar's information should
+also be written into the tracking file (proposed: yes, so a tracking file
+carries it without the JSON); gitignore the sidecars' real data (they hold
+animal information).
+**Versioning:** the JSON has its own `schema_version`, separate from Track
+Tamer's version, so either program can change on its own schedule; Track
+Tamer reads every schema version it knows. Built on a feature branch
+(`capture-metadata`) after 1.0 and released as **1.1**.
+
 ## Open questions — RESOLVED (2026-10-09)
 1. **EPM anxiety index** — ✅ report all three: %open time & %open entries, the
    composite Anxiety Index, and the closed/open time ratio. (See §4.)
@@ -1643,6 +1680,8 @@ Done:
   **object recognition** analysis that needs manual scoring (not planned
   yet; the user mentioned it 2026-11-05).
 - ✅ **Object recognition (§15)**: decided and built 2026-11-05 (O1–O4).
+- **Experiment information from the capture software (§16)**: planned for
+  after 1.0 (1.1); draft field list in `docs/capture_metadata.md`.
 - ✅ **Version 0.9, the testing release (user, 2026-11-05):** `core/version.py`
   (`VERSION`), shown in About and recorded in each exported Settings sheet;
   tagged `v0.9` (GitHub pre-release). The user first asked for 1.0, then chose

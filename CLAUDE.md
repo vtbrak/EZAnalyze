@@ -116,7 +116,8 @@ holds `VERSION` (About window, exported Settings sheet); git tag `v0.9`
 (GitHub pre-release). Fixes from testers go out as 0.9.1, 0.9.2, …; 1.0 comes
 after testing. Bump `VERSION` and tag for each release.
 **`video-tracking` was merged into `main` on 2026-11-05** (fast-forward) for
-the user's first outside testers; work continues on `main`. Tester guide:
+the user's first outside testers; work continues on `main`, and the
+`video-tracking` branch was deleted (local and GitHub) the same day. Tester guide:
 `TESTING.md` (keep it in step with the UI).
 **Video analysis (ROADMAP §12) was built on the `video-tracking` branch**
 (started 2026-10-30): adapting ezTrack (GPL-3.0, github.com/denisecailab/ezTrack;
@@ -131,7 +132,7 @@ build (Location Tracking first). The GUI review is decided (ROADMAP §12, end):
 settings panel, always-visible file list, Track / Analyze / Export acting on
 the selected files with a Select all button, one video setup window.
 **Video build (ROADMAP §12, "Video build progress" checklist):**
-C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. Next steps come from the user (PC test with ROADMAP §10's video checklist, merge into `main`, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
+C0–C9 (with C5b) done: **Location Tracking is complete**. Next steps come from the user (PC test with ROADMAP §10's video checklist, then Freeze Analysis / ASR when asked). Each chunk is committed and pushed when done.
 **Object recognition (ROADMAP §15) is built** (2026-11-05, on
 `video-tracking`, O1–O4): test type "Object Recognition"; setup step 5
 "Objects" (circles, Familiar/Novel/Moved, day, phase); Zone distance box

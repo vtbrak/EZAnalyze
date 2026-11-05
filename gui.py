@@ -1086,7 +1086,8 @@ class BehaviorTrackerApp(tk.Tk, _DnDMixin):
                                      "and click Track, then review it here.")
         else:
             self.review.load(entry.data, entry.video.path if entry.video else None,
-                             self._current_roles([entry]), self._review_cutoff())
+                             self._current_roles([entry]), self._review_cutoff(),
+                             title=entry.label)
 
     def _warn_lost(self, entries) -> None:
         """After Analyze: flag files where the point stayed outside the regions

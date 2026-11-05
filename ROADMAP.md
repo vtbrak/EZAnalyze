@@ -1561,6 +1561,13 @@ Done:
   video frame 0), so they wouldn't exist with the start set at placement;
   stretch 3 (0:29.74, 2.34 s, beside open arm 2) is a head dip. **The EPM
   rules hold** (nearest region; 5 s cutoff).
+  **Changed (user):** the video inside the Review tab was too cramped. The
+  tab now holds the points-to-review list and an **Open playback window**
+  button; the video plays in its own resizable window (`PlaybackWindow`),
+  and clicking a row opens it (or brings it forward) at that frame. Loading
+  another file closes the window. A separate window will also serve a future
+  **object recognition** analysis that needs manual scoring (not planned
+  yet; the user mentioned it 2026-11-05).
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

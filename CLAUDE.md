@@ -80,8 +80,10 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   Open Field = periphery (anything not center); EPM = nearest region (head
   dips count for that arm). Stretches outside are listed in the **Review tab**
   and flagged at a per-test cutoff (config `review_cutoff_s`, OF 1 s / EPM
-  5 s) as "tracker may be lost". The Review tab replaced the Play video…
-  window and buttons. **Center/periphery must never
+  5 s) as "tracker may be lost". The Review tab (list + "Open playback
+  window"; a row click opens the window at that frame) replaced the Play
+  video… buttons; the video plays in its own window (in-tab was too cramped,
+  and a window suits future manual scoring such as object recognition). **Center/periphery must never
   overlap**: that's a file error, so warn the user.
 - **Test type** chosen via a **dropdown** (EPM / Open Field); no auto-detect.
 - **All thresholds** are **input boxes in the UI, persisted to `config.json`**.

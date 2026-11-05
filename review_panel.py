@@ -1,19 +1,21 @@
-"""The Review tab: a tracked file's video with its tracked position drawn on,
-and a list of the moments to check (user, 2026-11-05; replaces the Play
-video… window).
+"""The Review tab and the playback window (user, 2026-11-05).
 
-The list holds every stretch where the tracked point was outside all the drawn
-regions. Brief ones are jumps at the wall or head dips, and they count for
-the region they belong to. A long one may mean the tracker got stuck on a
-dark spot or a reflection, so stretches at least as long as the cutoff are
-flagged for review. Clicking a row shows that exact frame.
+The Review tab lists the moments to check: every stretch where the tracked
+point was outside all the drawn regions. Brief ones are jumps at the wall or
+head dips, and they count for the region they belong to. A long one may mean
+the tracker got stuck on a dark spot or a reflection, so stretches at least
+as long as the cutoff are flagged. "Open playback window", or clicking a row,
+opens the video in its own resizable window at that exact frame. (The video
+was first built into the tab; it was too cramped there. A separate window
+will also suit manual scoring, e.g. object recognition, later.)
 
-Playback: play/pause (space bar on the video), one-frame and 10-second steps,
-a scrub slider and a speed choice. It draws a red marker on the tracked
-position, an optional short trail, and region outlines. The info line shows
-the session frame and time and the video's own frame and time (tracking
-files record the video frame of their first row). "Save as video…" writes
-`<name>_tracked.mp4` beside the video in the background.
+The playback window: play/pause (space bar on the video), one-frame and
+10-second steps, a scrub slider and a speed choice. It draws a red marker on
+the tracked position, an optional short trail, and region outlines. The info
+line shows the session frame and time, the video's own frame and time
+(tracking files record the video frame of their first row), and the region
+each frame counted for. "Save as video…" writes `<name>_tracked.mp4` beside
+the video in the background.
 
 Adapted from ezTrack's `PlayVideo` via core/playback.py (GPL-3.0, see LICENSE).
 """
@@ -49,14 +51,17 @@ def clock(seconds: float) -> str:
     return f"{int(seconds // 60)}:{seconds % 60:05.2f}"
 
 
-class ReviewPanel(ttk.Frame):
-    def __init__(self, parent, on_cutoff=None):
+class PlaybackWindow(tk.Toplevel):
+    """A tracked file's video with its tracking drawn on, in its own window."""
+
+    def __init__(self, parent, pb, labels, outside, title: str):
         super().__init__(parent)
-        self.on_cutoff = on_cutoff or (lambda value: None)
-        self.pb = None
-        self.source = None
-        self._data = None
-        self.events: list[dict] = []
+        self.pb = pb
+        self.source = FrameSource(pb)
+        self._labels, self._outside = labels, outside
+        self.title(f"Playback: {title}")
+        self.geometry("960x760")
+        self.minsize(600, 480)
         self.row = 0
         self.playing = False
         self._job = None
@@ -64,30 +69,25 @@ class ReviewPanel(ttk.Frame):
         self._save = None
         self._setting = False
         self._build()
-        self.show_message("Select a tracked file in the file list to review its video.")
+        self.protocol("WM_DELETE_WINDOW", self.close)
+        self.show(0)
 
     # ------------------------------------------------------------------ UI
     def _build(self) -> None:
-        self.message = ttk.Label(self, padding=20, wraplength=520, justify=tk.LEFT)
-        self.body = ttk.PanedWindow(self, orient=tk.VERTICAL)
-
-        top = ttk.Frame(self.body)
-        self.body.add(top, weight=3)
-        # Controls are packed first, from the bottom, so a short window shrinks
-        # the video instead of hiding them.
-        # Two short rows, so nothing is cut off in a narrow window.
-        bar2 = ttk.Frame(top, padding=(8, 0, 8, 6))
+        # Controls are packed first, from the bottom, so a small window
+        # shrinks the video instead of hiding them; two short rows fit narrow.
+        bar2 = ttk.Frame(self, padding=(8, 0, 8, 8))
         bar2.pack(side=tk.BOTTOM, fill=tk.X)
-        bar = ttk.Frame(top, padding=(8, 6, 8, 4))
+        bar = ttk.Frame(self, padding=(8, 6, 8, 4))
         bar.pack(side=tk.BOTTOM, fill=tk.X)
-        self.slider = ttk.Scale(top, from_=0, to=1, orient=tk.HORIZONTAL,
-                                command=self._on_slider)
+        self.slider = ttk.Scale(self, from_=0, to=max(self.pb.n_frames - 1, 0),
+                                orient=tk.HORIZONTAL, command=self._on_slider)
         self.slider.pack(side=tk.BOTTOM, fill=tk.X, padx=8)
-        self.info = ttk.Label(top, anchor=tk.W, padding=(8, 4), justify=tk.LEFT)
+        self.info = ttk.Label(self, anchor=tk.W, padding=(8, 4), justify=tk.LEFT)
         self.info.pack(side=tk.BOTTOM, fill=tk.X)
         self.info.bind("<Configure>",
                        lambda e: self.info.configure(wraplength=max(200, e.width - 16)))
-        self.canvas = FrameCanvas(top, height=200)
+        self.canvas = FrameCanvas(self)
         self.canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas.redraw_overlay = self._overlay
         self.canvas.bind("<space>", lambda _e: self.toggle())
@@ -120,149 +120,21 @@ class ReviewPanel(ttk.Frame):
                         command=self._redraw).pack(side=tk.LEFT, padx=(8, 0))
         self.save_btn = ttk.Button(bar2, text="Save as video…", command=self.save_video)
         self.save_btn.pack(side=tk.RIGHT)
-        self.save_tip = Tooltip(self.save_btn, "")
+        Tooltip(self.save_btn, f"Write {os.path.basename(tracked_video_path(self.pb.video))} "
+                               "next to the video: the session with the marker (and the "
+                               "trail and regions, if shown) drawn on, at the video's own "
+                               "frame rate. Replaces an earlier one.")
         self.save_text = ttk.Label(bar2, foreground="gray")
         self.save_text.pack(side=tk.RIGHT, padx=8)
 
-        # The points in question.
-        bottom = ttk.Frame(self.body, padding=(8, 4, 8, 0))
-        self.body.add(bottom, weight=1)
-        head = ttk.Frame(bottom)
-        head.pack(side=tk.TOP, fill=tk.X)
-        ttk.Label(head, text="Points to review").pack(side=tk.LEFT)
-        self.cutoff_var = tk.StringVar()
-        cutoff = ttk.Entry(head, textvariable=self.cutoff_var, width=5)
-        cutoff.pack(side=tk.RIGHT)
-        cutoff.bind("<Return>", lambda _e: self._apply_cutoff())
-        cutoff.bind("<FocusOut>", lambda _e: self._apply_cutoff())
-        ttk.Label(head, text="Flag stretches at least (s):").pack(side=tk.RIGHT, padx=(0, 4))
-        Tooltip(cutoff, "A stretch outside the regions this long or longer may mean the "
-                        "tracker lost the animal (stuck on a dark spot or a reflection), "
-                        "so it's flagged for review. Brief ones are usually jumps or head "
-                        "dips. Saved per test.")
-        self.summary = ttk.Label(bottom, foreground="gray", anchor=tk.W, wraplength=640,
-                                 justify=tk.LEFT)
-        self.summary.pack(side=tk.TOP, fill=tk.X, pady=(2, 4))
-        wrap = ttk.Frame(bottom)
-        wrap.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.tree = ttk.Treeview(wrap, columns=[c for c, _ in EVENT_COLUMNS],
-                                 show="headings", height=5, selectmode="browse")
-        for col, width in EVENT_COLUMNS:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=width, minwidth=width, anchor=tk.CENTER,
-                             stretch=col == "Check")
-        self.tree.tag_configure("flag", foreground="#c62828")
-        vsb = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
-        hsb = ttk.Scrollbar(wrap, orient="horizontal", command=self.tree.xview)
-        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        self.tree.grid(row=0, column=0, sticky="nsew")
-        vsb.grid(row=0, column=1, sticky="ns")
-        hsb.grid(row=1, column=0, sticky="ew")
-        wrap.rowconfigure(0, weight=1)
-        wrap.columnconfigure(0, weight=1)
-        self.tree.bind("<<TreeviewSelect>>", self._on_event)
-
-    def show_message(self, text: str) -> None:
-        """Show a note instead of the video (no file, not tracked, no video)."""
-        self.unload()
-        self.body.pack_forget()
-        self.message.configure(text=text)
-        self.message.pack(side=tk.TOP, anchor="nw")
-
-    # ------------------------------------------------------------- loading
-    def load(self, data, video_hint, roles: dict, cutoff: float) -> None:
-        """Show this tracking file's video and its points to review. Says why
-        instead if the video can't be matched to it."""
-        self.cutoff_var.set(f"{cutoff:g}")
-        if data is self._data and self.pb is not None:
-            self._fill_events()   # same file: just re-flag with the cutoff
-            return
-        self.unload()
-        try:
-            pb = open_playback(data, video_hint)
-            source = FrameSource(pb)
-        except ValueError as exc:
-            self.show_message(f"This file's video can't be shown.\n\n{exc}")
-            return
-        self.pb, self.source, self._data = pb, source, data
-        self.events = outside_events(data, roles, pb.fps)
-        # The region each frame counted for (outside frames included) and
-        # which frames were outside the drawn regions, for the info line.
-        self._labels = region_labels(data, roles)[0]
-        self._outside = _outside_mask(data)
-        self.message.pack_forget()
-        self.body.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self.slider.configure(to=max(pb.n_frames - 1, 0))
-        self.save_tip.text = (f"Write {os.path.basename(tracked_video_path(pb.video))} next "
-                              "to the video: the session with the marker (and the trail "
-                              "and regions, if shown) drawn on, at the video's own frame "
-                              "rate. Replaces an earlier one.")
-        self._fill_events()
-        self.show(0)
-
-    def unload(self) -> None:
-        self.pause()
-        if self._save is not None:
-            self._save[1].set()
-            self._save[0].join(timeout=10)
-            self._save = None
-        if self.source is not None:
-            self.source.close()
-        self.pb = self.source = self._data = None
-        self.events = []
-
-    def _cutoff(self) -> float:
-        try:
-            v = float(self.cutoff_var.get())
-            return v if v > 0 else 1.0
-        except ValueError:
-            return 1.0
-
-    def _apply_cutoff(self) -> None:
-        value = self._cutoff()
-        self.cutoff_var.set(f"{value:g}")
-        self.on_cutoff(value)
-        self._fill_events()
-
-    def _fill_events(self) -> None:
-        self.tree.delete(*self.tree.get_children())
-        if self.pb is None:
-            return
-        pb, cutoff = self.pb, self._cutoff()
-        flagged = 0
-        for n, e in enumerate(self.events):
-            long = e["seconds"] >= cutoff
-            flagged += long
-            vf = pb.video_frame(e["row"])
-            self.tree.insert("", tk.END, iid=str(n), tags=("flag",) if long else (), values=(
-                n + 1, f"{e['row'] + 1:,}", clock(e["row"] / pb.fps), f"{vf:,}",
-                clock(vf / pb.fps), f"{e['seconds']:g}", e["region"] or "none",
-                f"{e['px_outside']:g}", "⚠ check" if long else "brief"))
-        total = sum(e["seconds"] for e in self.events)
-        if not self.events:
-            self.summary.configure(text="The tracked point never left the drawn regions.")
-        else:
-            longest = max(e["seconds"] for e in self.events)
-            self.summary.configure(text=(
-                f"Outside the drawn regions {len(self.events)} times, {total:.2f} s in all "
-                f"(average {total / len(self.events):.3f} s, longest {longest:g} s). "
-                f"{flagged} at or over {cutoff:g} s. Each counts for the region shown; "
-                "click a row to see it."))
-
-    def _on_event(self, _e=None) -> None:
-        sel = self.tree.selection()
-        if sel and self.pb is not None:
-            self.pause()
-            self.show(self.events[int(sel[0])]["row"])
-
     # ------------------------------------------------------------- showing
     def _trail_frames(self) -> int:
-        if self.pb is None or not self.trail_var.get():
+        if not self.trail_var.get():
             return 0
         return int(round(TRAIL_SECONDS * (self.pb.fps or 20)))
 
     def show(self, row: int) -> None:
-        if self.pb is None or not self.winfo_exists():
+        if not self.winfo_exists():
             return
         self.row = max(0, min(self.pb.n_frames - 1, row))
         try:
@@ -437,3 +309,180 @@ class ReviewPanel(ttk.Frame):
         elif state["result"]:
             show_info(self, "Video saved",
                       f"Saved {os.path.basename(state['result'])} next to the video.")
+
+    # --------------------------------------------------------------- close
+    def close(self) -> None:
+        self.pause()
+        if self._save is not None:
+            self._save[1].set()
+            self._save[0].join(timeout=10)
+            self._save = None
+        self.source.close()
+        self.destroy()
+
+
+class ReviewPanel(ttk.Frame):
+    """The Review tab: the points to review and the button that opens the
+    playback window."""
+
+    def __init__(self, parent, on_cutoff=None):
+        super().__init__(parent)
+        self.on_cutoff = on_cutoff or (lambda value: None)
+        self.pb = None
+        self._data = None
+        self._title = ""
+        self.window: PlaybackWindow | None = None
+        self.events: list[dict] = []
+        self._build()
+        self.show_message("Select a tracked file in the file list to review its video.")
+
+    def _build(self) -> None:
+        self.message = ttk.Label(self, padding=20, wraplength=520, justify=tk.LEFT)
+        self.body = ttk.Frame(self, padding=(8, 8, 8, 4))
+        head = ttk.Frame(self.body)
+        head.pack(side=tk.TOP, fill=tk.X)
+        self.open_btn = ttk.Button(head, text="Open playback window",
+                                   command=lambda: self.open_window())
+        self.open_btn.pack(side=tk.LEFT)
+        Tooltip(self.open_btn, "Play the selected file's video with its tracked position "
+                               "drawn on, in its own window. Clicking a row below opens "
+                               "it at that moment.")
+        self.cutoff_var = tk.StringVar()
+        cutoff = ttk.Entry(head, textvariable=self.cutoff_var, width=5)
+        cutoff.pack(side=tk.RIGHT)
+        cutoff.bind("<Return>", lambda _e: self._apply_cutoff())
+        cutoff.bind("<FocusOut>", lambda _e: self._apply_cutoff())
+        ttk.Label(head, text="Flag stretches at least (s):").pack(side=tk.RIGHT, padx=(0, 4))
+        Tooltip(cutoff, "A stretch outside the regions this long or longer may mean the "
+                        "tracker lost the animal (stuck on a dark spot or a reflection), "
+                        "so it's flagged for review. Brief ones are usually jumps or head "
+                        "dips. Saved per test.")
+        ttk.Label(self.body, text="Points to review", font=("TkDefaultFont", 0, "bold")).pack(
+            side=tk.TOP, anchor="w", pady=(10, 0))
+        self.summary = ttk.Label(self.body, foreground="gray", anchor=tk.W, justify=tk.LEFT)
+        self.summary.pack(side=tk.TOP, fill=tk.X, pady=(2, 6))
+        self.summary.bind("<Configure>",
+                          lambda e: self.summary.configure(wraplength=max(200, e.width - 8)))
+        wrap = ttk.Frame(self.body)
+        wrap.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.tree = ttk.Treeview(wrap, columns=[c for c, _ in EVENT_COLUMNS],
+                                 show="headings", selectmode="browse")
+        for col, width in EVENT_COLUMNS:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=width, minwidth=width, anchor=tk.CENTER,
+                             stretch=col == "Check")
+        self.tree.tag_configure("flag", foreground="#c62828")
+        vsb = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
+        hsb = ttk.Scrollbar(wrap, orient="horizontal", command=self.tree.xview)
+        self.tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.tree.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        wrap.rowconfigure(0, weight=1)
+        wrap.columnconfigure(0, weight=1)
+        self.tree.bind("<<TreeviewSelect>>", self._on_event)
+
+    def show_message(self, text: str) -> None:
+        """Show a note instead of the list (no file, not tracked, no video)."""
+        self.unload()
+        self.body.pack_forget()
+        self.message.configure(text=text)
+        self.message.pack(side=tk.TOP, anchor="nw")
+
+    def load(self, data, video_hint, roles: dict, cutoff: float, title: str = "") -> None:
+        """List this tracking file's points to review (the video opens on
+        request). Says why instead if the video can't be matched to it."""
+        self.cutoff_var.set(f"{cutoff:g}")
+        if data is self._data and self.pb is not None:
+            self._fill_events()   # same file: just re-flag with the cutoff
+            return
+        self.unload()
+        try:
+            pb = open_playback(data, video_hint)
+        except ValueError as exc:
+            self.show_message(f"This file's video can't be shown.\n\n{exc}")
+            return
+        self.pb, self._data, self._title = pb, data, title or os.path.basename(pb.video)
+        self.events = outside_events(data, roles, pb.fps)
+        # The region each frame counted for (outside frames included) and
+        # which frames were outside the drawn regions, for the info line.
+        self._labels = region_labels(data, roles)[0]
+        self._outside = _outside_mask(data)
+        self.message.pack_forget()
+        self.body.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self._fill_events()
+
+    def open_window(self, row: int | None = None) -> PlaybackWindow | None:
+        """Open the playback window (or bring it forward), at `row` if given."""
+        if self.pb is None:
+            return None
+        if self.window is None or not self.window.winfo_exists():
+            try:
+                self.window = PlaybackWindow(self.winfo_toplevel(), self.pb, self._labels,
+                                             self._outside, self._title)
+            except Exception as exc:
+                traceback.print_exc()
+                show_warning(self, "The video couldn't be opened",
+                             f"The video couldn't be opened.\n\n{exc}")
+                return None
+        else:
+            self.window.lift()
+        if row is not None:
+            self.window.pause()
+            self.window.show(row)
+        return self.window
+
+    def pause(self) -> None:
+        if self.window is not None and self.window.winfo_exists():
+            self.window.pause()
+
+    def unload(self) -> None:
+        if self.window is not None and self.window.winfo_exists():
+            self.window.close()
+        self.window = None
+        self.pb = self._data = None
+        self.events = []
+
+    def _cutoff(self) -> float:
+        try:
+            v = float(self.cutoff_var.get())
+            return v if v > 0 else 1.0
+        except ValueError:
+            return 1.0
+
+    def _apply_cutoff(self) -> None:
+        value = self._cutoff()
+        self.cutoff_var.set(f"{value:g}")
+        self.on_cutoff(value)
+        self._fill_events()
+
+    def _fill_events(self) -> None:
+        self.tree.delete(*self.tree.get_children())
+        if self.pb is None:
+            return
+        pb, cutoff = self.pb, self._cutoff()
+        flagged = 0
+        for n, e in enumerate(self.events):
+            long = e["seconds"] >= cutoff
+            flagged += long
+            vf = pb.video_frame(e["row"])
+            self.tree.insert("", tk.END, iid=str(n), tags=("flag",) if long else (), values=(
+                n + 1, f"{e['row'] + 1:,}", clock(e["row"] / pb.fps), f"{vf:,}",
+                clock(vf / pb.fps), f"{e['seconds']:g}", e["region"] or "none",
+                f"{e['px_outside']:g}", "⚠ check" if long else "brief"))
+        total = sum(e["seconds"] for e in self.events)
+        if not self.events:
+            self.summary.configure(text="The tracked point never left the drawn regions.")
+        else:
+            longest = max(e["seconds"] for e in self.events)
+            self.summary.configure(text=(
+                f"Outside the drawn regions {len(self.events)} times, {total:.2f} s in all "
+                f"(average {total / len(self.events):.3f} s, longest {longest:g} s). "
+                f"{flagged} at or over {cutoff:g} s. Each counts for the region shown; "
+                "click a row to see it."))
+
+    def _on_event(self, _e=None) -> None:
+        sel = self.tree.selection()
+        if sel and self.pb is not None:
+            self.open_window(self.events[int(sel[0])]["row"])
+

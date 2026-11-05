@@ -165,9 +165,11 @@ Credits).
      every setting used and a `Frame_Unreadable` column) and
      `<name>_reference.png` next to it, and becomes **Not analyzed**.
 4. **Analyze** and **Export** as for CSVs (below).
-5. The **Review** tab plays the selected file's video with its tracked
-   position drawn on, to check the tracking.
-   - It shows a red marker, a short trail, region outlines, and an info line
+5. The **Review** tab lists the points to review for the selected file, and
+   **Open playback window** plays its video, in its own resizable window,
+   with the tracked position drawn on. Clicking a row in the list opens the
+   window at that exact frame.
+   - The window shows a red marker, a short trail, region outlines, and an info line
      with the session frame and time, the video's own frame and time, and the
      current region.
    - Controls: play/pause (space bar with the pointer on the video), ◀ ▶ one
@@ -175,7 +177,7 @@ Credits).
    - **Points to review** lists every stretch where the tracked point was
      outside all the drawn regions, with its frame, session time, video frame
      and time, length, the region it counted for, and how far outside it
-     went. Click a row to jump to that frame. Brief stretches are usually jumps
+     went. Brief stretches are usually jumps
      at the wall or head dips. A stretch at least as long as the cutoff
      (**Flag stretches at least (s)**, saved per test; Open Field 1 s, EPM
      5 s) is flagged because the tracker may have got stuck on a dark spot
@@ -200,7 +202,8 @@ at the bottom. In a short window the panel scrolls. The file list sits above
 the tabs. The **Path** and **Heatmap** tabs have their controls in a column
 beside the plot: point or cell style, Background, **Region labels** (show or
 hide the region names on the plot and in the exported image). The **Review**
-tab plays the selected file's video and lists the points to review.
+tab lists the points to review and opens the selected file's video in a
+playback window.
 
 ## Working with files
 1. **Add files…**, **Add folder…**, or drag files/folders onto the window.

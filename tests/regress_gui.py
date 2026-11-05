@@ -404,9 +404,12 @@ if os.path.exists(CLIP):
           len(hf.axes[0].images) == 2 and hf.opaque)
     app.path_bg_var.set("None"); app.bg_var.set("None")
     log.clear(); app._set_selection([0]); app.nb.select(app.review); app.update()
-    pw = app.review
-    check("Review tab shows the tracked video", pw.pb is not None and not log
-          and pw.body.winfo_manager())
+    rv = app.review
+    check("Review tab lists the tracked video's points", rv.pb is not None and not log
+          and rv.body.winfo_manager() and rv.window is None)
+    pw = rv.open_window(); pw.update()
+    check("Open playback window opens the video in its own window",
+          isinstance(pw, gui.tk.Toplevel) and pw.winfo_exists() and rv.open_window() is pw)
     pw.show(10); pw.update()
     check("playback shows the frame with its info",
           pw.canvas._array is not None and "Frame 11 of" in pw.info.cget("text")
@@ -438,23 +441,25 @@ if os.path.exists(CLIP):
     if os.path.exists(EX):
         from core import load_csv as _load
         exd = _load(EX)
-        pw.load(exd, None, gui.resolve_roles(exd.regions, {}), 2.0); pw.update()
-        rows = [pw.tree.item(i, "values") for i in pw.tree.get_children()]
+        rv.load(exd, None, gui.resolve_roles(exd.regions, {}), 2.0); rv.update()
+        rows = [rv.tree.item(i, "values") for i in rv.tree.get_children()]
         check("Review list: the EPM example's 3 outside stretches, 2 flagged at a 2 s cutoff",
               len(rows) == 3 and sum("check" in r[-1] for r in rows) == 2
               and rows[0][1] == "374" and rows[2][6] == "open arm 2")
-        pw.tree.selection_set("2"); pw.update()
-        check("clicking a row shows that exact frame", pw.row == 495
-              and "Frame 496 of" in pw.info.cget("text"))
+        check("loading another file closes the old playback window", not pw.winfo_exists())
+        rv.tree.selection_set("2"); rv.update()
+        w2 = rv.window
+        check("clicking a row opens the playback window at that exact frame",
+              w2 is not None and w2.row == 495 and "Frame 496 of" in w2.info.cget("text"))
         keep_fps = app.fps_var.get(); app.fps_var.set("20"); log.clear(); yesno[:] = [True]
         fake = gui.FileEntry(path=EX, data=exd, label="ex")
         check("Analyze offers the tracking file's own frame rate",
               app._check_file_frame_rates([fake]) and app.fps_var.get() == "16.64"
               and "isn't the frame rate setting" in " ".join(log))
         app.fps_var.set(keep_fps)
-        pw.cutoff_var.set("5"); pw._apply_cutoff()
+        rv.cutoff_var.set("5"); rv._apply_cutoff()
         check("changing the cutoff re-flags the list and saves it for the test",
-              sum("check" in pw.tree.item(i, "values")[-1] for i in pw.tree.get_children()) == 0
+              sum("check" in rv.tree.item(i, "values")[-1] for i in rv.tree.get_children()) == 0
               and app.config_data["review_cutoff_s"][app.test_var.get()] == 5)
     app.nb.select(app.tab_summary); app.update()
     check("a tracked video analyzes", app.files[0].analyzed

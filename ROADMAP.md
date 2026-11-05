@@ -1367,6 +1367,48 @@ New requests are added to this list as they come in.
 
 ---
 
+### 15. Object recognition (requested 2026-11-05, on `video-tracking`)
+Semi-automated novel object / object location scoring from video.
+**Decided (user, 2026-11-05):**
+- New test type **Object Recognition**. Trim, crop, exclusions, reference,
+  tracking check and scale work as usual.
+- **Objects are circles**: in setup step 5 (named "Objects" for this test),
+  press at the object's center and drag the radius out to its edge.
+  **Two objects by default** (object 1, object 2); more only appear when the
+  experimenter clicks **Add object**.
+- Each object is marked **Familiar, Novel or Moved**. Each video records the
+  trial **day** (number) and **phase** (Habituation / Training / Test).
+- The app draws a **zone** around each object at a set distance from its
+  edge: **Zone distance (cm)**, a type-in box (value TBD while the user
+  experiments, so it never locks; default 2 cm). Zones are worked out from
+  X/Y at analysis, so changing the distance needs no re-tracking.
+- **Review tab**: every stretch the tracked point spends within a zone
+  (object, first frame, session and video time, length, scored status).
+  Clicking one opens the playback window at the frame the point first
+  enters the zone.
+- **Manual scoring in the playback window**: the experimenter scrolls
+  through and logs the **start and end of an interaction** with an object,
+  or marks a zone visit as **no interaction**. Interactions can be logged
+  **anywhere in the video** (the object is picked from the zone the point
+  is in, or chosen by hand). Scoring is saved as it's made, to
+  `<name>_ObjectScoring.csv` beside the tracking file.
+- **Results**: time interacting with each object, number of interactions
+  (bouts) per object, latency to the first interaction per object,
+  **discrimination index** = (novel − familiar) / (novel + familiar)
+  interaction time, and **% preference** = novel / (novel + familiar) x 100
+  ("novel" = objects marked Novel or Moved; blank when there's none, e.g.
+  training). Also automatic zone time and zone visits per object, and the
+  day, phase and novel object(s).
+
+**Build plan:**
+- O1: core (`core/objects.py`): objects in the tracking file, zones, zone
+  visits, scoring file, results; test type; tests.
+- O2: setup window: draw circles, object types, add object, day, phase,
+  zone rings; Track writes the objects and trial info into the tracking file.
+- O3: Review tab and playback window scoring.
+- O4: Analyze / Summary / Time Bins / export, objects and zones on the
+  plots; docs.
+
 ## Open questions — RESOLVED (2026-10-09)
 1. **EPM anxiety index** — ✅ report all three: %open time & %open entries, the
    composite Anxiety Index, and the closed/open time ratio. (See §4.)
@@ -1568,6 +1610,7 @@ Done:
   another file closes the window. A separate window will also serve a future
   **object recognition** analysis that needs manual scoring (not planned
   yet; the user mentioned it 2026-11-05).
+- **Object recognition (§15)**: decided 2026-11-05; building O1–O4.
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

@@ -37,6 +37,10 @@ SETTINGS_COLUMNS = [
     "Scale_cm",
     "Scale_cm_per_px",
     "Video_FPS",
+    # Object recognition (ROADMAP §15): the objects drawn, and the trial.
+    "Objects",
+    "Trial_Day",
+    "Trial_Phase",
 ]
 
 # True/False columns that are not regions (Use_Window is a tracking setting;

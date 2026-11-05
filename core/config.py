@@ -46,7 +46,8 @@ DEFAULTS: dict = {
     "window_size": 100,
     "window_weight": 0.9,
     # Last session length used per test, in minutes (setup step 1).
-    "session_minutes": {"Elevated Plus Maze": 5.0, "Open Field": 60.0},
+    "session_minutes": {"Elevated Plus Maze": 5.0, "Open Field": 60.0,
+                        "Object Recognition": 10.0},
     # Last real length typed for the scale, per test, in cm (setup step 6).
     "scale_cm": {"Elevated Plus Maze": 75.0, "Open Field": 40.0},
     # Review tab: an outside-the-regions stretch at least this long (seconds)
@@ -54,6 +55,9 @@ DEFAULTS: dict = {
     # Open Field jumps average 0.11-0.15 s (longest 0.35 s); EPM head dips
     # about 1.9 s (longest 2.3 s). Provisional; the user may change them.
     "review_cutoff_s": {"Elevated Plus Maze": 5.0, "Open Field": 1.0},
+    # Object recognition (ROADMAP §15): zone around each object, out to this
+    # far from its edge (cm). To be settled by experimenting; never locks.
+    "object_zone_cm": 2.0,
     # Plot style.
     "plot": {
         "point_size": 4.0,  # float so sizes like 2.5 survive a reload

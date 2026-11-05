@@ -42,7 +42,7 @@ assays: **Elevated Plus Maze (EPM)** and **Open Field**.
   Time Bins, Settings sheets), `_path.png`, and `_heatmap.png` next to its CSV.
 - `region_dialog.py`: the Match regions dialog.
 - `tests/regress_gui.py`: workflow regression test. Run it after GUI changes
-  (`.venv/bin/python tests/regress_gui.py`); it needs the sample CSVs.
+  (`.venv/bin/python tests/regress_gui.py`); it needs the Examples files.
 - **Anaconda install (ROADMAP §14, built 2026-11-03):** `environment.yml`
   (env `behavior-tracker`, conda-forge only; `tkinterdnd2` via its `pip:`
   section), `find_conda.sh` / `find_conda.bat` (shared conda finders),
@@ -126,7 +126,7 @@ C0–C9 (with C5b) done: **Location Tracking is complete** on `video-tracking`. 
 "Objects" (circles, Familiar/Novel/Moved, day, phase); Zone distance box
 (never locks); Review tab lists zone visits; scoring in the playback window
 (`<name>_ObjectScoring.csv`); results `OR_*` (`core/objects.py`). Tested on
-the user's object trial `examples/1_2026-06-26_14-03-15.mp4`
+the user's object trial `Examples/1_2026-06-26_14-03-15.mp4`
 (`tests/test_objects_video.py`).
 **Anaconda install (ROADMAP §14) is built** (2026-11-03, on `main`, merged
 here); tested on Mac, PC test pending.
@@ -140,9 +140,12 @@ so.** Adapted ezTrack code (core/video.py, tracking.py, playback.py) keeps the
 GPL-3.0 license and credits ezTrack at the top of each file; keep doing so.
 Video-side modules: `core/video_setup.py`, `core/track_run.py`,
 `setup_window.py`, `review_panel.py` (Review tab; see README Layout).
-Sample files `EPM.csv` and `Open Field.csv` are in the project folder
-(gitignored). See ROADMAP "Sample data findings" and "Decisions from sample
-data".
+**Test data = the `Examples/` folder** (gitignored; user, 2026-11-05): real
+videos tracked in this app with their tracking files (EPM
+`6_2024-04-01_11-49-23`, Open Field `1_2026-08-17_13-27-03`) and the object
+trial video. Paths live in `tests/samples.py`; every test uses them. The old
+`EPM.csv` / `Open Field.csv` samples are gone (ROADMAP "Sample data findings"
+describes them).
 
 ## How to run
 ```bash

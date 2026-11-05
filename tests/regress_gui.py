@@ -2,8 +2,8 @@
 
 Drives the real app (window hidden behind fakes for pop-ups) through the file
 list, locking, Analyze, repeats, Clear, region checks, and saved settings,
-using the sample files EPM.csv and "Open Field.csv" in the project folder
-(gitignored, so this only runs where they exist). Settings go to a temporary
+using the example tracking files in Examples/ (tests/samples.py; real videos
+tracked in this app; gitignored, so this only runs where they exist). Settings go to a temporary
 config, never the real config.json.
 
 Run from the project folder:  .venv/bin/python tests/regress_gui.py
@@ -39,9 +39,8 @@ import review_panel
 review_panel.show_info = gui.show_info
 review_panel.show_warning = gui.show_warning
 gui.BehaviorTrackerApp.wait_window = lambda self, w=None: None
-E = os.path.join(ROOT, "EPM.csv"); O = os.path.join(ROOT, "Open Field.csv")
-if not (os.path.exists(E) and os.path.exists(O)):
-    sys.exit("Sample files EPM.csv and 'Open Field.csv' aren't in the project folder.")
+from samples import EPM as E, OF as O, require
+require(E, O)
 app = gui.BehaviorTrackerApp(); app.update()
 fails = 0
 def check(label, cond):
@@ -63,8 +62,11 @@ app.gap_var.set("2"); app.update()
 check("file list: File, Type, Status", list(app.file_tree["columns"]) == ["File", "Type", "Status"]
       and app.file_tree.item("0", "values")[1] == "CSV")
 check("first file selected, buttons count it", app._sel == [0] and app.analyze_btn.cget("text") == "Analyze (1)")
-check("no unreadable-frames section for ezTrack files", not bool(app.gaps_section.winfo_manager()))
+check("unreadable-frames section shown for files tracked in this app",
+      bool(app.gaps_section.winfo_manager()))
+yesno.append(True)  # the file's own frame rate (9.84 fps), offered at the first Analyze
 app.select_all(); app.analyze(); app.update()
+check("first Analyze uses the tracking file's frame rate", app.config_data["fps"] == 9.84)
 cols = list(app._summary_df.columns)
 check("Open Field measures computed", all(c in cols for c in ("OF_CenterEntries", "OF_Crossings_Total", "OF_CrossingSpeed_Peak_cm_s")))
 check("OF thresholds recorded in export", app._summary_df["MinBetweenCenterEntries_s"][0] == 2
@@ -78,7 +80,8 @@ check("OF bin crossings add up to the session",
       app.files[0].bins["OF_Crossings_Total"].sum() == app.files[0].summary["OF_Crossings_Total"])
 check("locked after Analyze", lockw() == LK)
 check("lock note shown", bool(app.lock_note.winfo_manager()))
-check("overlap warning for OF", "Center and periphery overlap" in log)
+check("no overlap warning: tracking writes periphery minus the center",
+      "Center and periphery overlap" not in log)
 check("bins use 30 s", "30 s" in app.bins_note.get() and app.bins_tree.get_children())
 check("no EPM columns under Open Field", not any(c.startswith("EPM_") for c in app._summary_df.columns))
 check("plot controls never lock", all(str(w.cget("state")) != "disabled" for w in (app.tab_heat.winfo_children()[0].winfo_children()) if w.winfo_class() in ("TSpinbox", "TCombobox")))
@@ -99,8 +102,11 @@ app.clear_files(); app.update()
 check("clear empties + unlocks", rows() == [] and lockw() == UN)
 app.test_var.set("Elevated Plus Maze"); app._on_test_type(); app.update()
 check("Open Field row hidden for EPM", not bool(app.of_bar.winfo_manager()))
-app.add_files([E, O]); log.clear(); dialogs.clear(); app.select_all(); app.analyze(); app.update()
-check("EPM test: OF file gets dialog, skipped", dialogs == [["center", "peripheral"]] and "Some files not analyzed" in log)
+app.add_files([E, O]); log.clear(); dialogs.clear(); app.select_all()
+yesno.append(True)  # their frame rates differ (16.64 and 9.84 fps): analyze anyway
+app.analyze(); app.update()
+check("files with different frame rates: asked first", "The files have different frame rates" in log)
+check("EPM test: OF file gets dialog, skipped", dialogs == [["periphery", "center"]] and "Some files not analyzed" in log)
 check("EPM file analyzed with EPM measures", rows()[0][1] == "Analyzed" and "EPM_AnxietyIndex" in app._summary_df.columns)
 KEY = ["EPM_ClosedOpenRatio", "EPM_Center_s", "EPM_PctSession_Center", "EPM_OpenArm_s",
        "EPM_PctOpenTime", "EPM_ClosedArm_s", "EPM_PctClosedTime", "EPM_OpenEntries",
@@ -115,9 +121,9 @@ check("Time Bins start with Bin, Start, End, then the key measures",
       list(app.files[0].bins.columns)[:12] == ["Bin", "Start_s", "End_s"]
       + [k.replace("PctSession", "PctBin") for k in KEY])
 check("EPM: the center's per-region columns (repeats of EPM center) are dropped",
-      not {"Time_mid_s", "Percent_mid", "Entries_mid"} & set(r0)
-      and not {"Time_mid_s", "Percent_mid"} & set(app.files[0].bins.columns)
-      and "Time_ol_s" in r0 and "EPM_Center_s" in r0)
+      not {"Time_center_s", "Percent_center", "Entries_center"} & set(r0)
+      and not {"Time_center_s", "Percent_center"} & set(app.files[0].bins.columns)
+      and "Time_open arm 1_s" in r0 and "EPM_Center_s" in r0)
 app.group_vars["test"].set(True); app._show_summary()
 check("More test measures adds the other EPM columns after the key ones",
       list(app.summary_tree["columns"])[:11] == ["File", "Status"] + KEY
@@ -133,7 +139,7 @@ tmp = tempfile.mkdtemp()
 E2 = shutil.copy(E, tmp)
 app._set_selection([1]); app.remove_selected(); app.update()
 check("Remove takes the selected file out", [r[0] for r in rows()] == [app.files[0].label] and len(app.files) == 1)
-app.clear_files(); app.add_files([E2]); app.analyze(); app.update()
+app.clear_files(); app.add_files([E2]); yesno.append(True); app.analyze(); app.update()
 log.clear(); app.export(); app.update()
 out = output_paths(E2)
 check("export writes _analysis.xlsx, _path.png, _heatmap.png", all(os.path.exists(p) for p in out.values()))
@@ -437,7 +443,7 @@ if os.path.exists(CLIP):
     vfps = cap.get(cv2.CAP_PROP_FPS); cap.release()
     check(f"saved _tracked.mp4: every frame, at the video's frame rate ({nf} frames, {vfps:.2f} fps)",
           "Video saved" in log and nf == pw.pb.n_frames and abs(vfps - v.info.fps) < 0.05)
-    EX = os.path.join(ROOT, "examples", "6_2024-04-01_11-49-23_LocationOutput.csv")
+    EX = E
     if os.path.exists(EX):
         from core import load_csv as _load
         exd = _load(EX)

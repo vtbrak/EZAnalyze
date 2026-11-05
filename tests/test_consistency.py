@@ -3,8 +3,8 @@
 only, per-region time / % / entries match the EPM and Open Field measures,
 and role totals are the per-region values added up.
 
-Runs on the sample files EPM.csv and "Open Field.csv" and, if present, the
-tracked example in examples/ (all gitignored), plus a small made-up file.
+Runs on the example tracking files in Examples/ (tests/samples.py;
+gitignored), plus a small made-up file.
 
 Run from the project folder:  .venv/bin/python tests/test_consistency.py
 """
@@ -19,6 +19,8 @@ sys.path.insert(0, ROOT)
 from core import load_csv, summary_metrics, epm_metrics, of_metrics, binned_metrics, epm_binned
 from core.loader import TrackingData
 from core.regions import resolve_roles
+from samples import EPM, OF, require
+require(EPM, OF)
 
 fails = 0
 def check(label, cond):
@@ -71,20 +73,16 @@ def epm_checks(path, fps=None):
     return d, s
 
 
-epm, s = epm_checks(os.path.join(ROOT, "EPM.csv"), 20)
-ex = os.path.join(ROOT, "examples", "6_2024-04-01_11-49-23_LocationOutput.csv")
-if os.path.exists(ex):
-    d, s = epm_checks(ex)
-    check("example: closed arm 2 time is the ROI-only time (108.28 s, not 108.77)",
-          close(s["Time_closed arm 2_s"], 108.28) and s["Entries_center"] == s["EPM_CenterEntries"])
-else:
-    print("skip examples/ checks (no example file)")
+ex = EPM
+d, s = epm_checks(ex)
+check("example: closed arm 2 time is the ROI-only time (108.28 s, not 108.77)",
+      close(s["Time_closed arm 2_s"], 108.28) and s["Entries_center"] == s["EPM_CenterEntries"])
 
 # Frames outside every drawn region (user, 2026-11-05): Open Field counts them
 # as periphery, EPM as the nearest region; brief stretches are listed.
 from core import outside_events
-ofx = os.path.join(ROOT, "examples", "1_2026-08-17_13-27-03_LocationOutput.csv")
-if os.path.exists(ofx):
+ofx = OF
+if True:
     d = load_csv(ofx); roles = resolve_roles(d.regions, {}); fps = float(d.settings["Video_FPS"])
     s = summary_metrics(d, fps, roles, 5, min_gap_s=1.0)
     s.update(of_metrics(d, roles, fps, 5, min_between_entries_s=1.0))
@@ -98,7 +96,7 @@ if os.path.exists(ofx):
     check("Open Field video: outside stretches listed and summarized (brief: jumps)",
           s["OutsideEvents"] == len(ev) > 0 and s["OutsideEventMax_s"] < 1
           and close(s["OutsideEventMean_s"], s["OutsideTime_s"] / len(ev), 0.001))
-if os.path.exists(ex):
+if True:
     d = load_csv(ex); roles = resolve_roles(d.regions, {}); fps = float(d.settings["Video_FPS"])
     s = summary_metrics(d, fps, roles, 5); s.update(epm_metrics(d, roles, fps, 5))
     ev = outside_events(d, roles, fps)
@@ -108,10 +106,11 @@ if os.path.exists(ex):
           and [e["row"] for e in ev] == [373, 409, 495])
 
 # Open Field: per-region columns equal the OF_ measures.
-d = load_csv(os.path.join(ROOT, "Open Field.csv"))
+d = load_csv(OF)
 roles = resolve_roles(d.regions, {})
-s = summary_metrics(d, 20, roles, 5, min_gap_s=1.0)
-s.update(of_metrics(d, roles, 20, 5, min_between_entries_s=1.0))
+fps = float(d.settings["Video_FPS"])
+s = summary_metrics(d, fps, roles, 5, min_gap_s=1.0)
+s.update(of_metrics(d, roles, fps, 5, min_between_entries_s=1.0))
 c = [r for r in d.regions if roles[r] == "center"][0]
 p = [r for r in d.regions if roles[r] == "periphery"][0]
 check("Open Field: center time / % / entries equal the OF_ measures",

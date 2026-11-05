@@ -1,6 +1,6 @@
 """Checks that unreadable video frames are handled in the analysis, using the
-sample files EPM.csv and "Open Field.csv" (gitignored, so this only runs
-where they exist) with gaps added the way this app's tracking writes them.
+example tracking files in Examples/ (tests/samples.py; gitignored, so this
+only runs where they exist) with gaps added the way this app's tracking writes them.
 
 Run from the project folder:  .venv/bin/python tests/test_unreadable.py
 """
@@ -17,9 +17,8 @@ from core import load_csv, summary_metrics, epm_metrics, of_metrics, binned_metr
 from core import resolve_roles
 from core.gaps import fill_gaps
 
-E = os.path.join(ROOT, "EPM.csv"); O = os.path.join(ROOT, "Open Field.csv")
-if not (os.path.exists(E) and os.path.exists(O)):
-    sys.exit("Sample files EPM.csv and 'Open Field.csv' aren't in the project folder.")
+from samples import EPM as E, OF as O, require
+require(E, O)
 
 fails = 0
 def check(label, cond):

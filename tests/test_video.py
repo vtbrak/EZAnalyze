@@ -76,24 +76,37 @@ check("region columns", list(cols["center"]) == [False, True, None, True, False]
 check("ROI_location", list(cols["ROI_location"]) == ["periphery", "center", None, "center", "periphery"])
 check("ROI_transition skips the gap", list(cols["ROI_transition"]) == [False, True, False, False, True])
 
-# Real video: matches ezTrack's EPM.csv closely (wire removal is dropped and
-# the user's exact crop is estimated, so close rather than identical).
-EPM_CSV = os.path.join(ROOT, "EPM.csv")
-if os.path.exists(EPM_CSV):
-    prep = video.Prep(crop=(165, 5, 745, 575))
-    reference = tracking.make_reference(EPM_VIDEO, prep, start=460, num_frames=50)
+# Real video: re-tracking the start of the EPM example (Examples/, tracked in
+# this app) with the settings and reference its tracking file recorded gives
+# the same positions.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from samples import EPM as EX_CSV, EPM_VIDEO as EX_VIDEO
+if os.path.exists(EX_CSV) and os.path.exists(EX_VIDEO):
+    from core.loader import load_csv
+    from core.playback import load_reference, prep_from_settings
+    exd = load_csv(EX_CSV)
+    st = exd.settings
+    prep = prep_from_settings(st)
+    reference = load_reference(exd).astype(float)
+    params = tracking.TrackingParams(
+        loc_thresh=float(st["Location_Thresh"]), method=str(st["Method"]),
+        use_window=str(st["Use_Window"]).lower() == "true",
+        window_size=int(float(st["Window_Size"])), window_weight=float(st["Window_Weight"]))
+    start = int(float(st["Start_Frame"]))
     calls = []
-    res = tracking.track_video(EPM_VIDEO, reference, tracking.TrackingParams(), prep,
-                               start=460, end=760, progress=lambda d, t: calls.append((d, t)))
-    b = pd.read_csv(EPM_CSV).iloc[:300]
-    d = np.hypot(res.df.X - b.X, res.df.Y - b.Y)
-    check(f"tracks like ezTrack (median {d.median():.1f} px)", d.median() < 3)
+    res = tracking.track_video(EX_VIDEO, reference, params, prep, start=start,
+                               end=start + 300, progress=lambda d, t: calls.append((d, t)))
+    b = exd.df.iloc[:300]
+    d = np.hypot(res.df.X.to_numpy() - b.X.to_numpy(), res.df.Y.to_numpy() - b.Y.to_numpy())
+    check(f"re-tracking the EPM example matches its tracking file "
+          f"(median {np.nanmedian(d):.2f} px, 95th percentile {np.nanpercentile(d, 95):.2f} px)",
+          np.nanmedian(d) < 1 and np.nanpercentile(d, 95) < 3)
     check("progress reported", calls and calls[-1] == (300, 300))
     check("no unreadable frames", res.unreadable == 0 and not res.df.Frame_Unreadable.any())
-    stopped = tracking.track_video(EPM_VIDEO, reference, tracking.TrackingParams(), prep,
-                                   start=460, end=760, should_cancel=lambda: True)
+    stopped = tracking.track_video(EX_VIDEO, reference, params, prep, start=start,
+                                   end=start + 300, should_cancel=lambda: True)
     check("cancel", stopped.cancelled and stopped.df is None)
-    out = tracking.assemble_output(EPM_VIDEO, res.df, tracking.TrackingParams(), prep, 460,
+    out = tracking.assemble_output(EX_VIDEO, res.df, params, prep, start,
                                    regions[:1], reference.shape, tracking.Scale(100, 25), 50, 0,
                                    16.64)
     check("output starts with ezTrack's columns",
@@ -101,7 +114,7 @@ if os.path.exists(EPM_CSV):
                                     "Window_Size", "Start_Frame", "Frame", "X", "Y"])
     check("cm distance", np.allclose(out.Distance_cm, out.Distance_px * 0.25, equal_nan=True))
 else:
-    print("skip EPM.csv comparison (EPM.csv not in the project folder)")
+    print("skip the EPM example re-tracking (Examples/ files missing)")
 
 # --- core/video_setup.py: full-size shapes line up with prepared frames ---
 from core.video_setup import VideoSetup

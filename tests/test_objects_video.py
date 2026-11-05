@@ -1,5 +1,5 @@
 """Object recognition end to end on the user's object trial
-(examples/1_2026-06-26_14-03-15.mp4, gitignored): set up, track, list zone
+(Examples/1_2026-06-26_14-03-15.mp4, gitignored): set up, track, list zone
 visits, score, analyze, export. Works on a copy in a temporary folder.
 
 Run from the project folder:  .venv/bin/python tests/test_objects_video.py
@@ -11,9 +11,8 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-SRC = os.path.join(ROOT, "examples", "1_2026-06-26_14-03-15.mp4")
-if not os.path.exists(SRC):
-    sys.exit("The object trial video isn't in examples/.")
+from samples import OBJECT_VIDEO as SRC, require
+require(SRC)
 tmp = tempfile.mkdtemp()
 cfg = os.path.join(tmp, "config.json")
 import gui, core

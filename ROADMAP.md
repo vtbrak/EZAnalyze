@@ -1523,6 +1523,15 @@ Done:
   arena is empty at 1 min, so the start must be set when the mouse is
   placed). Plan: the user sets it up and tracks it; the assistant lists the
   outside-region stretches with times to review in Play video….
+  **Review (user, 2026-11-05), second tracking (27 frames in 24 stretches,
+  top and left walls only, mostly 1 frame and 1-4 px past the outline):**
+  every stretch checked is the mouse **jumping at the wall**. Sometimes the
+  tracker loses it for a moment as it goes up the wall (rows 4059, 8890,
+  8918, 10300), but the point stays at the periphery; other jumps stay
+  inside the outline and track well (9473, 10172). Also jumps: 10248,
+  10716-10740 (several bouts), 17100, 29158 (a series), 29389. So the
+  outside frames are a mouse at the edge, not time elsewhere, which supports
+  option B. Awaiting the user's choice.
 - **First PC test** (§10), whenever the user is ready.
 - **Future items** (§11): immobility, now to be covered by §12's freezing.
 - **Standalone app** (bundling): on hold until the user says so.

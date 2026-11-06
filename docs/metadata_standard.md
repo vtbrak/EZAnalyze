@@ -8,8 +8,10 @@ the apps. It stays a draft until the user says otherwise; while it's a draft,
 changes don't raise `schema_version`. Reading it in Track Tamer is planned
 for after Track Tamer 1.0.
 
-Apps covered so far: **Creature Capture** (see "Apps" at the end). Others
-will be added as their analyses come into Track Tamer.
+Apps covered so far: **Creature Capture**, **Boom Box** and **Pellet
+Paparazzi** (see "Apps" at the end). Apps whose videos Track Tamer doesn't
+analyze follow it too, where the fields apply, so every lab data file has
+the same fields with the same names.
 
 ---
 
@@ -133,6 +135,7 @@ case and spaces at the ends.
 | `Acoustic Startle Response` | planned (ROADMAP §13) | `Prepulse Inhibition`, `Startle Habituation` | |
 | `Conditioned Place Preference` | planned | | `Pretest`, `Conditioning`, `Test` |
 | `Fear Conditioning` | planned (freezing, ROADMAP §12) | | `Training`, `Context Test`, `Cue Test` |
+| `Skilled Reaching` | not analyzed in Track Tamer (listed for consistency) | | |
 
 Variants of one assay share Track Tamer's analysis: an object trial is
 analyzed the same way whichever variant it is (the user marks each object
@@ -141,8 +144,10 @@ Summary, so trials can be told apart, which matters in Habituation and
 Training, when every object is familiar.
 
 New assays, variants and phases are added to this table as Track Tamer
-analyzes them. An app may record an assay that isn't listed (e.g. a pilot);
-Track Tamer then asks the user to choose the test.
+analyzes them, or when a lab app records them (so the names stay the same
+everywhere), even if Track Tamer never analyzes them. An app may record an
+assay that isn't listed (e.g. a pilot); Track Tamer then asks the user to
+choose the test.
 
 ---
 
@@ -310,5 +315,18 @@ written in one go.
 9. **Fields not in the standard:** `weight_g`, `cage`, `ear_tag`, dose
    fields, `arena_size_cm`, `environment`. Don't add them.
 10. **Cohort:** label the box "Cohort / litter" (the field stays `cohort`).
+
+### Boom Box
+Acoustic startle recording. `assay` = `Acoustic Startle Response` (variants
+`Prepulse Inhibition`, `Startle Habituation`); arena `ASR1`, camera label
+`Side`. App-only fields in `boom_box`. Its fields will be listed here once
+its info file is written.
+
+### Pellet Paparazzi
+Skilled reaching recording. **Not analyzed in Track Tamer** (the task and
+its analysis are different); it follows this standard where the fields
+apply, so its data files match the rest of the lab's. `assay` =
+`Skilled Reaching`. App-only fields in `pellet_paparazzi`. Its fields will
+be listed here once its info file is written.
 
 <!-- Add a section here for each new app as it's brought in. -->

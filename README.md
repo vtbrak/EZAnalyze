@@ -103,7 +103,7 @@ other boxes to add columns. Open Field shows its basics and test measures.
   for how long (`OutsideTime_s`), and the average and longest stretch.
 - The tracking settings recorded in the file
 
-**Object Recognition** (novel object / object location; videos tracked in
+**Object Recognition** (novel object recognition / spatial object recognition; videos tracked in
 this program): in **Set up videos…**, step 5 (**Objects**), draw each object
 as a circle: press at its center and drag out to its edge. Two objects are
 listed; **Add object** adds more. Mark each **Familiar**, **Novel** or

@@ -61,7 +61,7 @@ Every info file has up to three kinds of fields:
 | Kind | Where it goes | Who writes it |
 |---|---|---|
 | **Standard fields** (section 4) | top level, and in each `cameras` entry | every app, using only the ones it has (the required ones are a must) |
-| **Assay fields** (section 5) | top level | only for that assay (e.g. `objects` only for the object assays) |
+| **Assay fields** (section 5) | top level | only for that assay (e.g. `objects` only for Object Recognition) |
 | **App fields** | inside one object named after the app, in lowercase with `_` (`creature_capture`, `startle_box`, …) | only that app |
 
 An app writes **only the standard fields it has**: anything it doesn't know
@@ -112,28 +112,36 @@ Capture's own fields, so they sit in its object.
 
 ---
 
-## 3. Assay names
+## 3. Assay names, variants and phases
 
-`assay` must be **exactly** one of these names. Track Tamer uses it to set
-the test type. Matching ignores upper/lower case and spaces at the ends, but
-apps should write the name as shown. Each task is its own assay, even when
-two share Track Tamer's analysis.
+Three fields say what was run, each from a fixed list:
+- **`assay`**: the test. Track Tamer uses it to pick its analysis.
+- **`assay_variant`**: the version of that test, when the test has versions
+  (e.g. which object task). Left out for tests without versions.
+- **`phase`**: which session of the test this is, when the test has
+  sessions.
 
-| `assay` | Track Tamer analysis | `phase` (one of) |
-|---|---|---|
-| `Elevated Plus Maze` | Elevated Plus Maze (built) | |
-| `Open Field` | Open Field (built) | |
-| `Novel Object Location` | Object Recognition (built) | `Habituation`, `Training`, `Test` |
-| `Spatial Object Location` | Object Recognition (built) | `Habituation`, `Training`, `Test` |
-| `Acoustic Startle Response` | planned (ROADMAP §13) | |
-| `Prepulse Inhibition` | planned (ROADMAP §13) | |
-| `Startle Habituation` | planned (ROADMAP §13) | |
-| `Conditioned Place Preference` | planned | `Pretest`, `Conditioning`, `Test` |
-| `Fear Conditioning` | planned (freezing, ROADMAP §12) | `Training`, `Context Test`, `Cue Test` |
+Write each **exactly** as shown. Track Tamer's matching ignores upper/lower
+case and spaces at the ends.
 
-New assays are added to this table when Track Tamer starts analyzing them.
-An app may record something not listed (e.g. a pilot); Track Tamer then asks
-the user to choose the test.
+| `assay` | Track Tamer | `assay_variant` (one of) | `phase` (one of) |
+|---|---|---|---|
+| `Elevated Plus Maze` | built | | |
+| `Open Field` | built | | |
+| `Object Recognition` | built | `Novel Object Recognition`, `Spatial Object Recognition` | `Habituation`, `Training`, `Test` |
+| `Acoustic Startle Response` | planned (ROADMAP §13) | `Prepulse Inhibition`, `Startle Habituation` | |
+| `Conditioned Place Preference` | planned | | `Pretest`, `Conditioning`, `Test` |
+| `Fear Conditioning` | planned (freezing, ROADMAP §12) | | `Training`, `Context Test`, `Cue Test` |
+
+Variants of one assay share Track Tamer's analysis: an object trial is
+analyzed the same way whichever variant it is (the user marks each object
+Familiar, Novel or Moved when drawing it). The variant is recorded in the
+Summary, so trials can be told apart, which matters in Habituation and
+Training, when every object is familiar.
+
+New assays, variants and phases are added to this table as Track Tamer
+analyzes them. An app may record an assay that isn't listed (e.g. a pilot);
+Track Tamer then asks the user to choose the test.
 
 ---
 
@@ -154,6 +162,7 @@ counted from **0**, the same as the frames in the video file.
 | `date` | `YYYY-MM-DD` | trial date, from the recording computer's clock | Summary column |
 | `start_time` | `HH:MM:SS` | start time, from the recording computer's clock | Summary column |
 | `assay` | text | from section 3 | **set the test type** |
+| `assay_variant` | text | from section 3's list for that assay (left out if it has none) | Summary column |
 | `phase` | text | from section 3's list for that assay | Summary column; Object Recognition phase |
 | `arena` | text | arena name (as in the file name) | Summary column; draft crop, scale and regions from that arena's last video |
 | `room` | text | room or rig | Summary column |
@@ -202,7 +211,7 @@ file's own frame rate only as checks (or when there's no `_frames.csv`).
 
 Written only for those assays.
 
-### Novel Object Location and Spatial Object Location
+### Object Recognition
 | Field | Type | What it is |
 |---|---|---|
 | `objects` | list | one entry per object: `name`, `identity` (what it is, e.g. `glass bottle`), `kind` (`Familiar`, `Novel` or `Moved`), `position` (e.g. `top left`) |
@@ -211,7 +220,7 @@ Written only for those assays.
 Track Tamer gives the objects, so each object's type can be matched. Track
 Tamer sets each object's type; the user draws the circles.
 
-### Acoustic Startle Response, Prepulse Inhibition, Startle Habituation (planned)
+### Acoustic Startle Response (planned)
 `stimuli`: one entry per trial with `frame`, `video_time_s`, `type`
 (`pulse`, `prepulse+pulse`, `prepulse`, `none`), `pulse_db`, `prepulse_db`,
 `interval_ms`. Settled when Track Tamer's startle analysis is built.
@@ -245,10 +254,11 @@ confined to in a conditioning session).
 
 ### Changes
 - **Schema 1 (draft, 2026-11-06):** first version, built from Creature
-  Capture's `_info.json`. Revised the same day: `assay_variant` removed
-  (each task is its own assay: `Novel Object Location` and `Spatial Object
-  Location` replace `Object Recognition`; `Prepulse Inhibition` and `Startle
-  Habituation` are their own assays); `phase` made a standard field with a
+  Capture's `_info.json`. Revised the same day: assay, variant and phase
+  each from a fixed list per assay (`Object Recognition` with variants
+  `Novel Object Recognition` and `Spatial Object Recognition`; `Acoustic
+  Startle Response` with `Prepulse Inhibition` and `Startle Habituation`);
+  `phase` made a standard field with a
   list per assay; `start_wall_clock` removed (date and start time come from
   the recording computer's clock); `trial_number` added; `sex` may be `U`;
   `slot` renamed `camera_position`, and it and `camera_settings` (now
@@ -276,9 +286,9 @@ from 0 in `repeated_frame_indices` and `_frames.csv` (confirmed); the JSON
 written in one go.
 
 **To change for this revision:**
-1. **Assay names:** replace `Object Recognition` + `assay_variant` with the
-   separate assays `Novel Object Location` and `Spatial Object Location`.
-   Stop writing `assay_variant`.
+1. **Variants:** keep `assay` + `assay_variant`, with the object variants
+   renamed `Novel Object Recognition` and `Spatial Object Recognition`
+   (section 3). Show the Variant choice only for assays that have variants.
 2. **Phase for every assay that has one** (section 3): `Conditioned Place
    Preference` and `Fear Conditioning` too, from their own lists.
 3. **Remove `start_wall_clock`**; `date` and `start_time` from the recording

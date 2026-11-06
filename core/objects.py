@@ -1,6 +1,6 @@
 """Object recognition (GUI-free; ROADMAP §15, user 2026-11-05).
 
-Novel object / object location scoring, semi-automated:
+Novel object recognition / spatial object recognition scoring, semi-automated:
 - Each object is a circle (center and radius) drawn in setup step 5, marked
   Familiar, Novel or Moved. Tracking writes the circles (in the tracking
   file's own prepared-frame pixels) and the trial's day and phase into the

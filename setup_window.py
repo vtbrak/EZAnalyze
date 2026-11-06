@@ -1358,7 +1358,7 @@ class SetupWindow(tk.Toplevel):
         kind.pack(side=tk.LEFT, padx=(4, 8))
         kind.bind("<<ComboboxSelected>>", lambda _e: self._set_kind())
         Tooltip(kind, "Familiar: seen before. Novel: new in this trial. Moved: a familiar "
-                      "object in a new place (object location). The results compare "
+                      "object in a new place (spatial object recognition). The results compare "
                       "novel and moved objects against familiar ones.")
         ttk.Button(b1, text="Redraw", command=self._redraw_object).pack(side=tk.LEFT)
         add = ttk.Button(b1, text="Add object", command=self._add_object)

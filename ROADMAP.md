@@ -1368,7 +1368,8 @@ New requests are added to this list as they come in.
 ---
 
 ### 15. Object recognition (requested 2026-11-05, on `video-tracking`)
-Semi-automated novel object / object location scoring from video.
+Semi-automated novel object recognition / spatial object recognition
+scoring from video.
 **Decided (user, 2026-11-05):**
 - New test type **Object Recognition**. Trim, crop, exclusions, reference,
   tracking check and scale work as usual.
@@ -1496,10 +1497,15 @@ the app, and how the standard changes (`schema_version`). An "Apps" section
 lists each app's changes to match; the user will add other apps' pieces
 over time.
 **Revised with the user (2026-11-06), section by section:** no
-`assay_variant`: each task is its own assay (`Novel Object Location` and
-`Spatial Object Location` both use Track Tamer's Object Recognition
-analysis; `Acoustic Startle Response`, `Prepulse Inhibition`, `Startle
-Habituation`, `Conditioned Place Preference`, `Fear Conditioning` planned);
+separate assays for variants: then (user) **assay + `assay_variant` +
+`phase`, each from a fixed list per assay**: `Object Recognition` with
+variants `Novel Object Recognition` / `Spatial Object Recognition` (both use
+the same analysis; the variant is recorded); `Acoustic Startle Response`
+with `Prepulse Inhibition` / `Startle Habituation`; `Conditioned Place
+Preference`, `Fear Conditioning` planned. Variants will matter for ASR and
+for more object and other variants later. Also removed (not recorded in the
+lab): `trial_day`, weight, cage, ear tag, dose, arena size, environment;
+`cohort` labeled "Cohort / litter";
 `phase` is a standard field with a list per assay; start date and time come
 from the recording computer (no `start_wall_clock`); `trial_number` added;
 `sex` may be `U`; `camera_position` (was `slot`) and `camera_settings` (with
@@ -1509,8 +1515,7 @@ arena-name rule. One camera over several arenas: not a concern for now
 (user). Draft until the user says otherwise. Creature Capture had already
 applied the first checklist (and confirmed frames count from 0); its section
 lists what's done and what this revision changes.
-**Open (for Track Tamer, not the standard):** whether Track Tamer's own test
-dropdown should split "Object Recognition" into the two assay names.
+Track Tamer's test dropdown keeps "Object Recognition" (it's the assay name).
 **Fixed now (not waiting for 1.0):** Add folder tried to load
 `_frames.csv`, `_info.csv` and Track Tamer's own `_ObjectScoring.csv` as
 tracking files (each gave a "couldn't be read" error); it now skips them.

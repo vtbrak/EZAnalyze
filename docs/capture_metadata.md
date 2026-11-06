@@ -64,41 +64,38 @@ The info is copied into the tracking file when a video is tracked, so a
    `stopped_early` as `true`/`false`, empty fields as `null` or left out
    rather than `""`.
 
-**Fills in setup steps automatically (the biggest time savers)**
-5. **An "animal placed" mark**, a key the experimenter presses when the
-   animal goes in, saved as `events: [{"type": "animal_placed", "frame": 412,
-   "video_time_s": 20.6}]`. This sets the trial start, which is currently the
-   slowest setup step. The same list can hold `animal_removed` and
-   `disturbance` (door, noise, someone in view), which Track Tamer would list
-   in the Review tab.
-6. **Frame rate per camera:** `fps_set` (what was asked for) and
+**Fills in setup automatically**
+5. **Frame rate per camera:** `fps_set` (what was asked for) and
    `fps_measured` (frames ÷ recorded time). Track Tamer can work it out from
    `_frames.csv`, but having it in the JSON is simpler and gets checked.
-7. **Frame size per camera:** `width_px`, `height_px`.
-8. **A fixed list of `assay` names** that both programs agree on:
+6. **Frame size per camera:** `width_px`, `height_px`.
+7. **A fixed list of `assay` names** that both programs agree on:
    `Elevated Plus Maze`, `Open Field`, `Object Recognition` (later, e.g.
    `Acoustic Startle`). Today's `Elevated Plus` would need a translation
    table.
 
 **Object Recognition**
-9. **`phase`**: one of `Habituation`, `Training`, `Test`.
-10. **`objects`**: one entry per object with `name` (`object 1`), `identity`
+8. **`phase`**: one of `Habituation`, `Training`, `Test`.
+9. **`objects`**: one entry per object with `name` (`object 1`), `identity`
     (what it is, e.g. `glass bottle`), `kind` (`Familiar`, `Novel` or
     `Moved`) and `position` (e.g. `top left`). The experimenter knows this
     when placing the objects. Track Tamer would fill in each object's type,
     and the user just draws the circles.
 
 **Worth recording while you're there (optional)**
-11. `weight_g`; `dose`, `dose_units`, `time_since_treatment_min`;
+10. `weight_g`; `dose`, `dose_units`, `time_since_treatment_min`;
     `cage`, `ear_tag`.
-12. `room` or `rig`; `arena_size_cm` (e.g. `{"width": 40, "length": 40}`),
+11. `room` or `rig`; `arena_size_cm` (e.g. `{"width": 40, "length": 40}`),
     which Track Tamer could suggest as the scale length.
-13. Environment: `temperature_c`, `humidity_pct`, `light_lux`,
+12. Environment: `temperature_c`, `humidity_pct`, `light_lux`,
     `light_phase` (`light`/`dark`), `zt_hours` (hours since lights on).
-14. Later, for startle (ROADMAP §13): stimulus times and levels in the
+13. Later, for startle (ROADMAP §13): stimulus times and levels in the
     same file, instead of separate stimulus logs.
 
 ## Notes
+- **No "animal placed" keypress** (user, 2026-11-06): marking events during
+  recording isn't realistic in the lab, so the trial start stays a setup
+  step in Track Tamer.
 - **Two fields say similar things:** top-level `frames` and `repeated_frames`
   repeat the per-camera numbers as text. Track Tamer will use the per-camera
   ones in `cameras[]`.

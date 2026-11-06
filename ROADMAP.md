@@ -1452,8 +1452,9 @@ What it would fill in automatically:
 - **Test type** (and a warning when videos in one load differ).
 - **Frame rate** from the measured rate; **dropped frames** marked like
   unreadable frames so timing stays right.
-- **Trial start** from an "animal placed" event, and the **session length**
-  from the planned duration.
+- The **session length** from the planned duration. (The trial start stays
+  a setup step: an "animal placed" keypress during recording isn't
+  realistic in the lab; user, 2026-11-06.)
 - **Object Recognition**: day, phase, each object's type (familiar / novel /
   moved) and identity; draft circles if the rig is calibrated.
 - **Drafts for crop and scale** from a fixed rig's calibration, for the user
@@ -1479,8 +1480,8 @@ per arena per trial, beside one MP4 and one `_frames.csv` per camera. The
 spec was rewritten around it: a video is matched to its JSON by its exact
 name in `cameras[].video` (not by a shared base name, since one JSON covers
 several cameras); the import table and the asks for Creature Capture
-(schema_version, time zone, 0-based frame numbering, an "animal placed"
-keypress event, fps and frame size per camera, a fixed assay list, OR
+(schema_version, time zone, 0-based frame numbering, fps and frame size
+per camera, a fixed assay list, OR
 `phase` and `objects`, optional extras) are in `docs/capture_metadata.md`.
 **Fixed now (not waiting for 1.0):** Add folder tried to load
 `_frames.csv`, `_info.csv` and Track Tamer's own `_ObjectScoring.csv` as

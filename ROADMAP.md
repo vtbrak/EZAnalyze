@@ -1504,10 +1504,11 @@ the same analysis; the variant is recorded); `Acoustic Startle Response`
 with `Prepulse Inhibition` / `Startle Habituation`; `Conditioned Place
 Preference`, `Fear Conditioning` planned. Variants will matter for ASR and
 for more object and other variants later. Also removed (not recorded in the
-lab): `trial_day`, weight, cage, ear tag, dose, arena size, environment;
+lab): weight, cage, ear tag, dose, arena size, environment;
 `cohort` labeled "Cohort / litter";
 `phase` is a standard field with a list per assay; start date and time come
-from the recording computer (no `start_wall_clock`); `trial_number` added;
+from the recording computer (no `start_wall_clock`); `trial_day` (day of a
+multi-day trial) and `session_number` (sessions within a day);
 `sex` may be `U`; `camera_position` (was `slot`) and `camera_settings` (with
 `encoder`) are required for every camera; `_frames.csv` times are the
 record of timing; Track Tamer reads only the JSON; camera labels follow the

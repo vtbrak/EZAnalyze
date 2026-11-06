@@ -90,7 +90,8 @@ Example, from a Creature Capture Open Field trial:
   "arena": "OF2",
   "animal_id": "M7",
   "treatment": "saline",
-  "trial_number": 1,
+  "trial_day": 1,
+  "session_number": 1,
   "duration_set_min": 60,
   "cameras": [
     {
@@ -173,7 +174,8 @@ counted from **0**, the same as the frames in the video file.
 | `strain` | text | strain or genotype | Summary column |
 | `dob` | `YYYY-MM-DD` | date of birth | age on the test day |
 | `treatment` | text | treatment or group (a blinded code is fine) | **Summary column for comparing groups** |
-| `trial_number` | number | which trial this is for the animal (1, 2, …) | Summary column |
+| `trial_day` | number | day of a multi-day trial (1, 2, …) | Summary column; Object Recognition trial day |
+| `session_number` | number | which session that day, when there's more than one in a day (1, 2, …) | Summary column |
 | `notes` | text | | export |
 | `duration_set_min` | number | length chosen, in minutes | **set the session length** |
 | `duration_actual_s` | number | length actually recorded, in seconds | warn if shorter than the session length |
@@ -260,12 +262,13 @@ confined to in a conditioning session).
   Startle Response` with `Prepulse Inhibition` and `Startle Habituation`);
   `phase` made a standard field with a
   list per assay; `start_wall_clock` removed (date and start time come from
-  the recording computer's clock); `trial_number` added; `sex` may be `U`;
+  the recording computer's clock); `session_number` added (sessions within
+  a day; `trial_day` is the day of a multi-day trial); `sex` may be `U`;
   `slot` renamed `camera_position`, and it and `camera_settings` (now
   including `encoder`) became required standard camera fields; the frame
   times in `_frames.csv` are the record of timing; Track Tamer reads only
-  the JSON. Then removed (not recorded in the lab): `trial_day`,
-  `weight_g`, `cage`, `ear_tag`, dose fields, `arena_size_cm`,
+  the JSON. Then removed (not recorded in the lab): `weight_g`, `cage`,
+  `ear_tag`, dose fields, `arena_size_cm`,
   `environment`; `cohort` is labeled "Cohort / litter".
 
 ---
@@ -293,7 +296,9 @@ written in one go.
    Preference` and `Fear Conditioning` too, from their own lists.
 3. **Remove `start_wall_clock`**; `date` and `start_time` from the recording
    computer's clock are the start.
-4. **Add `trial_number`** (which trial that day).
+4. **Keep `trial_day`** (day of a multi-day trial) and **add
+   `session_number`** (which session that day, for more than one session in
+   a day).
 5. **Sex:** write `U` when it's unknown or not recorded, instead of leaving
    it out.
 6. **Cameras:** rename `slot` to `camera_position`, and move it and
@@ -302,9 +307,8 @@ written in one go.
    changed. Put `encoder` inside `camera_settings`.
 7. **Camera labels** use letters, digits and `-` only.
 8. **`error`:** leave it out when there's no error (no `""`).
-9. **Fields removed from the standard:** `trial_day`, `weight_g`, `cage`,
-   `ear_tag`, dose fields, `arena_size_cm`, `environment`. Stop writing
-   `trial_day` (use `trial_number`), and don't add the others.
+9. **Fields not in the standard:** `weight_g`, `cage`, `ear_tag`, dose
+   fields, `arena_size_cm`, `environment`. Don't add them.
 10. **Cohort:** label the box "Cohort / litter" (the field stays `cohort`).
 
 <!-- Add a section here for each new app as it's brought in. -->

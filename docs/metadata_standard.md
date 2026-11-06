@@ -90,7 +90,6 @@ Example, from a Creature Capture Open Field trial:
   "arena": "OF2",
   "animal_id": "M7",
   "treatment": "saline",
-  "trial_day": 1,
   "trial_number": 1,
   "duration_set_min": 60,
   "cameras": [
@@ -159,23 +158,17 @@ counted from **0**, the same as the frames in the video file.
 | `arena` | text | arena name (as in the file name) | Summary column; draft crop, scale and regions from that arena's last video |
 | `room` | text | room or rig | Summary column |
 | `experimenter` | text | who ran it | Summary column |
-| `cohort` | text | cohort or litter | Summary column |
+| `cohort` | text | **Cohort / litter** (label it that way on screen; the field name stays `cohort`) | Summary column |
 | `animal_id` | text | animal ID | **Summary column** |
 | `sex` | text | `F`, `M`, or `U` (unknown or not recorded) | Summary column |
 | `strain` | text | strain or genotype | Summary column |
 | `dob` | `YYYY-MM-DD` | date of birth | age on the test day |
 | `treatment` | text | treatment or group (a blinded code is fine) | **Summary column for comparing groups** |
-| `dose`, `dose_units`, `time_since_treatment_min` | number, text, number | | Summary columns |
-| `weight_g` | number | | Summary column |
-| `cage`, `ear_tag` | text | | Summary columns |
-| `trial_day` | number | trial day (1, 2, …) | Summary column; Object Recognition day |
-| `trial_number` | number | which trial that day (1, 2, …) | Summary column |
+| `trial_number` | number | which trial this is for the animal (1, 2, …) | Summary column |
 | `notes` | text | | export |
 | `duration_set_min` | number | length chosen, in minutes | **set the session length** |
 | `duration_actual_s` | number | length actually recorded, in seconds | warn if shorter than the session length |
 | `stopped_early` | true/false | | warn |
-| `arena_size_cm` | object | e.g. `{"width": 40, "length": 40}` | suggest the scale length |
-| `environment` | object | `temperature_c`, `humidity_pct`, `light_lux`, `light_phase` (`light`/`dark`), `zt_hours` | Summary columns |
 
 ### `cameras`: one entry per camera in this arena
 | Field | Type | What it is | Track Tamer uses it to |
@@ -261,7 +254,9 @@ confined to in a conditioning session).
   `slot` renamed `camera_position`, and it and `camera_settings` (now
   including `encoder`) became required standard camera fields; the frame
   times in `_frames.csv` are the record of timing; Track Tamer reads only
-  the JSON.
+  the JSON. Then removed (not recorded in the lab): `trial_day`,
+  `weight_g`, `cage`, `ear_tag`, dose fields, `arena_size_cm`,
+  `environment`; `cohort` is labeled "Cohort / litter".
 
 ---
 
@@ -297,7 +292,9 @@ written in one go.
    changed. Put `encoder` inside `camera_settings`.
 7. **Camera labels** use letters, digits and `-` only.
 8. **`error`:** leave it out when there's no error (no `""`).
-9. Optional extras from section 4 (weight, dose, room, arena size,
-   environment, …): only the ones the lab actually records; to be decided.
+9. **Fields removed from the standard:** `trial_day`, `weight_g`, `cage`,
+   `ear_tag`, dose fields, `arena_size_cm`, `environment`. Stop writing
+   `trial_day` (use `trial_number`), and don't add the others.
+10. **Cohort:** label the box "Cohort / litter" (the field stays `cohort`).
 
 <!-- Add a section here for each new app as it's brought in. -->

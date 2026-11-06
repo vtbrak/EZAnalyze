@@ -1694,6 +1694,8 @@ Done:
   **Confirmed (user, 2026-11-06): 0.9.1 opens on that tester's Windows 11 PC.**
   Other Windows testers had installed 0.9 successfully, so the Windows install
   and launch work in the field.
+  At least one Windows tester has **loaded, tracked and analyzed** videos
+  (2026-11-06); **export** not reported yet.
 - **Experiment information from the capture software (§16)**: planned for
   after 1.0 (1.1); draft field list in `docs/capture_metadata.md`.
 - ✅ **Version 0.9, the testing release (user, 2026-11-05):** `core/version.py`

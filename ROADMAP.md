@@ -1691,6 +1691,9 @@ Done:
   morning (start frame 389) for a demo, without exclusion zones for the
   areas outside the maze, hence the 101.7 s outside stretch at the start; tests
   no longer hard-code that file's numbers. **Released as 0.9.1** (tag `v0.9.1`).
+  **Confirmed (user, 2026-11-06): 0.9.1 opens on that tester's Windows 11 PC.**
+  Other Windows testers had installed 0.9 successfully, so the Windows install
+  and launch work in the field.
 - **Experiment information from the capture software (§16)**: planned for
   after 1.0 (1.1); draft field list in `docs/capture_metadata.md`.
 - ✅ **Version 0.9, the testing release (user, 2026-11-05):** `core/version.py`

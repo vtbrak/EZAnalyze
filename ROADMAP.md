@@ -1688,8 +1688,9 @@ Done:
   example still matches its file exactly) and **scipy is no longer a
   dependency** (requirements.txt, environment.yml). INSTALL.md gained a
   troubleshooting entry. The EPM example was re-tracked by the user that
-  morning (start frame 389), so tests no longer hard-code that file's old
-  numbers.
+  morning (start frame 389) for a demo, without exclusion zones for the
+  areas outside the maze, hence the 101.7 s outside stretch at the start; tests
+  no longer hard-code that file's numbers. **Released as 0.9.1** (tag `v0.9.1`).
 - **Experiment information from the capture software (§16)**: planned for
   after 1.0 (1.1); draft field list in `docs/capture_metadata.md`.
 - ✅ **Version 0.9, the testing release (user, 2026-11-05):** `core/version.py`

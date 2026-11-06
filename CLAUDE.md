@@ -111,7 +111,7 @@ and §9 export are done. Immobility is deferred (ROADMAP §11). Everything in
 the current build order is built; next steps come from the user (and the
 first PC test when they're ready). **ROADMAP "Build order" is
 the source of truth.**
-**Version 0.9** (2026-11-05, the testing release; user chose 0.x): `core/version.py`
+**Version 0.9.1** (2026-11-06; 0.9 was 2026-11-05, the testing release; user chose 0.x): `core/version.py`
 holds `VERSION` (About window, exported Settings sheet); git tag `v0.9`
 (GitHub pre-release). Fixes from testers go out as 0.9.1, 0.9.2, …; 1.0 comes
 after testing. Bump `VERSION` and tag for each release.

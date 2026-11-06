@@ -284,37 +284,30 @@ confined to in a conditioning session).
 Writes `<date>_<time>_<arena>_info.json` (and `_info.csv`) per arena per
 trial, one MP4 and one `_frames.csv` per camera.
 
-**Already matches** (done in Creature Capture after the first draft):
-`schema_version` and `app_name`; assay names from a dropdown; numbers and
-`true`/`false` types, blank fields left out; arena names without spaces or
-`_`, and videos named `<date>_<time>_<arena>_<camera label>.mp4`; per-camera
-`fps_set`, `fps_measured`, `width_px`, `height_px`, numeric
-`repeated_frames`; `phase` and `objects` for object trials; frames counted
-from 0 in `repeated_frame_indices` and `_frames.csv` (confirmed); the JSON
-written in one go.
+**Matches the revised schema 1 draft** (reported by Creature Capture,
+2026-11-06; its changes are waiting for the user to commit them):
+- `schema_version`, `app_name`, `app_version`; `date` and `start_time` from
+  the recording computer (no `start_wall_clock`).
+- `assay`, `assay_variant` and `phase` from each assay's own lists in
+  section 3, shown on its Record tab only when the assay has them; values
+  outside a list are dropped.
+- `trial_day` and `session_number`; `sex` F, M or U; `cohort` labeled
+  "Cohort / litter"; numbers and `true`/`false` types; blank fields left out.
+- Arena names and camera labels use letters, digits and `-` only (the
+  editor enforces it, and output is cleaned); videos named
+  `<date>_<time>_<arena>_<camera label>.mp4`.
+- Each camera: `camera_position` and `camera_settings` (the `encoder` and
+  every control, defaults filled in), `fps_set`, `fps_measured`,
+  `width_px`, `height_px`, numeric `repeated_frames`, frames counted from 0,
+  `error` left out when empty.
+- `objects` for object trials. The `creature_capture` object holds only
+  `experiment` and `gpu`.
+- None of the fields left out of the standard (weight, cage, ear tag, dose,
+  arena size, environment).
+- The JSON is written in one go.
 
-**To change for this revision:**
-1. **Variants:** keep `assay` + `assay_variant`, with the object variants
-   renamed `Novel Object Recognition` and `Spatial Object Recognition`
-   (section 3). Show the Variant choice only for assays that have variants.
-2. **Phase for every assay that has one** (section 3): `Conditioned Place
-   Preference` and `Fear Conditioning` too, from their own lists.
-3. **Remove `start_wall_clock`**; `date` and `start_time` from the recording
-   computer's clock are the start.
-4. **Keep `trial_day`** (day of a multi-day trial) and **add
-   `session_number`** (which session that day, for more than one session in
-   a day).
-5. **Sex:** write `U` when it's unknown or not recorded, instead of leaving
-   it out.
-6. **Cameras:** rename `slot` to `camera_position`, and move it and
-   `camera_settings` out of `creature_capture` into each camera's entry
-   (standard fields). Every camera writes both, even when nothing was
-   changed. Put `encoder` inside `camera_settings`.
-7. **Camera labels** use letters, digits and `-` only.
-8. **`error`:** leave it out when there's no error (no `""`).
-9. **Fields not in the standard:** `weight_g`, `cage`, `ear_tag`, dose
-   fields, `arena_size_cm`, `environment`. Don't add them.
-10. **Cohort:** label the box "Cohort / litter" (the field stays `cohort`).
+Creature Capture keeps a copy of this file (`Creature_Capture/metadata_standard.md`),
+taken from GitHub; refresh it from GitHub whenever the standard changes.
 
 ### Boom Box
 Acoustic startle recording. `assay` = `Acoustic Startle Response` (variants

@@ -1473,6 +1473,18 @@ and the user can always change it); whether the sidecar's information should
 also be written into the tracking file (proposed: yes, so a tracking file
 carries it without the JSON); gitignore the sidecars' real data (they hold
 animal information).
+**Update (2026-11-06): the user's capture software is "Creature Capture".**
+Its real format: `<date>_<time>_<arena>_info.json` (plus `_info.csv`), one
+per arena per trial, beside one MP4 and one `_frames.csv` per camera. The
+spec was rewritten around it: a video is matched to its JSON by its exact
+name in `cameras[].video` (not by a shared base name, since one JSON covers
+several cameras); the import table and the asks for Creature Capture
+(schema_version, time zone, 0-based frame numbering, an "animal placed"
+keypress event, fps and frame size per camera, a fixed assay list, OR
+`phase` and `objects`, optional extras) are in `docs/capture_metadata.md`.
+**Fixed now (not waiting for 1.0):** Add folder tried to load
+`_frames.csv`, `_info.csv` and Track Tamer's own `_ObjectScoring.csv` as
+tracking files (each gave a "couldn't be read" error); it now skips them.
 **Versioning:** the JSON has its own `schema_version`, separate from Track
 Tamer's version, so either program can change on its own schedule; Track
 Tamer reads every schema version it knows. Built on a feature branch

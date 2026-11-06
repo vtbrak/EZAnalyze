@@ -1528,12 +1528,18 @@ class TrackTamerApp(tk.Tk, _DnDMixin):
     def _addable(path: str) -> bool:
         return path.lower().endswith(".csv") or is_video(path)
 
+    # CSVs that sit beside videos but aren't tracking files: Track Tamer's own
+    # object scoring, and Creature Capture's per-camera frame times and trial
+    # info (ROADMAP §16). Adding a folder skips them.
+    COMPANION_CSV_SUFFIXES = ("_objectscoring.csv", "_frames.csv", "_info.csv")
+
     @classmethod
     def _files_in(cls, folder: str) -> list[str]:
         return sorted(
             os.path.join(folder, f)
             for f in os.listdir(folder)
             if cls._addable(f) and not f.startswith(".")
+            and not f.lower().endswith(cls.COMPANION_CSV_SUFFIXES)
         )
 
     @staticmethod

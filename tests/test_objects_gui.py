@@ -183,6 +183,14 @@ check("changing the zone distance updates the visit list (no re-tracking)",
       len(rv.scorer.visits) != n_before or rv.scorer.zone_cm == 0)
 app.zone_var.set("3"); app.update()
 
+folder = tempfile.mkdtemp()
+for name in ("a.mp4", "a_LocationOutput.csv", "a_ObjectScoring.csv",
+             "2026-11-05_16-56-42_EPM_Overhead_frames.csv", "2026-11-05_16-56-42_EPM_info.csv"):
+    open(os.path.join(folder, name), "w").close()
+check("Add folder skips companion CSVs (object scoring, capture frame times and info)",
+      [os.path.basename(p) for p in app._files_in(folder)] == ["a.mp4", "a_LocationOutput.csv"])
+shutil.rmtree(folder, ignore_errors=True)
+
 print(f"\n{fails} failure(s)")
 app.destroy()
 shutil.rmtree(tmp, ignore_errors=True)

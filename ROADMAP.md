@@ -1488,7 +1488,8 @@ per camera, a fixed assay list, OR
 Track Tamer is the master; any app that records video for it (Creature
 Capture first, others as their analyses are added) follows it. It fixes the
 **assay names** (`Elevated Plus Maze`, `Open Field`, `Object Recognition`;
-planned `Acoustic Startle`, `Fear Conditioning`; optional `assay_variant`),
+planned `Acoustic Startle Response`, `Fear Conditioning`, `Conditioned Place
+Preference`; optional `assay_variant`),
 file naming (`<date>_<time>_<arena>_info.json`, videos
 `<date>_<time>_<arena>_<camera>.mp4`, arena names without spaces or `_`),
 reserved endings, common fields (Creature Capture's names kept), per-camera

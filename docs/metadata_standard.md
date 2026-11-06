@@ -58,7 +58,8 @@ apps should write the name as shown.
 | `Elevated Plus Maze` | built | |
 | `Open Field` | built | |
 | `Object Recognition` | built | `Novel Object`, `Object Location` |
-| `Acoustic Startle` | planned (ROADMAP §13) | `Prepulse Inhibition`, `Habituation` |
+| `Acoustic Startle Response` | planned (ROADMAP §13) | `Prepulse Inhibition`, `Habituation` |
+| `Conditioned Place Preference` | planned | `Pretest`, `Conditioning`, `Test` |
 | `Fear Conditioning` | planned (freezing, ROADMAP §12) | `Training`, `Context Test`, `Cue Test` |
 
 New assays are added to this table when Track Tamer starts analyzing them.
@@ -141,13 +142,18 @@ Written only for that assay.
 Track Tamer sets the phase and each object's type; the user draws the
 circles.
 
-### Acoustic Startle (planned)
+### Acoustic Startle Response (planned)
 `stimuli`: one entry per trial with `frame`, `video_time_s`, `type`
 (`pulse`, `prepulse+pulse`, `prepulse`, `none`), `pulse_db`, `prepulse_db`,
 `interval_ms`. Settled when Track Tamer's startle analysis is built.
 
 ### Fear Conditioning (planned)
 To be added when freezing analysis is built (e.g. tone and shock times).
+
+### Conditioned Place Preference (planned)
+To be added when its analysis is built (e.g. which chamber was paired with
+the drug, `conditioning_session` number, and the chamber the animal was
+confined to in a conditioning session).
 
 ---
 
@@ -174,7 +180,9 @@ standard.
 
 ### Changes
 - **Schema 1 (2026-11-06):** first version, built from Creature Capture's
-  `_info.json` (app 0.1.0 plus its `main`).
+  `_info.json` (app 0.1.0 plus its `main`). Assay names reserved for
+  planned analyses: `Acoustic Startle Response`, `Fear Conditioning`,
+  `Conditioned Place Preference`.
 
 ---
 

@@ -19,6 +19,9 @@ Changes from ezTrack:
   exclude other regions (Open Field periphery = arena outline minus center).
 - The scale is always in cm, and every setting used is written to the output.
 - Progress and cancel are reported through callbacks, for a GUI progress bar.
+- The center of mass is worked out with numpy (same formula as scipy's
+  `ndimage.center_of_mass`), so scipy isn't needed: Windows 11 Smart App
+  Control blocked scipy's compiled file on a tester's PC (2026-11-06).
 """
 
 from __future__ import annotations
@@ -29,7 +32,6 @@ from dataclasses import dataclass, field
 import cv2
 import numpy as np
 import pandas as pd
-from scipy import ndimage
 
 from .video import Prep, VideoReader, polygon_mask
 
@@ -126,9 +128,20 @@ def locate(frame: np.ndarray, reference: np.ndarray, params: TrackingParams,
         weights[slice(max(ymin, 0), max(ymax, 0)), slice(max(xmin, 0), max(xmax, 0))] = 1
         dif = dif * weights
     dif[dif < np.percentile(dif, params.loc_thresh)] = 0
-    with np.errstate(invalid="ignore", divide="ignore"):
-        y, x = ndimage.center_of_mass(dif)  # all zero (nothing found): NaN, quietly
+    y, x = center_of_mass(dif)
     return y, x, dif
+
+
+def center_of_mass(image: np.ndarray) -> tuple[float, float]:
+    """(y, x) of the weighted center of `image`, as scipy's
+    `ndimage.center_of_mass` computes it; NaN, NaN if it's all zero."""
+    total = float(image.sum(dtype=np.float64))
+    if total == 0:
+        return float("nan"), float("nan")
+    h, w = image.shape
+    y = float(image.sum(axis=1, dtype=np.float64) @ np.arange(h)) / total
+    x = float(image.sum(axis=0, dtype=np.float64) @ np.arange(w)) / total
+    return y, x
 
 
 @dataclass

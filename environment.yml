@@ -16,7 +16,6 @@ dependencies:
   - numpy
   - matplotlib
   - openpyxl
-  - scipy
   - pillow
   - pip
   - pip:

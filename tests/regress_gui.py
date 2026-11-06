@@ -449,14 +449,19 @@ if os.path.exists(CLIP):
         exd = _load(EX)
         rv.load(exd, None, gui.resolve_roles(exd.regions, {}), 2.0); rv.update()
         rows = [rv.tree.item(i, "values") for i in rv.tree.get_children()]
-        check("Review list: the EPM example's 3 outside stretches, 2 flagged at a 2 s cutoff",
-              len(rows) == 3 and sum("check" in r[-1] for r in rows) == 2
-              and rows[0][1] == "374" and rows[2][6] == "open arm 2")
+        evs = rv.events
+        check(f"Review list: the EPM example's {len(evs)} outside stretch(es), those of 2 s or "
+              "more flagged",
+              len(rows) == len(evs) > 0
+              and sum("check" in r[-1] for r in rows) == sum(e["seconds"] >= 2 for e in evs)
+              and rows[0][1] == f"{evs[0]['row'] + 1:,}" and rows[-1][6] == evs[-1]["region"])
         check("loading another file closes the old playback window", not pw.winfo_exists())
-        rv.tree.selection_set("2"); rv.update()
+        last = len(evs) - 1
+        rv.tree.selection_set(str(last)); rv.update()
         w2 = rv.window
         check("clicking a row opens the playback window at that exact frame",
-              w2 is not None and w2.row == 495 and "Frame 496 of" in w2.info.cget("text"))
+              w2 is not None and w2.row == evs[last]["row"]
+              and f"Frame {evs[last]['row'] + 1:,} of" in w2.info.cget("text"))
         keep_fps = app.fps_var.get(); app.fps_var.set("20"); log.clear(); yesno[:] = [True]
         fake = gui.FileEntry(path=EX, data=exd, label="ex")
         check("Analyze offers the tracking file's own frame rate",
@@ -465,7 +470,8 @@ if os.path.exists(CLIP):
         app.fps_var.set(keep_fps)
         rv.cutoff_var.set("5"); rv._apply_cutoff()
         check("changing the cutoff re-flags the list and saves it for the test",
-              sum("check" in rv.tree.item(i, "values")[-1] for i in rv.tree.get_children()) == 0
+              sum("check" in rv.tree.item(i, "values")[-1] for i in rv.tree.get_children())
+              == sum(e["seconds"] >= 5 for e in evs)
               and app.config_data["review_cutoff_s"][app.test_var.get()] == 5)
     app.nb.select(app.tab_summary); app.update()
     check("a tracked video analyzes", app.files[0].analyzed

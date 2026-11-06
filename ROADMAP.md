@@ -1680,6 +1680,16 @@ Done:
   **object recognition** analysis that needs manual scoring (not planned
   yet; the user mentioned it 2026-11-05).
 - ✅ **Object recognition (§15)**: decided and built 2026-11-05 (O1–O4).
+- ✅ **Tester report (Windows 11, 2026-11-06): "An Application Control policy
+  has blocked this file"** on scipy's `_nd_image` DLL (Smart App Control or an
+  IT policy; other Windows testers were fine). scipy was only used for
+  `ndimage.center_of_mass` in tracking, so that's now numpy
+  (`core/tracking.center_of_mass`, identical to 1e-13; re-tracking the EPM
+  example still matches its file exactly) and **scipy is no longer a
+  dependency** (requirements.txt, environment.yml). INSTALL.md gained a
+  troubleshooting entry. The EPM example was re-tracked by the user that
+  morning (start frame 389), so tests no longer hard-code that file's old
+  numbers.
 - **Experiment information from the capture software (§16)**: planned for
   after 1.0 (1.1); draft field list in `docs/capture_metadata.md`.
 - ✅ **Version 0.9, the testing release (user, 2026-11-05):** `core/version.py`

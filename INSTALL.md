@@ -150,6 +150,16 @@ is blocked:
     you can save into (not a read-only drive or a zip you haven't unzipped).
     If an `_analysis.xlsx` or `_LocationOutput.csv` is open in Excel, close
     it and try again.
+- **Windows: "An Application Control policy has blocked this file"**
+  - Windows 11's **Smart App Control** (or a work or school computer's IT
+    policy) blocked one of the program's files. Version 0.9 used a package
+    (scipy) that this happened to; newer versions don't need it, so download
+    the program again and replace the old folder.
+  - If it still happens with another file, check **Windows Security → App &
+    browser control → Smart App Control**. On a work or school computer, ask
+    IT to allow Python in the Anaconda folder. Turning Smart App Control off
+    is a big change (Windows only lets you turn it back on by reinstalling),
+    so it's your call, or IT's.
 - **The program closes with an error**
   - Take a screenshot of the text window and send it to whoever shared the
     program with you.

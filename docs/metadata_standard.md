@@ -159,11 +159,55 @@ confined to in a conditioning session).
 
 ## 5. An app's own fields
 
-An app may add fields this standard doesn't have. Put them in an object
-named after the app, e.g. `"creature_capture": {...}`, so they can't clash
-with future standard fields. Track Tamer records them in the export and
-otherwise ignores them. A field several apps need is moved into the
-standard.
+Every info file has up to three kinds of fields:
+
+| Kind | Where it goes | Who writes it |
+|---|---|---|
+| **Standard fields** (section 3) | top level, and in each `cameras` entry | every app, using only the ones it knows (just the four required ones are a must) |
+| **Assay fields** (section 4) | top level | only for that assay (e.g. `phase` and `objects` only for Object Recognition) |
+| **App fields** | inside one object named after the app, in lowercase with `_` (`creature_capture`, `startle_box`, …) | only that app |
+
+An app writes **only the standard fields it has**: anything it doesn't know
+is left out, never filled with blanks. Anything the standard doesn't cover
+goes in the app's own object, never at the top level, so it can't clash
+with a standard field added later or with another app's field of the same
+name. Per-camera app fields go in an object of the same name inside that
+camera's entry.
+
+Track Tamer reads the standard and assay fields, copies the app object
+into the export's Settings sheet as it is, and otherwise ignores it. If a
+field in an app object turns out to be useful to Track Tamer or needed by
+several apps, it's added to the standard (section 6) and apps move it to
+the top level.
+
+Example, from a Creature Capture Open Field trial:
+
+```json
+{
+  "schema_version": 1,
+  "app_name": "Creature Capture",
+  "app_version": "0.2.0",
+  "assay": "Open Field",
+  "arena": "OF2",
+  "animal_id": "M7",
+  "treatment": "saline",
+  "duration_set_min": 60,
+  "cameras": [
+    {
+      "label": "Overhead",
+      "video": "2026-11-05_16-56-42_OF2_Overhead.mp4",
+      "fps_measured": 9.84,
+      "creature_capture": {"slot": "Camera5", "encoder": "libx264"}
+    }
+  ],
+  "creature_capture": {"encoder": "libx264", "gpu": false}
+}
+```
+
+Here `assay`, `animal_id` and the rest are standard fields. There are no
+assay fields, since Open Field has none, and nothing about objects
+appears. `encoder` and `gpu` are Creature Capture's own fields, so they
+sit in its object.
 
 ---
 
@@ -210,7 +254,8 @@ standard:**
    column count from 0, the same as the MP4's frames.
 10. Optional extras from section 3 when convenient: `weight_g`, `dose`,
     `room`, `arena_size_cm`, `environment`, …
-11. App-only settings (`encoder`, …) can stay at the top level for now, or
-    move into `"creature_capture": {...}` (section 5).
+11. Move app-only fields (`encoder`, `camera_settings`, `slot`, …) into
+    `"creature_capture": {...}` (section 5): at the top level for the trial,
+    inside each camera's entry for that camera.
 
 <!-- Add a section here for each new app as it's brought in. -->

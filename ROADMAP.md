@@ -1447,7 +1447,7 @@ a JSON file beside each video (`<video name>.json`) with the experiment
 information, and Track Tamer reads it when the video is added, filling in
 what it can. **Not before 1.0** (the user's order). Draft field list, for the
 user to hand to the capture-software project:
-**[docs/capture_metadata.md](docs/capture_metadata.md)** (schema 1).
+**[docs/metadata_standard.md](docs/metadata_standard.md)** (schema 1).
 What it would fill in automatically:
 - **Test type** (and a warning when videos in one load differ).
 - **Frame rate** from the measured rate; **dropped frames** marked like
@@ -1482,7 +1482,20 @@ name in `cameras[].video` (not by a shared base name, since one JSON covers
 several cameras); the import table and the asks for Creature Capture
 (schema_version, time zone, 0-based frame numbering, fps and frame size
 per camera, a fixed assay list, OR
-`phase` and `objects`, optional extras) are in `docs/capture_metadata.md`.
+`phase` and `objects`, optional extras) are in `docs/metadata_standard.md`.
+**Update (2026-11-06): one standard for every video app.** The spec became
+`docs/metadata_standard.md`, the **Track Tamer video metadata standard**:
+Track Tamer is the master; any app that records video for it (Creature
+Capture first, others as their analyses are added) follows it. It fixes the
+**assay names** (`Elevated Plus Maze`, `Open Field`, `Object Recognition`;
+planned `Acoustic Startle`, `Fear Conditioning`; optional `assay_variant`),
+file naming (`<date>_<time>_<arena>_info.json`, videos
+`<date>_<time>_<arena>_<camera>.mp4`, arena names without spaces or `_`),
+reserved endings, common fields (Creature Capture's names kept), per-camera
+fields, per-assay fields, app-specific fields under an object named after
+the app, and how the standard changes (`schema_version`). An "Apps" section
+lists each app's changes to match; the user will add other apps' pieces
+over time.
 **Fixed now (not waiting for 1.0):** Add folder tried to load
 `_frames.csv`, `_info.csv` and Track Tamer's own `_ObjectScoring.csv` as
 tracking files (each gave a "couldn't be read" error); it now skips them.
@@ -1710,7 +1723,7 @@ Done:
   At least one Windows tester has **loaded, tracked and analyzed** videos
   (2026-11-06); **export** not reported yet.
 - **Experiment information from the capture software (§16)**: planned for
-  after 1.0 (1.1); draft field list in `docs/capture_metadata.md`.
+  after 1.0 (1.1); draft standard in `docs/metadata_standard.md`.
 - ✅ **Version 0.9, the testing release (user, 2026-11-05):** `core/version.py`
   (`VERSION`), shown in About and recorded in each exported Settings sheet;
   tagged `v0.9` (GitHub pre-release). The user first asked for 1.0, then chose

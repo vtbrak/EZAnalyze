@@ -1487,9 +1487,7 @@ per camera, a fixed assay list, OR
 `docs/metadata_standard.md`, the **Track Tamer video metadata standard**:
 Track Tamer is the master; any app that records video for it (Creature
 Capture first, others as their analyses are added) follows it. It fixes the
-**assay names** (`Elevated Plus Maze`, `Open Field`, `Object Recognition`;
-planned `Acoustic Startle Response`, `Fear Conditioning`, `Conditioned Place
-Preference`; optional `assay_variant`),
+**assay names**,
 file naming (`<date>_<time>_<arena>_info.json`, videos
 `<date>_<time>_<arena>_<camera>.mp4`, arena names without spaces or `_`),
 reserved endings, common fields (Creature Capture's names kept), per-camera
@@ -1497,6 +1495,22 @@ fields, per-assay fields, app-specific fields under an object named after
 the app, and how the standard changes (`schema_version`). An "Apps" section
 lists each app's changes to match; the user will add other apps' pieces
 over time.
+**Revised with the user (2026-11-06), section by section:** no
+`assay_variant`: each task is its own assay (`Novel Object Location` and
+`Spatial Object Location` both use Track Tamer's Object Recognition
+analysis; `Acoustic Startle Response`, `Prepulse Inhibition`, `Startle
+Habituation`, `Conditioned Place Preference`, `Fear Conditioning` planned);
+`phase` is a standard field with a list per assay; start date and time come
+from the recording computer (no `start_wall_clock`); `trial_number` added;
+`sex` may be `U`; `camera_position` (was `slot`) and `camera_settings` (with
+`encoder`) are required for every camera; `_frames.csv` times are the
+record of timing; Track Tamer reads only the JSON; camera labels follow the
+arena-name rule. One camera over several arenas: not a concern for now
+(user). Draft until the user says otherwise. Creature Capture had already
+applied the first checklist (and confirmed frames count from 0); its section
+lists what's done and what this revision changes.
+**Open (for Track Tamer, not the standard):** whether Track Tamer's own test
+dropdown should split "Object Recognition" into the two assay names.
 **Fixed now (not waiting for 1.0):** Add folder tried to load
 `_frames.csv`, `_info.csv` and Track Tamer's own `_ObjectScoring.csv` as
 tracking files (each gave a "couldn't be read" error); it now skips them.
